@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.log
+venv/
+fillers/
+*.wav
+mirana_state.json
