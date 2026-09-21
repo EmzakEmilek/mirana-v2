@@ -31,7 +31,7 @@
      ================================================================== */
   .panel {
     position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
-    width: min(78vw, 980px); min-height: 150px;
+    width: min(78vw, 980px); height: 150px; box-sizing: border-box;
     display: grid; grid-template-columns: 150px 1fr; gap: 0 18px; align-items: center;
     padding: 12px 26px 14px 12px;
     background: var(--panel-bg);
@@ -58,7 +58,7 @@
 
   canvas#core { width: 150px; height: 150px; display: block; }
 
-  .text { min-width: 0; }
+  .text { min-width: 0; height: 126px; display: flex; flex-direction: column; }
   .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .status {
     font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 12px;
@@ -86,11 +86,17 @@
   }
   .sub.system { font-style: normal; color: var(--cyan); }
 
-  .answer {
-    font-size: 22px; line-height: 1.42; color: var(--yellow); min-height: 32px;
-    text-shadow: 0 0 12px rgba(252,238,10,.25);
-    transition: color .3s;
+  .answer-box {                 /* pevné okno na 3 riadky; dlhší text sa počas písania posúva hore */
+    height: 84px; overflow: hidden; position: relative;
+    mask-image: linear-gradient(180deg, transparent 0, #000 10px, #000 100%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10px, #000 100%);
   }
+  .answer {
+    font-size: 20px; line-height: 1.4; color: var(--yellow);
+    text-shadow: 0 0 12px rgba(252,238,10,.25);
+    transition: color .3s, opacity 1.2s, filter 1.2s, transform 1.2s;
+  }
+  .answer.fade { opacity: 0; filter: blur(4px); transform: translateY(-6px); }   /* zmiznutie po odpovedi */
   .answer::after { content: "▌"; opacity: .8; animation: caret .9s step-start infinite; }
   .answer.done::after { content: ""; }
   .answer.cut { color: rgba(252,238,10,.55); }      /* prerušená odpoveď (barge-in) zostane, len zbledne */
@@ -121,7 +127,7 @@
         <div class="telemetry" id="telemetry"></div>
       </div>
       <div class="sub" id="sub"></div>
-      <div class="answer done" id="answer"></div>
+      <div class="answer-box" id="answer-box"><div class="answer done" id="answer"></div></div>
     </div>
   </div>
 </div>
@@ -150,7 +156,16 @@ const COLORS = {
 };
 
 let state = 'offline', combat = false;
-let typing = 0;
+let typing = 0, fadeTimer = null;
+const FADE_AFTER_MS = 5000;   // odpoveď zmizne 5 s po tom, čo Mirana dohovorí
+
+function scheduleFade() {
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    const a = el('answer'); a.classList.add('fade');
+    setTimeout(() => { if (a.classList.contains('fade')) { a.textContent = ''; a.className = 'answer done'; } }, 1300);
+  }, FADE_AFTER_MS);
+}
 
 function setState(s) {
   const prev = state; state = s;
@@ -160,6 +175,7 @@ function setState(s) {
     typing++;
     const a = el('answer'); a.classList.add('done');
     if (prev === 'speaking' && s === 'listening') a.classList.add('cut');   // barge-in: odpoveď zbledne
+    if (prev === 'speaking') scheduleFade();
   }
   if (s === 'listening' || s === 'idle') { el('sub').textContent = ''; el('sub').className = 'sub'; }
   if (prev !== s) { panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); }
@@ -170,13 +186,18 @@ function showSub(text, system) {
   q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
 }
 function typeAnswer(fullText, msPerChar) {
-  const a = el('answer'); a.className = 'answer'; a.textContent = '';
+  clearTimeout(fadeTimer);
+  const a = el('answer'), box = el('answer-box');
+  a.className = 'answer'; a.textContent = ''; box.scrollTop = 0;
   el('sub').textContent = '';
   const gen = ++typing; let i = 0;
   (function step() {
     if (gen !== typing) return;
-    if (i <= fullText.length) { a.textContent = fullText.slice(0, i); i++; setTimeout(step, msPerChar); }
-    else a.classList.add('done');
+    if (i <= fullText.length) {
+      a.textContent = fullText.slice(0, i); i++;
+      box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });   // dlhší text sa posúva, panel nerastie
+      setTimeout(step, msPerChar);
+    } else a.classList.add('done');
   })();
 }
 function setTelemetry(t) {
