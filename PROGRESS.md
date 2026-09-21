@@ -57,20 +57,22 @@ Navrh routingu (na potvrdenie):
   LLM finalne: claude-opus-5, effort low (Sonnet 5 high = 3 halucinacie + jazykove artefakty).
   Whisper: medium + slovensky prefix promptu (large-v3-turbo prekladal do anglictiny).
   Zname slabiny modelu: Padre (El Coyote Cojo — zle), obcas prijme chybny predpoklad otazky.
-- ROZHODNUTIE 2026-09-21: divaci sa s Miranou nerozpravaju — Kick chat (byvala Faza 5)
-  zruseny uplne, faze precislovane (5 = audio, 6 = hardening). Persona bez [CHAT_*] tagov.
-- Faza 2-6: nezacate
+- ROZHODNUTIE 2026-09-21: Kick chat (Faza 5) ostava v plane, ale zatial VYPNUTY
+  (kick_chat.enabled: false). Persona, routing na Sonnet a pamat divakov v SPEC ostavaju.
+- Faza 2-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
 - SPEC.md, persona.md, config.yaml, POSTUP.md ulozene v korene (COWORK-FAZA-0.md splneny a zmazany)
 - overlay/index.html (diegeticky HUD) ulozeny
 - .gitignore prepisany na plnu verziu (+ *.pyc, mirana_state.json)
-- .env.example ulozeny
+- .env.example ulozeny (obsahuje aj KICK_* pre Fazu 5)
 - config.yaml: audio.output_device = "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
   (presny match nazov+hostapi, index 57 sa moze menit); input_device ostava null
 
 ## Caka na Erika
 - [x] gh auth login + repo vytvorene
+- [ ] pridat do .env riadky KICK_CLIENT_ID / KICK_CLIENT_SECRET / KICK_CHANNEL_ID
+      (rucne - .env sa neda zapisovat vzdialene; predloha je v .env.example)
 - [ ] doplnit API kluce do .env (ANTHROPIC_API_KEY, OPENAI_API_KEY, AZURE_SPEECH_KEY)
 - [ ] nainstalovat Cyberpunk 2077, potom CyberEngineTweaks
 - [ ] pripojit druhy mikrofon do herneho PC (odlozene)
