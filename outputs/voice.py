@@ -46,6 +46,9 @@ def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
     return np.stack(channels, axis=1).astype(np.int16)
 
 
+_NON_LATIN_PATTERN = re.compile(r"[Ѐ-ӿԀ-ԯ　-鿿가-힯豈-﫿]")
+
+
 def load_phonetics(path) -> list[tuple[re.Pattern, str]]:
     """Nacita phonetics.yaml -> zoznam (regex, nahrada), najdlhsi kluc prvy.
 
@@ -80,6 +83,8 @@ def sanitize_text(text: str) -> str:
     text = _MARKDOWN_LINK_PATTERN.sub(r"\1", text)
     text = _EMOJI_PATTERN.sub("", text)
     text = re.sub(r"[*_`~#>]", "", text)
+    # Model obcas pusti znak z ineho pisma (cyrilika, CJK) — TTS by ho precitala nezmyselne
+    text = _NON_LATIN_PATTERN.sub("", text)
     text = re.sub(r"^\s*[-•+]\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"[ \t]+", " ", text)
     return text.strip()

@@ -13,12 +13,13 @@ audio:
 stt:
   provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)
   api_model: "whisper-1"
-  local_model: "medium"       # small | medium | large-v3 — medium je kompromis pre SK (test 1b: medium)
+  local_model: "medium"       # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
   local_device: "cuda"
   local_compute_type: "float16"
   language: "sk"
   # Slovník pre lokálny Whisper (initial_prompt): naladí ho na anglické názvy z CP2077, ktoré inak
   # prepisuje foneticky ("na SETI" = Night City, "čudy" = Judy). Whisper berie max 224 tokenov, dlhsi zoznam ticho oreze zlava — pri pridavani nieco vyhod.
+  local_prompt_prefix: "Erik sa po slovensky pýta Mirany na Cyberpunk 2077:"   # slovensky kontext, aby Whisper neskocil do anglictiny
   local_vocabulary:
     - "Mirana"
     - "Emzo"
@@ -32,38 +33,30 @@ stt:
     - "Takemura"
     - "Hanako"
     - "Adam Smasher"
-    - "Evelyn"
     - "Alt Cunningham"
     - "Rogue"
     - "Viktor"
     - "Misty"
     - "Delamain"
     - "Songbird"
-    - "Reed"
     - "Aldecaldos"
     - "Voodoo Boys"
     - "Maelstrom"
     - "Tyger Claws"
     - "Valentinos"
-    - "Barghest"
     - "Arasaka"
     - "Militech"
     - "NetWatch"
-    - "Trauma Team"
     - "NCPD"
-    - "MaxTac"
     - "Relic"
     - "Blackwall"
     - "Mikoshi"
     - "Soulkiller"
     - "Dogtown"
     - "Watson"
-    - "Westbrook"
     - "Heywood"
     - "Pacifica"
     - "Badlands"
-    - "Kabuki"
-    - "Japantown"
     - "Afterlife"
     - "Phantom Liberty"
     - "netrunner"
@@ -81,20 +74,17 @@ stt:
     - "iconic"
     - "eddies"
     - "street cred"
-    - "fixer"
     - "braindance"
-    - "gig"
-    - "perk"
 
 llm:
-  model: "claude-sonnet-5"
+  model: "claude-opus-5"      # pisomny test 2026-09-21: Opus low 0.86 c/otazku, 1 halucinacia; Sonnet high 0.40 c, 3 halucinacie + jazykove artefakty
   max_tokens: 800             # strop pre thinking + odpoveď dokopy; 300 by orezalo odpoveď
-  effort: "medium"            # Sonnet 5 má adaptívne thinking vždy zapnuté — low = najnižšia latencia, medium = presnejšie lore, prirodzenejšia reč
+  effort: "low"               # Opus na low je rychlejsi nez Sonnet na high (4.3 s vs 4.8 s) a presnejsi
                               # (temperature Sonnet 5 neprijíma, štýl rieši persona.md)
   cache_persona: true         # persona ako cacheable blok — zásadné pre rozpočet
 
 tts:
-  voice: "en-US-EmmaMultilingualNeural"   # multilingválny, anglicizmy navyše rieši phonetics.yaml (sk-SK-ViktoriaNeural = záloha)
+  voice: "sk-SK-ViktoriaNeural"   # rodená SK + phonetics.yaml; Emma (multilingválna) čítala fonetický prepis ako ruštinu
   rate: "0%"
   pitch: "0%"
   phonetics_file: "phonetics.yaml"   # anglicizmy -> slovenská fonetika, len pre TTS (titulky ostávajú v origináli)
@@ -107,13 +97,13 @@ fillers:
   skip_if_faster_than_ms: 800
   lines:
     - "moment, Emzo"
-    - "nechaj ma pozrieť"
+    - "pozriem"
     - "hmm"
-    - "počkaj"
-    - "idem na to"
     - "sekundu"
-    - "už na tom robím"
+    - "hľadám"
+    - "idem na to"
     - "chvíľu"
+    - "overujem"
 
 overlay:
   enabled: true
@@ -139,17 +129,17 @@ kick_chat:
   cooldown_per_user_sec: 180
 
 limits:
-  daily_usd_cap: 1.00         # tvrdý strop, chráni pred bugom v slučke
+  daily_usd_cap: 3.00         # tvrdý strop, chráni pred bugom v slučke (Opus ~0.9 c/otazka => ~$0.35/hod streamu)
   proactive_cooldown_sec: 300
   api_timeout_sec: 20
   api_retries: 1               # retry robí SDK (429, 5xx, timeout)
 
 fallback_phrases:
-  stt_failed: "Nepočula som ťa poriadne, Emzo. Skús to znova."
-  llm_failed: "Spojenie s netom je dnes v riti. Daj mi chvíľu."
-  tts_failed: "Mám čo povedať, ale hlas mi vypadol. Pozri na titulky."
-  budget_reached: "Na dnes som minula rozpočet, Emzo. Zajtra sme späť."
-  general_error: "Niečo sa posralo na mojej strane. Idem na to."
+  stt_failed: "Nerozumela som ti, Emzo. Zopakuj to."
+  llm_failed: "Spojenie s Netom vypadlo. Skús to o chvíľu."
+  tts_failed: "Hlas mi vypadol, Emzo. Odpoveď máš na HUDe."
+  budget_reached: "Dnešný rozpočet je vyčerpaný. Zajtra som späť."
+  general_error: "Mám chybu v systéme. Pracujem na tom."
 
 logging:
   file: "mirana.log"

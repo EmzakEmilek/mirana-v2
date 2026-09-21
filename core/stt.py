@@ -59,13 +59,14 @@ class LocalStt:
 
     def __init__(self, stt_cfg: dict):
         _register_cuda_dlls()
-        os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")  # Windows bez dev mode
+        os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")  # Windows bez dev mode: HF cache bez symlinkov
         from faster_whisper import WhisperModel
 
         self.language = stt_cfg["language"]
         # Slovnik nazvov ako initial_prompt — Whisper ho berie ako predchadzajuci kontext a preferuje tieto tvary.
         vocabulary = stt_cfg.get("local_vocabulary") or []
-        self.initial_prompt = ", ".join(vocabulary) + "." if vocabulary else None
+        prefix = stt_cfg.get("local_prompt_prefix") or ""
+        self.initial_prompt = f"{prefix} {', '.join(vocabulary)}.".strip() if vocabulary else None
         started = time.perf_counter()
         self.model = WhisperModel(
             stt_cfg["local_model"],

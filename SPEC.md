@@ -29,6 +29,7 @@ mirana-v2/
 ├── requirements.txt
 ├── .env                 # API kľúče (necommitovať)
 ├── persona.md
+├── phonetics.yaml       # anglicizmy → SK fonetika, len pre TTS
 ├── SPEC.md
 │
 ├── inputs/
@@ -38,9 +39,10 @@ mirana-v2/
 │
 ├── core/
 │   ├── config.py        # načítanie config.yaml + .env, jediné miesto s cestami
-│   ├── brain.py         # STT (core/stt.py) → LLM (Sonnet) → text
+│   ├── brain.py         # STT (core/stt.py) → LLM (Opus 5) → text
 │   ├── stt.py           # Whisper: api (OpenAI) | local (faster-whisper, CUDA)
 │   ├── memory.py        # posledných 8 výmen (RAM)
+│   ├── longterm.py      # data/memory.json: Erik (postup, fakty) + diváci, medzi sessions
 │   ├── budget.py        # denný strop, počítadlo tokenov
 │   └── safety.py        # výstupný filter pred TTS
 │
@@ -50,6 +52,7 @@ mirana-v2/
 │   └── overlay.py       # WebSocket server pre OBS
 │
 ├── fillers/             # predgenerované WAV, vznikne pri prvom spustení
+├── data/                # memory.json (necommitovať)
 ├── overlay/
 │   └── index.html       # diegetický HUD — HOTOVÝ, needituj vzhľad
 └── mod/
@@ -132,9 +135,20 @@ OBS na notebooku: Browser Source na `http://IP-herného-PC:8080`.
 4. Proaktívne hlášky: max 1 / 5 min, nikdy počas SPEAKING. `hp_critical` má
    výnimku z cooldownu.
 5. Keď mod nebeží, Mirana funguje ďalej bez kontextu.
+6. `core/longterm.py` — dlhodobá pamäť o Erikovi v `data/memory.json` (necommitovať):
+   - **Herný postup** z telemetrie, bez LLM: level, lifepath, štvrť, aktívny quest,
+     zoznam dokončených questov. Slúži aj spoiler pravidlu — čo Erik dokončil,
+     spoiler nie je.
+   - **Osobné fakty** (čo o sebe povie v rozhovore): na konci session jedno volanie
+     Haiku 4.5 nad výmenami → 5–15 riadkov. Voliteľné,
+     `memory.longterm.extract_facts: true|false`.
+   - Do promptu ide ako **samostatný system blok za personou** (~150 tokenov), nie
+     do persony, aby sa nerušil jej cache.
+   - Hlasové príkazy „Mirana, zabudni to" / „čo o mne vieš?" — druhý číta záznam
+     doslovne. Súbor je čitateľný JSON, Erik ho môže upraviť ručne.
 
 **Akceptácia:** „Mirana, čo mám robiť?" → odpoveď vychádza z aktívneho questu
-a lokácie bez toho, aby ich Erik povedal.
+a lokácie bez toho, aby ich Erik povedal. Po reštarte vie, kde Erik skončil.
 
 ---
 
@@ -149,6 +163,13 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 3. Fronta max 10. Cooldown 30 s globálne, 3 min na diváka. Orchestrátor berie
    z fronty len v stave IDLE a mimo combatu.
 4. Nick pred TTS prečisti (čísla, symboly, `xX...Xx`).
+5. Pamäť divákov (`core/longterm.py`, tá istá `data/memory.json`):
+   `{nick: {prvýkrát, naposledy, počet návštev, posledné 2–3 témy}}`, trvá medzi
+   sessions. Zápis deterministický, bez LLM, pri každej `[CHAT_SUB]` správe. Čítanie:
+   pri správe od známeho nicku jeden riadok do promptu
+   („Kubo: 3. návšteva, naposledy 21.9. sa pýtal na Sandevistan"). Ukladá sa len nick
+   a téma, nič osobné (Kick TOS). „Mirana, zabudni Kuba" záznam zmaže.
+   Simulácia 2026-09-21: 8-výmenové okno diváka zabudne za ~2 min.
 
 ---
 
@@ -164,7 +185,7 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 ## 8. Fáza 7 — Hardening
 
 1. `core/budget.py` — počítaj tokeny a odhadovanú cenu za deň.
-   `limits.daily_usd_cap: 1.00`. Pri dosiahnutí prestaň volať API, Mirana povie
+   `limits.daily_usd_cap` (3.00). Pri dosiahnutí prestaň volať API, Mirana povie
    hlášku v charaktere, zaloguj varovanie. Reset o polnoci.
 2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS
    a osobné údaje divákov. Pri zachytení preskoč vetu.
@@ -178,13 +199,18 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 
 ## 9. Náklady
 
-Sadzby (september 2026): Claude Sonnet 5 $2/$10 za milión tokenov, cache hit
-10 % ceny inputu, Whisper $0.006/min, Azure TTS Free F0 500K znakov/mesiac.
+Sadzby (september 2026): Claude Opus 5 $5/$25 za milión tokenov, cache hit 10 % ceny
+inputu, Azure TTS Free F0 500K znakov/mesiac, Whisper lokálne $0.
 
-Pri 800 výmenách na 100 hodín streamu: **~2,40 USD**. Limit je 10 € / 100 h.
+Merané 2026-09-21 (Opus 5, effort low, persona ~2 600 tok cachovaná, pamäť 8 výmen):
+**~0,9 c na otázku od Erika, ~0,65 c na správu z chatu** → pri 40 otázkach/hod
+**~$0.35/hod streamu**, 100 hodín ≈ $35. `limits.daily_usd_cap: 3.00`.
 
-Rozpočet rozbije: Opus namiesto Sonnetu, pamäť nad 8 výmen, nezacachovaná
-persona, alebo bug v slučke.
+Sonnet 5 by stál ~0,4 c/otázku, ale v teste mal 3 lore halucinácie, jazykové artefakty
+a prezradil spoiler — pre živý stream nepoužiteľné. Rozhodnutie: Opus.
+
+Rozpočet rozbije: effort nad low, pamäť nad 8 výmen, nezacachovaná persona
+(persona sa nesmie meniť za behu), alebo bug v slučke.
 
 ---
 

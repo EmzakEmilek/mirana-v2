@@ -50,6 +50,13 @@ Navrh routingu (na potvrdenie):
   Audio docasne na Logitech G733 (WASAPI, nativna frekvencia, sample_rate: null); pre stream prepnut
   output_device spat na Voicemeeter Input.
   Znama slabina: Sonnet obcas vymysli lore detail (Scalpel = katana, nie noz) — kandidat na Opus 5.
+- Persona v3 "Jarvis/Friday" (2026-09-21): sekcia Charakter (pokoj, suchy humor, lojalita
+  s nazorom, predvidavost, zdrzanlivost), register namiesto hotovych replik, zensky rod,
+  spoiler ani naznakom. 2612 tok. Pisomny test 24 promptov (vratane [GAME_EVENT], [CHAT_*],
+  telemetria, mimo hry) na Opus 5 low: 0.93 c/otazka, ton sedi, 0 unikov spoilerov.
+  LLM finalne: claude-opus-5, effort low (Sonnet 5 high = 3 halucinacie + jazykove artefakty).
+  Whisper: medium + slovensky prefix promptu (large-v3-turbo prekladal do anglictiny).
+  Zname slabiny modelu: Padre (El Coyote Cojo — zle), obcas prijme chybny predpoklad otazky.
 - Faza 2-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
