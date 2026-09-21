@@ -99,13 +99,10 @@ fillers:
   enabled: true
   skip_if_faster_than_ms: 800
   lines:
-    - "moment, Emzo"
-    - "pozriem"
-    - "hmm"
-    - "sekundu"
-    - "hľadám"
-    - "idem na to"
-    - "chvíľu"
+    - "sekundu, Emzo"
+    - "premýšľam"
+    - "momentík"
+    - "daj mi chvíľku"
     - "overujem"
 
 overlay:
