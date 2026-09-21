@@ -1,8 +1,11 @@
 """Voice: Azure TTS (sk-SK-ViktoriaNeural) do pamate, prehratie cez sounddevice na audio.output_device."""
 
+import ctypes
 import io
 import os
 import re
+import sys
+import threading
 import wave
 from xml.sax.saxutils import escape as xml_escape
 
@@ -35,6 +38,15 @@ _AZURE_FORMATS = {
     44100: speechsdk.SpeechSynthesisOutputFormat.Riff44100Hz16BitMonoPcm,
     48000: speechsdk.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm,
 }
+
+
+def _ensure_com() -> None:
+    """PortAudio WASAPI vyzaduje COM inicializovany v aktualnom vlakne; hlavne vlakno ho ma, nove nie.
+
+    CoInitializeEx je idempotentne (S_FALSE pri opakovani, RPC_E_CHANGED_MODE pri inom modeli — oboje neskodne).
+    """
+    if sys.platform == "win32":
+        ctypes.windll.ole32.CoInitializeEx(None, 0)  # COINIT_MULTITHREADED
 
 
 def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
@@ -111,6 +123,9 @@ class Voice:
         # WASAPI neprevzorkuje — necham Azure vratit WAV rovno v nativnej frekvencii vystupu
         # (VoiceMeeter 48 kHz, G733 44.1 kHz). Ine frekvencie preveziem v play() cez numpy.
         self.device_rate = int(sd.query_devices(self.output_device, "output")["default_samplerate"])
+        self._play_lock = threading.Lock()   # naraz hra len jedno
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
         output_format = _AZURE_FORMATS.get(self.device_rate, speechsdk.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
         speech_config.set_speech_synthesis_output_format(output_format)
         self._synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
@@ -133,8 +148,8 @@ class Voice:
             raise RuntimeError(f"Azure TTS zlyhalo: {reason}")
         return result.audio_data
 
-    def play(self, wav_bytes: bytes) -> None:
-        """Prehra WAV bytes na nakonfigurovane vystupne zariadenie (blokuje do konca)."""
+    def to_device_audio(self, wav_bytes: bytes) -> np.ndarray:
+        """WAV bytes -> int16 pole vo frekvencii vystupneho zariadenia (pripravene na sd.play)."""
         with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             channels = wav_file.getnchannels()
@@ -143,12 +158,47 @@ class Voice:
         audio = np.frombuffer(frames, dtype=np.int16).reshape(-1, channels)
         if sample_rate != self.device_rate:
             audio = _resample(audio, sample_rate, self.device_rate)
-        sd.play(audio, samplerate=self.device_rate, device=self.output_device)
-        sd.wait()
+        return audio
+
+    def play_audio(self, audio: np.ndarray, block: bool = True) -> None:
+        """Prehra pripravene pole na vystupne zariadenie.
+
+        Vlastny OutputStream s blokujucim write po 50 ms kusoch: stop() len nastavi flag, ktory
+        prehravacie vlakno skontroluje pred dalsim kusom. sd.stop() z ineho vlakna WASAPI stream
+        zhadzoval (crash procesu), toto je bezpecne z ktorehokolvek vlakna.
+        """
+        if block:
+            self._play_blocking(audio)
+            return
+        self._thread = threading.Thread(target=self._play_blocking, args=(audio,), daemon=True)
+        self._thread.start()
+
+    def _play_blocking(self, audio: np.ndarray) -> None:
+        _ensure_com()  # WASAPI stream z ineho vlakna (filler timer, worker) inak zlyha
+        with self._play_lock:
+            self._stop_event.clear()
+            chunk = int(self.device_rate * 0.05)
+            with sd.OutputStream(
+                samplerate=self.device_rate, device=self.output_device, channels=audio.shape[1], dtype="int16"
+            ) as stream:
+                for start in range(0, audio.shape[0], chunk):
+                    if self._stop_event.is_set():
+                        break
+                    stream.write(np.ascontiguousarray(audio[start:start + chunk]))
+
+    def play(self, wav_bytes: bytes) -> None:
+        """Prehra WAV bytes na nakonfigurovane vystupne zariadenie (blokuje do konca)."""
+        self.play_audio(self.to_device_audio(wav_bytes))
+
+    def wait(self) -> None:
+        """Pocka na koniec neblokujuceho prehravania (napr. filler pred odpovedou)."""
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join()
 
     def stop(self) -> None:
-        """Okamzite zastavi prehravanie (barge-in)."""
-        sd.stop()
+        """Okamzite zastavi prehravanie (barge-in). Bezpecne z ktorehokolvek vlakna."""
+        self._stop_event.set()
 
     def say(self, text: str) -> None:
         self.play(self.synthesize(text))

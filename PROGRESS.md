@@ -59,7 +59,12 @@ Navrh routingu (na potvrdenie):
   Zname slabiny modelu: Padre (El Coyote Cojo — zle), obcas prijme chybny predpoklad otazky.
 - ROZHODNUTIE 2026-09-21: Kick chat (Faza 5) ostava v plane, ale zatial VYPNUTY
   (kick_chat.enabled: false). Persona, routing na Sonnet a pamat divakov v SPEC ostavaju.
-- Faza 2-7: nezacate
+- Faza 2 (fillery + barge-in): KOD HOTOVY (2026-09-21). outputs/fillers.py (8 WAV, generuju sa
+  pri prvom starte), main.py prepisany: STT+LLM vo worker vlakne, generacia ulohy, filler z casovaca
+  po 800 ms, barge-in z PTT vlakna (stop < 100 ms). voice.py: vlastny OutputStream po 50 ms kusoch
+  (sd.stop z ineho vlakna padal, WASAPI z ineho vlakna potrebuje CoInitializeEx).
+  Automaticky test 4 scenarov presiel. CAKA NA TEST cez F12 (krok 17).
+- Faza 3-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
 - SPEC.md, persona.md, config.yaml, POSTUP.md ulozene v korene (COWORK-FAZA-0.md splneny a zmazany)
