@@ -2,7 +2,7 @@
 
 Datum setupu: 2026-09-20
 Projekt: C:\mirana-v2
-Repo: mirana-v2 (privatne, zatial nevytvorene na GitHube)
+Repo: https://github.com/EmzakEmilek/mirana-v2 (privatne)
 
 ## Nainstalovane / verzie
 - git: 2.55.0.windows.3
@@ -16,7 +16,7 @@ C:\mirana-v2\
   inputs/ core/ outputs/ overlay/ mod/ fillers/
   .gitignore, .env (prazdna sablona), venv/, audio-devices.txt
 
-venv balicky: python-dotenv, PyYAML, sounddevice, soundfile, numpy, pynput
+venv balicky: pozri requirements.txt (pip install -r requirements.txt)
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt)
 Vstup (mikrofon):
@@ -36,16 +36,32 @@ Navrh routingu (na potvrdenie):
 - Po instalacii: najst ...\Cyberpunk 2077\bin\x64\ a rozbalit tam najnovsi release
   z https://github.com/maximegmd/CyberEngineTweaks/releases
 
+## Stav faz
+- Faza 0 (priprava): HOTOVA (2026-09-20), okrem hry/CET a druheho mikrofonu
+- Faza 1 (jadro PTT -> Whisper -> Sonnet 5 -> Azure TTS): HOTOVA (2026-09-21).
+  5 testovacich kol, ~25 otazok, 0 padov, 0 chyb. Od pustenia F12 po hlas 3-5 s.
+  Cena ~0.3 c/otazka (Sonnet 5, effort medium, persona 2658 tok cachovana) => ~$0.20-0.25/hod streamu.
+- Faza 1b (lokalny Whisper): HOTOVA (2026-09-21). core/stt.py, faster-whisper medium/cuda/float16,
+  prepis 0.5-1.0 s, slovencina presna. Anglicke nazvy: stt.local_vocabulary (initial_prompt, max 224 tok)
+  + persona vie, ze prepis je foneticky (skalpel = Scalpel). OpenAI ucet uz nie je potrebny (provider api = zaloha).
+- Ladenie po testoch (2026-09-21): oslovenie "Emzo" (nie chum), odpovede max 2 vety/35 slov,
+  sarkazmus ako korenie nie zaklad, sekcia "Prirodzena rec" v persona.md.
+  TTS: en-US-EmmaMultilingualNeural + phonetics.yaml (anglicizmy -> SK fonetika len pre TTS).
+  Audio docasne na Logitech G733 (WASAPI, nativna frekvencia, sample_rate: null); pre stream prepnut
+  output_device spat na Voicemeeter Input.
+  Znama slabina: Sonnet obcas vymysli lore detail (Scalpel = katana, nie noz) — kandidat na Opus 5.
+- Faza 2-7: nezacate
+
 ## Podklady (HOTOVE, 2026-09-20)
-- SPEC.md, persona.md, config.yaml, POSTUP.md, COWORK-FAZA-0.md ulozene v korene
+- SPEC.md, persona.md, config.yaml, POSTUP.md ulozene v korene (COWORK-FAZA-0.md splneny a zmazany)
 - overlay/index.html (diegeticky HUD) ulozeny
 - .gitignore prepisany na plnu verziu (+ *.pyc, mirana_state.json)
 - .env.example ulozeny (obsahuje aj KICK_* pre Fazu 5)
-- config.yaml: audio.output_device predvyplnene na
-  "Voicemeeter Input (VB-Audio Voicemeeter VAIO)"; input_device ostava null
+- config.yaml: audio.output_device = "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
+  (presny match nazov+hostapi, index 57 sa moze menit); input_device ostava null
 
 ## Caka na Erika
-- [ ] gh auth login (+ vytvorit privatne repo mirana-v2)
+- [x] gh auth login + repo vytvorene
 - [ ] pridat do .env riadky KICK_CLIENT_ID / KICK_CLIENT_SECRET / KICK_CHANNEL_ID
       (rucne - .env sa neda zapisovat vzdialene; predloha je v .env.example)
 - [ ] doplnit API kluce do .env (ANTHROPIC_API_KEY, OPENAI_API_KEY, AZURE_SPEECH_KEY)

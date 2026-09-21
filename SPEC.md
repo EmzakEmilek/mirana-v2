@@ -26,6 +26,7 @@ mirana-v2/
 ├── run.py               # supervisor — spúšťa a reštartuje main.py, heartbeat
 ├── main.py              # orchestrátor: event loop, priority, stavový automat
 ├── config.yaml
+├── requirements.txt
 ├── .env                 # API kľúče (necommitovať)
 ├── persona.md
 ├── SPEC.md
@@ -36,7 +37,9 @@ mirana-v2/
 │   └── kick_chat.py     # Kick WebSocket, sub filter, fronta
 │
 ├── core/
-│   ├── brain.py         # STT (Whisper) → LLM (Sonnet) → text
+│   ├── config.py        # načítanie config.yaml + .env, jediné miesto s cestami
+│   ├── brain.py         # STT (core/stt.py) → LLM (Sonnet) → text
+│   ├── stt.py           # Whisper: api (OpenAI) | local (faster-whisper, CUDA)
 │   ├── memory.py        # posledných 8 výmen (RAM)
 │   ├── budget.py        # denný strop, počítadlo tokenov
 │   └── safety.py        # výstupný filter pred TTS
@@ -61,13 +64,16 @@ mirana-v2/
    zariadenia (druhý mikrofón) → pusti → vráť WAV v pamäti.
 2. `core/brain.py` — Whisper API (`whisper-1`, jazyk `sk`) → Claude Sonnet 5
    (`claude-sonnet-5`). System prompt = persona.md + riadok stavu hry + pamäť.
-   **Personu posielaj ako cacheable blok** (prompt caching).
+   **Personu posielaj ako cacheable blok** (prompt caching). Sonnet 5 neprijíma
+   `temperature`; thinking má vždy zapnuté → `effort: low`, `max_tokens` ≥ 800.
+   Každá správa od Erika nesie tag `[ERIK]` (kontrakt v persona.md).
 3. `core/memory.py` — deque 8 výmen, vkladá sa do promptu.
 4. `outputs/voice.py` — Azure TTS `sk-SK-ViktoriaNeural` → prehratie na
    konfigurovateľné zariadenie. Pred TTS sanitizuj text: preč `*`, `_`, emoji, markdown.
 5. `main.py` — stavový automat IDLE → LISTENING → PROCESSING → SPEAKING.
-6. Každé API volanie: timeout 20 s, 1 retry, pri zlyhaní fallback hláška
-   z config.yaml a návrat do IDLE. Proces nesmie skončiť na výnimke.
+6. Každé API volanie: timeout 20 s, 1 retry (rieši SDK cez `max_retries`, nie
+   vlastná slučka), pri zlyhaní fallback hláška z config.yaml a návrat do IDLE.
+   O fallbackoch rozhoduje main.py, moduly vracajú `None`. Proces nesmie skončiť na výnimke.
 
 **Akceptácia:** hodinový beh, 30+ otázok, žiadny pád, žiadna odpoveď dlhšia
 než ~15 s reči.
@@ -79,7 +85,7 @@ než ~15 s reči.
 1. `outputs/fillers.py` — pri prvom spustení vygeneruje cez TTS 8–12 krátkych
    hlášok zo zoznamu v config.yaml do `fillers/*.wav`. Ak súbory existujú,
    negeneruje nič.
-   Príklady: „moment, chum", „nechaj ma pozrieť", „hmm", „počkaj", „idem na to".
+   Príklady: „moment, Emzo", „nechaj ma pozrieť", „hmm", „počkaj", „idem na to".
 2. Pri pustení F12 okamžite prehraj náhodnú hlášku a pošli na HUD `PROCESSING`.
    Nikdy tú istú dvakrát po sebe.
 3. Ak odpoveď dorazí do 800 ms, filler nehraj.
@@ -184,8 +190,4 @@ persona, alebo bug v slučke.
 
 ## 10. Práca s Claude Code
 
-1. Jeden prompt = jeden krok: „Postav len `inputs/ptt.py` podľa sekcie 2 kroku 1.
-   Nič iné."
-2. Po každom kroku to Erik reálne spustí a overí — Claude Code nepočuje reproduktory.
-3. Commit po každom funkčnom kroku, tag po fáze (`v0.1-core`, `v0.2-fillers`…).
-4. Pri páde vkladaj celý traceback a log, nie parafrázu.
+Pozri POSTUP.md, sekcia „Práca s Claude Code“.

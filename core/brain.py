@@ -1,62 +1,45 @@
-"""Brain: STT (Whisper API) -> LLM (Claude). System prompt = persona (cacheable) + stav hry + pamat."""
+"""Brain: STT (core.stt, api|local) -> LLM (Claude). System prompt = persona (cacheable) + stav hry.
 
+Retry a timeout riesi SDK (max_retries / timeout na klientovi). Kazda metoda vrati None pri zlyhani,
+o fallbacku rozhoduje main.py.
+"""
+
+import logging
 import os
-from pathlib import Path
 
-import yaml
 from anthropic import Anthropic
-from dotenv import load_dotenv
-from openai import OpenAI
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-CONFIG_PATH = BASE_DIR / "config.yaml"
-PERSONA_PATH = BASE_DIR / "persona.md"
+from core.config import load_persona
+from core.stt import create_stt
 
-load_dotenv(BASE_DIR / ".env")
-
-
-def load_config() -> dict:
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def load_persona() -> str:
-    return PERSONA_PATH.read_text(encoding="utf-8")
+logger = logging.getLogger(__name__)
 
 
 class Brain:
-    """STT (Whisper) -> LLM (Claude Sonnet 5) -> text. Kazde API volanie: timeout, 1 retry, fallback."""
+    """STT (Whisper) -> LLM (Claude Sonnet 5) -> text."""
 
-    def __init__(self, config: dict | None = None):
-        self.config = config or load_config()
+    def __init__(self, config: dict):
         self.persona = load_persona()
+        self.llm_cfg = config["llm"]
+        limits = config["limits"]
 
-        self.stt_cfg = self.config["stt"]
-        self.llm_cfg = self.config["llm"]
-        self.limits_cfg = self.config["limits"]
-        self.fallback_phrases = self.config["fallback_phrases"]
-
-        self.timeout = self.limits_cfg["api_timeout_sec"]
-        self.retries = self.limits_cfg["api_retries"]
-
-        self.openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=self.timeout)
-        self.anthropic_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"), timeout=self.timeout)
+        self.stt = create_stt(config)
+        # API kluc si SDK cita z ANTHROPIC_API_KEY (nacitane v core.config). Kluc bez workspace
+        # vyzaduje hlavicku anthropic-workspace-id — ANTHROPIC_WORKSPACE_ID v .env (alebo kluc vytvoreny vo workspace).
+        headers = {}
+        if os.environ.get("ANTHROPIC_WORKSPACE_ID"):
+            headers["anthropic-workspace-id"] = os.environ["ANTHROPIC_WORKSPACE_ID"]
+        self.anthropic_client = Anthropic(
+            timeout=limits["api_timeout_sec"], max_retries=limits["api_retries"], default_headers=headers
+        )
+        self._cache_checked = False
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
-        """Whisper API, jazyk podla config. None pri zlyhani po vsetkych pokusoch."""
-        for _ in range(self.retries + 1):
-            try:
-                result = self.openai_client.audio.transcriptions.create(
-                    model=self.stt_cfg["api_model"],
-                    file=("audio.wav", wav_bytes, "audio/wav"),
-                    language=self.stt_cfg["language"],
-                )
-                return result.text
-            except Exception:
-                continue
-        return None
+        """Whisper (api|local podla config), jazyk podla config. None pri zlyhani."""
+        return self.stt.transcribe(wav_bytes)
 
     def _build_system(self, game_state_line: str | None) -> list[dict]:
+        # Persona je prvy (stabilny) blok s cache breakpointom, stav hry ide az za nim.
         persona_block = {"type": "text", "text": self.persona}
         if self.llm_cfg.get("cache_persona"):
             persona_block["cache_control"] = {"type": "ephemeral"}
@@ -66,46 +49,29 @@ class Brain:
             system.append({"type": "text", "text": game_state_line})
         return system
 
-    def ask(
-        self,
-        user_text: str,
-        game_state_line: str | None,
-        memory_messages: list[dict],
-    ) -> str | None:
-        """Claude Sonnet, system = persona (cacheable) + stav hry. None pri zlyhani po vsetkych pokusoch."""
-        system = self._build_system(game_state_line)
-        messages = [*memory_messages, {"role": "user", "content": user_text}]
+    def ask(self, user_text: str, game_state_line: str | None, memory_messages: list[dict]) -> str | None:
+        """Claude Sonnet 5, system = persona (cacheable) + stav hry. None pri zlyhani."""
+        try:
+            response = self.anthropic_client.messages.create(
+                model=self.llm_cfg["model"],
+                max_tokens=self.llm_cfg["max_tokens"],
+                output_config={"effort": self.llm_cfg["effort"]},
+                system=self._build_system(game_state_line),
+                messages=[*memory_messages, {"role": "user", "content": user_text}],
+            )
+        except Exception as e:
+            logger.warning("Claude ask zlyhalo: %s", e)
+            return None
 
-        for _ in range(self.retries + 1):
-            try:
-                response = self.anthropic_client.messages.create(
-                    model=self.llm_cfg["model"],
-                    max_tokens=self.llm_cfg["max_tokens"],
-                    temperature=self.llm_cfg["temperature"],
-                    system=system,
-                    messages=messages,
-                )
-                return "".join(block.text for block in response.content if block.type == "text")
-            except Exception:
-                continue
-        return None
+        usage = response.usage
+        logger.info(
+            "tokens: input=%s cache_read=%s cache_create=%s output=%s",
+            usage.input_tokens, usage.cache_read_input_tokens, usage.cache_creation_input_tokens, usage.output_tokens,
+        )
+        # Jednorazova kontrola, ci sa persona naozaj cachuje (min. 1024 tokenov pre Sonnet 5).
+        if not self._cache_checked and memory_messages:
+            self._cache_checked = True
+            if not usage.cache_read_input_tokens:
+                logger.warning("persona sa necachuje — je kratsia nez cache minimum? Skontroluj SPEC §9.")
 
-    def process(
-        self,
-        wav_bytes: bytes,
-        game_state_line: str | None,
-        memory_messages: list[dict],
-    ) -> tuple[str | None, str]:
-        """STT -> LLM -> (transcript, text). Pri zlyhani ktorejkolvek casti vrati fallback hlasku z config.yaml.
-
-        transcript je None ak zlyhalo STT (nema zmysel ho ukladat do pamate).
-        """
-        transcript = self.transcribe(wav_bytes)
-        if transcript is None:
-            return None, self.fallback_phrases["stt_failed"]
-
-        answer = self.ask(transcript, game_state_line, memory_messages)
-        if answer is None:
-            return transcript, self.fallback_phrases["llm_failed"]
-
-        return transcript, answer
+        return "".join(block.text for block in response.content if block.type == "text")

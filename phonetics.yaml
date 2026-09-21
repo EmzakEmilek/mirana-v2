@@ -1,0 +1,193 @@
+# Fonetický prepis anglicizmov pre TTS (outputs/voice.py). Titulky a log ostávajú v pôvodnom pravopise,
+# nahradí sa len text, ktorý ide do Azure.
+#
+# Pravidlá:
+#  - kľúč sa hľadá bez ohľadu na veľkosť písmen, na začiatku slova; koniec slova sa neviaže,
+#    takže "Silverhand" chytí aj "Silverhandom", "Arasak" aj "Arasakou" (skloňovanie)
+#  - dlhší kľúč má prednosť ("Night City" pred "City")
+#  - veľké začiatočné písmeno sa zachová
+#  - kľúč = pravopis, hodnota = ako to má Slovák prečítať
+
+# --- postavy ---
+Johnny Silverhand: Džony Silverhend
+Silverhand: Silverhend
+Johnny: Džony
+Judy Alvarez: Džudy Alvarez
+Judy: Džudy
+Panam Palmer: Panam Palmer
+Jackie Welles: Džeky Vels
+Jackie: Džeky
+Kerry Eurodyne: Kery Jurodajn
+Kerry: Kery
+River Ward: Rivr Vord
+Goro Takemura: Goro Takemura
+Adam Smasher: Adam Smešr
+Smasher: Smešr
+Dexter DeShawn: Dexter Dešón
+Evelyn Parker: Evelin Parker
+Evelyn: Evelin
+Alt Cunningham: Alt Kaningem
+Rogue: Roug
+Viktor Vektor: Viktor Vektor
+Misty: Misty
+Delamain: Delamejn
+Songbird: Songbérd
+Solomon Reed: Solomon Ríd
+Reed: Ríd
+Kurt Hansen: Kurt Hensen
+Myers: Majers
+Placide: Plasíd
+Brigitte: Brižit
+Regina Jones: Redžina Džouns
+Wakako: Vakako
+Mr. Hands: Mister Hends
+Sandra Dorsett: Sandra Dorset
+
+# --- gangy, korporácie ---
+Aldecaldos: Aldekaldos
+Voodoo Boys: Vúdú Bojs
+Maelstrom: Mejlstrom
+Tyger Claws: Tajger Klós
+Valentinos: Valentínos
+Scavengers: Skevendžers
+Scavs: Skevs
+Barghest: Bargest
+Arasaka: Arasaka
+Militech: Militek
+Kang Tao: Kang Tao
+NetWatch: Netvoč
+Trauma Team: Trauma Tím
+NCPD: En Sí Pí Dí
+MaxTac: Maxtak
+Biotechnica: Biotechnika
+Zetatech: Zetatek
+
+# --- lore, miesta ---
+Night City: Najt Siti
+Relic: Relik
+Blackwall: Blekvól
+Mikoshi: Mikoši
+Soulkiller: Soulkiler
+Dogtown: Dogtaun
+Watson: Votson
+Westbrook: Vestbruk
+Heywood: Hejvud
+Pacific: Pacifik
+Santo Domingo: Santo Domingo
+City Center: Siti Sentr
+Badlands: Bedlends
+Kabuki: Kabuki
+Japantown: Džepentaun
+Little China: Litl Čajna
+Charter Hill: Čártr Hil
+Afterlife: Afterlajf
+Lizzie's Bar: Lizis Bar
+Konpeki Plaza: Konpeki Plaza
+Phantom Liberty: Fantom Liberty
+Cyberpunk: Sajberpank
+Edgerunners: Edžraners
+Unification War: Junifikejšn Vór
+Corporate War: Korporejt Vór
+
+# --- cyberware, mechaniky ---
+netrunning: netraning
+netrunner: netraner
+quickhacking: kvikheking
+quickhack: kvikhek
+cyberdeck: sajberdek
+cyberware: sajbervér
+cyberpsycho: sajbersajko
+ripperdoc: riperdok
+Sandevistan: Sandevistan
+Kerenzikov: Kerenzikov
+Berserk: Berserk
+Mantis Blades: Mantis Blejds
+Monowire: Monovajr
+Gorilla Arms: Gorila Arms
+Projectile Launch System: Prodžektajl Lónč Sistem
+iconic: ajkonik
+eddies: edís
+street cred: strít kred
+fixer: fixer
+braindance: brejndens
+gig: gig
+perk: perk
+build: bild
+crit chance: krit čens
+crit: krit
+damage: demidž
+melee: melí
+headshot: hedšot
+stealth: stels
+throwing: throuing
+smart: smárt
+tech: tek
+shotgun: šotgan
+sniper: snajper
+katana: katana
+blade: blejd
+blades: blejds
+sandy: sendy
+Solo: Solo
+Techie: Teki
+Nomad: Nomad
+Corpo: Korpo
+Street Kid: Strít Kid
+Body: Body
+Reflexes: Reflexes
+Cool: Kúl
+Intelligence: Inteligens
+Technical Ability: Teknikl Ebility
+quest: kvest
+side job: sajd džob
+main job: mejn džob
+walkthrough: vókstrú
+ending: ending
+endings: endings
+romance: romanc
+loot: lút
+stash: steš
+save: sejv
+respawn: rispón
+checkpoint: čekpojnt
+lifepath: lajfpat
+skill: skil
+skillcheck: skilček
+skill check: skil ček
+cooldown: kúldaun
+buff: baf
+nerf: nerf
+overheat: ovrhít
+RAM: rem
+OS: ó es
+HP: há pé
+
+# --- zbrane ---
+Satori: Satori
+Errata: Errata
+Scalpel: Skalpel
+Malorian: Malorian
+Skippy: Skipy
+Overwatch: Ovrvoč
+Widow Maker: Vidou Mejker
+Lizzie: Lizi
+Dying Night: Dajing Najt
+Comrade's Hammer: Komreds Hemr
+Problem Solver: Problem Solvr
+Divided We Stand: Divajdid Ví Stend
+Jinchu-Maru: Džinču Maru
+Cocktail Stick: Koktejl Stik
+Byakko: Bjako
+Nehan: Nehan
+Chaos: Kejos
+Doom Doom: Dúm Dúm
+Fenrir: Fenrir
+Archangel: Arkejndžel
+Crash: Kreš
+Amnesty: Emnesty
+Psalm: Sálm
+Apparition: Eparišn
+Prejudice: Predžudis
+Guts: Gats
+Bloody Maria: Bladi Maria
+Ba Xing Chong: Ba Šing Čong

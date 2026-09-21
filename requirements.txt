@@ -1,0 +1,14 @@
+# pip install -r requirements.txt  (vo venv)
+python-dotenv
+PyYAML
+numpy
+sounddevice
+soundfile
+pynput
+anthropic>=1.7
+openai>=3
+azure-cognitiveservices-speech
+faster-whisper
+# CUDA runtime pre faster-whisper bez instalacie CUDA toolkitu (core/stt.py ich registruje)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12

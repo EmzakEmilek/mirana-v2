@@ -3,32 +3,101 @@
 
 audio:
   # Presné názvy zisti cez: python -m sounddevice
-  input_device: null          # druhý mikrofón na hernom PC
-  output_device: "Voicemeeter Input (VB-Audio Voicemeeter VAIO)"  # WASAPI #57 / MME #20
-  sample_rate: 16000
+  input_device: "Microphone (Logitech G733 Gaming Headset), Windows WASAPI"   # docasne slúchadlá; neskôr druhý mikrofón
+  # "názov, hostapi" = presný match; samotný názov by trafil aj MME variant, index sa mení po pripojení zariadenia
+  output_device: "Speakers (Logitech G733 Gaming Headset), Windows WASAPI"     # docasne; pre stream: "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
+  sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
   ptt_key: "f12"
   panic_mute_key: "f11"
 
 stt:
-  provider: "api"             # "api" (Whisper API) alebo "local" (faster-whisper)
+  provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)
   api_model: "whisper-1"
-  local_model: "medium"       # small | medium | large-v3 — medium je kompromis pre SK
+  local_model: "medium"       # small | medium | large-v3 — medium je kompromis pre SK (test 1b: medium)
   local_device: "cuda"
   local_compute_type: "float16"
   language: "sk"
+  # Slovník pre lokálny Whisper (initial_prompt): naladí ho na anglické názvy z CP2077, ktoré inak
+  # prepisuje foneticky ("na SETI" = Night City, "čudy" = Judy). Whisper berie max 224 tokenov, dlhsi zoznam ticho oreze zlava — pri pridavani nieco vyhod.
+  local_vocabulary:
+    - "Mirana"
+    - "Emzo"
+    - "Night City"
+    - "Johnny Silverhand"
+    - "Judy"
+    - "Panam"
+    - "Jackie"
+    - "Kerry"
+    - "River"
+    - "Takemura"
+    - "Hanako"
+    - "Adam Smasher"
+    - "Evelyn"
+    - "Alt Cunningham"
+    - "Rogue"
+    - "Viktor"
+    - "Misty"
+    - "Delamain"
+    - "Songbird"
+    - "Reed"
+    - "Aldecaldos"
+    - "Voodoo Boys"
+    - "Maelstrom"
+    - "Tyger Claws"
+    - "Valentinos"
+    - "Barghest"
+    - "Arasaka"
+    - "Militech"
+    - "NetWatch"
+    - "Trauma Team"
+    - "NCPD"
+    - "MaxTac"
+    - "Relic"
+    - "Blackwall"
+    - "Mikoshi"
+    - "Soulkiller"
+    - "Dogtown"
+    - "Watson"
+    - "Westbrook"
+    - "Heywood"
+    - "Pacifica"
+    - "Badlands"
+    - "Kabuki"
+    - "Japantown"
+    - "Afterlife"
+    - "Phantom Liberty"
+    - "netrunner"
+    - "quickhack"
+    - "cyberdeck"
+    - "cyberware"
+    - "ripperdoc"
+    - "Sandevistan"
+    - "Kerenzikov"
+    - "Mantis Blades"
+    - "Monowire"
+    - "Satori"
+    - "Errata"
+    - "Scalpel"
+    - "iconic"
+    - "eddies"
+    - "street cred"
+    - "fixer"
+    - "braindance"
+    - "gig"
+    - "perk"
 
 llm:
-  provider: "anthropic"
   model: "claude-sonnet-5"
-  max_tokens: 300
-  temperature: 0.9
+  max_tokens: 800             # strop pre thinking + odpoveď dokopy; 300 by orezalo odpoveď
+  effort: "medium"            # Sonnet 5 má adaptívne thinking vždy zapnuté — low = najnižšia latencia, medium = presnejšie lore, prirodzenejšia reč
+                              # (temperature Sonnet 5 neprijíma, štýl rieši persona.md)
   cache_persona: true         # persona ako cacheable blok — zásadné pre rozpočet
 
 tts:
-  provider: "azure"
-  voice: "sk-SK-ViktoriaNeural"
+  voice: "en-US-EmmaMultilingualNeural"   # multilingválny, anglicizmy navyše rieši phonetics.yaml (sk-SK-ViktoriaNeural = záloha)
   rate: "0%"
   pitch: "0%"
+  phonetics_file: "phonetics.yaml"   # anglicizmy -> slovenská fonetika, len pre TTS (titulky ostávajú v origináli)
 
 memory:
   max_exchanges: 8            # vyššie číslo = výrazne drahší input
@@ -37,7 +106,7 @@ fillers:
   enabled: true
   skip_if_faster_than_ms: 800
   lines:
-    - "moment, chum"
+    - "moment, Emzo"
     - "nechaj ma pozrieť"
     - "hmm"
     - "počkaj"
@@ -73,13 +142,13 @@ limits:
   daily_usd_cap: 1.00         # tvrdý strop, chráni pred bugom v slučke
   proactive_cooldown_sec: 300
   api_timeout_sec: 20
-  api_retries: 1
+  api_retries: 1               # retry robí SDK (429, 5xx, timeout)
 
 fallback_phrases:
-  stt_failed: "Nepočula som ťa poriadne, chum. Skús to znova."
+  stt_failed: "Nepočula som ťa poriadne, Emzo. Skús to znova."
   llm_failed: "Spojenie s netom je dnes v riti. Daj mi chvíľu."
   tts_failed: "Mám čo povedať, ale hlas mi vypadol. Pozri na titulky."
-  budget_reached: "Na dnes som minula rozpočet, chum. Zajtra sme späť."
+  budget_reached: "Na dnes som minula rozpočet, Emzo. Zajtra sme späť."
   general_error: "Niečo sa posralo na mojej strane. Idem na to."
 
 logging:
