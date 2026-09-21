@@ -13,9 +13,11 @@ Stavia sa po fázach — každá je samostatne testovateľná a commitnutá.
 4. Každý modul má vlastný try/except a smie zlyhať sám za seba. Supervisor
    reštartuje proces.
 5. Vstupy hádžu eventy do fronty, o poradí rozhoduje jedine main.py.
-6. Priorita: Erik (PTT) > herné eventy > chat.
+6. Priorita: Erik (PTT) > herné eventy.
 7. Model pozná CP2077 z tréningu, lore databáza sa nepoužíva.
 8. Konfigurácia patrí do config.yaml.
+9. Diváci sa s Miranou nerozprávajú. Chat sa nečíta a nespracúva — Mirana je Erikov
+   copilot, diváci ju len počujú (rozhodnutie 2026-09-21).
 
 ---
 
@@ -34,15 +36,14 @@ mirana-v2/
 │
 ├── inputs/
 │   ├── ptt.py           # F12 → nahrávka
-│   ├── game_state.py    # číta JSON z CET modu → eventy
-│   └── kick_chat.py     # Kick WebSocket, sub filter, fronta
+│   └── game_state.py    # číta JSON z CET modu → eventy
 │
 ├── core/
 │   ├── config.py        # načítanie config.yaml + .env, jediné miesto s cestami
 │   ├── brain.py         # STT (core/stt.py) → LLM (Opus 5) → text
 │   ├── stt.py           # Whisper: api (OpenAI) | local (faster-whisper, CUDA)
 │   ├── memory.py        # posledných 8 výmen (RAM)
-│   ├── longterm.py      # data/memory.json: Erik (postup, fakty) + diváci, medzi sessions
+│   ├── longterm.py      # data/memory.json: Erik (postup, fakty), medzi sessions
 │   ├── budget.py        # denný strop, počítadlo tokenov
 │   └── safety.py        # výstupný filter pred TTS
 │
@@ -110,10 +111,10 @@ HTML je hotové a vystavuje tieto funkcie — napoj na ne WebSocket a **vzhľad 
 | Funkcia | Volá sa keď |
 |---|---|
 | `setState('idle'\|'listening'\|'processing'\|'speaking')` | zmena stavu |
-| `showQuestion(text)` | prepis Erikovej otázky alebo `[SYSTÉM]` / meno diváka |
+| `showQuestion(text)` | prepis Erikovej otázky alebo `[SYSTÉM]` |
 | `typeAnswer(text, msPerChar)` | celá odpoveď naraz, HUD ju vypíše sám |
 | `setTelemetry({hp, location, quest, combat})` | nový stav hry |
-| `setQueue(n)` | zmena dĺžky chat fronty |
+| `setQueue(n)` | nepoužíva sa (chat zrušený), nechaj na 0 |
 
 V `index.html` odstráň demo slučku na konci `<script>` a nahraď ju pripojením
 na WebSocket. Doplň reconnect logiku.
@@ -152,28 +153,7 @@ a lokácie bez toho, aby ich Erik povedal. Po reštarte vie, kde Erik skončil.
 
 ---
 
-## 6. Fáza 5 — Kick chat
-
-Pred písaním si načítaj aktuálnu dokumentáciu na docs.kick.com. Modul drž
-izolovaný — jeho pád nesmie ovplyvniť zvyšok.
-
-1. `inputs/kick_chat.py` — pripojenie, parsovanie správ a badges odosielateľa.
-2. Sub / mod / OG → `!mira <otázka>` ide do fronty. Nesub → ignoruj, približne
-   každú desiatu krátko odmietni v charaktere.
-3. Fronta max 10. Cooldown 30 s globálne, 3 min na diváka. Orchestrátor berie
-   z fronty len v stave IDLE a mimo combatu.
-4. Nick pred TTS prečisti (čísla, symboly, `xX...Xx`).
-5. Pamäť divákov (`core/longterm.py`, tá istá `data/memory.json`):
-   `{nick: {prvýkrát, naposledy, počet návštev, posledné 2–3 témy}}`, trvá medzi
-   sessions. Zápis deterministický, bez LLM, pri každej `[CHAT_SUB]` správe. Čítanie:
-   pri správe od známeho nicku jeden riadok do promptu
-   („Kubo: 3. návšteva, naposledy 21.9. sa pýtal na Sandevistan"). Ukladá sa len nick
-   a téma, nič osobné (Kick TOS). „Mirana, zabudni Kuba" záznam zmaže.
-   Simulácia 2026-09-21: 8-výmenové okno diváka zabudne za ~2 min.
-
----
-
-## 7. Fáza 6 — Audio routing + DSP
+## 6. Fáza 5 — Audio routing + DSP
 
 1. `voice.py` prehráva do VoiceMeeter Input na hernom PC.
 2. VST reťaz na tom kanáli: bitcrusher → ring mod → EQ (HP 180 Hz, LP 5200 Hz)
@@ -182,13 +162,13 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 
 ---
 
-## 8. Fáza 7 — Hardening
+## 7. Fáza 6 — Hardening
 
 1. `core/budget.py` — počítaj tokeny a odhadovanú cenu za deň.
    `limits.daily_usd_cap` (3.00). Pri dosiahnutí prestaň volať API, Mirana povie
    hlášku v charaktere, zaloguj varovanie. Reset o polnoci.
-2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS
-   a osobné údaje divákov. Pri zachytení preskoč vetu.
+2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS.
+   Pri zachytení preskoč vetu.
 3. `run.py` — supervisor: sleduj heartbeat, pri páde alebo zamrznutí (>60 s)
    reštartuj. Max 5 reštartov za hodinu.
 4. Panic mute na F11 — okamžite umlčí Miranu a pozastaví spracovanie.
@@ -197,13 +177,13 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 
 ---
 
-## 9. Náklady
+## 8. Náklady
 
 Sadzby (september 2026): Claude Opus 5 $5/$25 za milión tokenov, cache hit 10 % ceny
 inputu, Azure TTS Free F0 500K znakov/mesiac, Whisper lokálne $0.
 
 Merané 2026-09-21 (Opus 5, effort low, persona ~2 600 tok cachovaná, pamäť 8 výmen):
-**~0,9 c na otázku od Erika, ~0,65 c na správu z chatu** → pri 40 otázkach/hod
+**~0,9 c na otázku od Erika** → pri 40 otázkach/hod
 **~$0.35/hod streamu**, 100 hodín ≈ $35. `limits.daily_usd_cap: 3.00`.
 
 Sonnet 5 by stál ~0,4 c/otázku, ale v teste mal 3 lore halucinácie, jazykové artefakty
@@ -214,6 +194,6 @@ Rozpočet rozbije: effort nad low, pamäť nad 8 výmen, nezacachovaná persona
 
 ---
 
-## 10. Práca s Claude Code
+## 9. Práca s Claude Code
 
 Pozri POSTUP.md, sekcia „Práca s Claude Code“.

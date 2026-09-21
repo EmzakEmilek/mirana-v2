@@ -49,18 +49,9 @@ class Brain:
             system.append({"type": "text", "text": game_state_line})
         return system
 
-    def _route(self, user_text: str) -> tuple[str, str]:
-        if user_text.startswith("[CHAT_") and self.llm_cfg.get("chat_model"):
-            return self.llm_cfg["chat_model"], self.llm_cfg.get("chat_effort", self.llm_cfg["effort"])
-        return self.llm_cfg["model"], self.llm_cfg["effort"]
-
     def ask(self, user_text: str, game_state_line: str | None, memory_messages: list[dict]) -> str | None:
-        """Claude, system = persona (cacheable) + stav hry. None pri zlyhani.
-
-        Erik a herne eventy idu na llm.model, chat divakov na llm.chat_model (lacnejsi).
-        Persona sa cachuje na kazdom modeli zvlast, pamat je spolocna (cisty text).
-        """
-        model, effort = self._route(user_text)
+        """Claude, system = persona (cacheable) + stav hry. None pri zlyhani."""
+        model, effort = self.llm_cfg["model"], self.llm_cfg["effort"]
         try:
             response = self.anthropic_client.messages.create(
                 model=model,

@@ -69,13 +69,7 @@ Herný PC na kábli, nie Wi-Fi.
 21. **[ERIK]** Spustí Cyberpunk, hrá 2 min, overí že sa JSON mení a že Mirana pozná
     quest bez toho, aby ho povedal. Nechá klesnúť HP pod 25 % — musí sa ozvať sama.
 
-## Fáza 5 — Kick chat
-
-22. **[COWORK]** Stiahne aktuálnu dokumentáciu z docs.kick.com do repa.
-23. **[CODE]** SPEC sekcia 6.
-24. **[ERIK]** Test z druhého účtu — sub prejde, nesub nie.
-
-## Fáza 6 — Zvuk a napojenie notebooku
+## Fáza 5 — Zvuk a napojenie notebooku
 
 25. **[COWORK]** Stiahne free VST pluginy (bitcrusher, ring mod, EQ, limiter).
 26. **[ERIK]** Herný PC: `voice.py` hrá do VoiceMeeter Input, VST reťaz na kanáli,
@@ -87,10 +81,10 @@ Herný PC na kábli, nie Wi-Fi.
 29. **[ERIK]** Firewall na hernom PC: TCP 8080 a UDP 6980, obe len Private.
     Statická IP alebo DHCP rezervácia pre herný PC.
 
-## Fáza 7 — Hardening
+## Fáza 6 — Hardening
 
 30. **[CODE]** SPEC sekcia 8 — budget cap, safety filter, supervisor, panic mute F11.
-31. **[ERIK]** 8-hodinový suchý beh: skript + hra + mod + overlay + chat.
+31. **[ERIK]** 8-hodinový suchý beh: skript + hra + mod + overlay.
     Sleduj RAM a chyby v logu.
 32. **[ERIK]** Prvý ostrý stream.
 
@@ -103,7 +97,6 @@ Herný PC na kábli, nie Wi-Fi.
 - [ ] Testovacia otázka cez F12 → počuť odpoveď
 - [ ] Notebook: overlay v OBS svieti (stav IDLE)
 - [ ] Miranin hlas vidno v OBS audio mixeri
-- [ ] Kick chat pripojený
 - [ ] Vieš, kde je panic mute (F11)
 
 ---
