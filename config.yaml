@@ -97,7 +97,7 @@ memory:
 
 fillers:
   enabled: true
-  skip_if_faster_than_ms: 800
+  skip_if_faster_than_ms: 1300      # pauza pred fillerom (~0.8 s STT + 0.5 s prirodzena prestavka); rychlejsia odpoved filler preskoci
   lines:
     - "sekundu, Emzo"
     - "premýšľam"
