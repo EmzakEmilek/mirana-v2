@@ -55,11 +55,13 @@ class Mirana:
         self.voice = Voice(config)
         self.fillers = Fillers(config, self.voice)
         self.overlay = Overlay(config)
+        self.voice.on_level = self.overlay.level
         self.ptt = PushToTalk(
             config,
             on_start=self._on_ptt_press,
             on_recording=lambda wav: self._events.put(("recording", wav)),
         )
+        self.ptt.on_level = self.overlay.level
 
     def _set_state(self, state: State) -> None:
         self.state = state
@@ -146,7 +148,8 @@ class Mirana:
             with self._lock:
                 if job.gen != self._gen:
                     return
-            self.overlay.answer(text)  # HUD pise sucasne s hlasom; Erikova otazka sa nezobrazuje
+            # HUD pise v tempe hlasu; Erikova otazka sa nezobrazuje
+            self.overlay.answer(text, duration_sec=audio.shape[0] / self.voice.device_rate)
             self.voice.play_audio(audio, block=True)
         except Exception:
             logger.exception("voice zlyhal")

@@ -49,6 +49,12 @@ def _ensure_com() -> None:
         ctypes.windll.ole32.CoInitializeEx(None, 0)  # COINIT_MULTITHREADED
 
 
+def _level(chunk: np.ndarray) -> float:
+    """RMS int16 kusu -> 0..1, s miernou kompresiou, aby aj tichsia rec hybala vizualom."""
+    rms = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2))) / 32767.0
+    return min(1.0, (rms * 4.0) ** 0.6)
+
+
 def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
     """Linearna interpolacia — pre rec staci, pouzije sa len ak Azure nevie nativnu frekvenciu vystupu."""
     src_len = audio.shape[0]
@@ -126,6 +132,7 @@ class Voice:
         self._play_lock = threading.Lock()   # naraz hra len jedno
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self.on_level = None  # callback(0..1) pre kazdy prehrany kus — HUD vizualizacia hlasu
         output_format = _AZURE_FORMATS.get(self.device_rate, speechsdk.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
         speech_config.set_speech_synthesis_output_format(output_format)
         self._synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
@@ -184,7 +191,12 @@ class Voice:
                 for start in range(0, audio.shape[0], chunk):
                     if self._stop_event.is_set():
                         break
-                    stream.write(np.ascontiguousarray(audio[start:start + chunk]))
+                    piece = np.ascontiguousarray(audio[start:start + chunk])
+                    if self.on_level is not None:
+                        self.on_level(_level(piece))
+                    stream.write(piece)
+            if self.on_level is not None:
+                self.on_level(0.0)
 
     def play(self, wav_bytes: bytes) -> None:
         """Prehra WAV bytes na nakonfigurovane vystupne zariadenie (blokuje do konca)."""

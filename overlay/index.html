@@ -2,12 +2,14 @@
 <html lang="sk">
 <head>
 <meta charset="UTF-8">
-<title>MIRANA HUD — diegetic v3</title>
+<title>MIRANA HUD — living core v4</title>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Pozadie je tmavé len pre test v prehliadači. OBS Browser Source ho svojím
+     predvoleným CSS (body { background-color: rgba(0,0,0,0) }) spraví priehľadným. */
   html, body {
     margin: 0; padding: 0; height: 100%;
-    background: #0a0a0c; /* V OBS: transparent */
+    background: #0a0a0c;
     font-family: 'Share Tech Mono', monospace;
     overflow: hidden;
   }
@@ -15,239 +17,286 @@
     --yellow: #FCEE0A;
     --cyan: #00F0FF;
     --red: #FF003C;
-    --panel-bg: rgba(8,10,9,0.82);
-    --panel-border: rgba(252,238,10,0.35);
+    --dim: rgba(255,255,255,.38);
+    --panel-bg: rgba(6,8,8,0.78);
+    --accent: var(--yellow);
   }
 
   .hud { position: relative; width: 100%; height: 100vh; }
 
   /* ==================================================================
-     DIEGETICKÝ PANEL — základná stavebná jednotka, podľa referencie:
-     tenký farebný okraj, uťatý roh (clip-path), tmavé poloprie hľadné
-     pozadie, drobný "ornament" štítok v rohu. Žiadne scanlines/vinety —
-     hra má vlastnú chromatickú aberáciu, netreba ju duplikovať.
+     HLAVNÝ PANEL — dole na stred. Vľavo jadro (canvas), vpravo text.
+     Farba akcentu sa mení so stavom (idle tlmená, listening cyan,
+     processing/speaking žltá, combat červená).
      ================================================================== */
   .panel {
-    position: absolute;
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    width: min(78vw, 980px); min-height: 150px;
+    display: grid; grid-template-columns: 150px 1fr; gap: 0 18px; align-items: center;
+    padding: 12px 26px 14px 12px;
     background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
-    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+    transition: border-color .4s;
   }
-  .panel::before {
-    /* rohový "ornament" štítok — malý plný trojuholník v rezanom rohu */
-    content: ""; position: absolute; top: 0; right: 0;
-    width: 14px; height: 14px;
-    background: var(--panel-accent, var(--yellow));
-    clip-path: polygon(100% 0, 0 0, 100% 100%);
-    opacity: .9;
+  .panel::before {              /* rohový štítok */
+    content: ""; position: absolute; top: 0; right: 0; width: 16px; height: 16px;
+    background: var(--accent); clip-path: polygon(100% 0, 0 0, 100% 100%); opacity: .9;
+    transition: background .4s;
   }
-  .panel-label {
-    font-family: 'Rajdhani', sans-serif; font-weight: 600;
-    font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase;
-    color: var(--panel-accent, var(--yellow)); opacity: .85;
+  .panel::after {               /* tenká spodná linka, ktorá "dýcha" s jadrom */
+    content: ""; position: absolute; left: 16px; right: 0; bottom: 0; height: 1px;
+    background: linear-gradient(90deg, var(--accent), transparent 70%);
+    opacity: var(--breath, .5); transition: background .4s;
   }
+  .panel.offline { --accent: var(--dim); }
+  .panel.idle       { --accent: rgba(252,238,10,.55); }
+  .panel.listening  { --accent: var(--cyan); }
+  .panel.processing { --accent: var(--yellow); }
+  .panel.speaking   { --accent: var(--yellow); }
+  .panel.combat     { --accent: var(--red); }
 
-  /* ==================================================================
-     TELEMETRIA — pravý dolný roh (over v hre proti natívnemu ammo
-     HUD-u; ak koliduje, presunúť na left:14px pod chat).
-     ================================================================== */
-  .telemetry {
-    right: 18px; bottom: 18px; width: 236px;
-    padding: 10px 14px 12px;
-    --panel-accent: var(--cyan);
-  }
-  .telemetry .panel-label { margin-bottom: 6px; }
-  .t-row {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 12px; color: rgba(255,255,255,.82); letter-spacing: .5px;
-    padding: 2px 0;
-  }
-  .t-row b { color: var(--cyan); font-weight: normal; }
-  .hpbar { height: 4px; margin: 5px 0 7px; background: rgba(255,255,255,.08); position: relative; }
-  .hpfill { height: 100%; background: var(--yellow); width: 100%; transition: width .5s, background .3s; }
-  .hpfill.low { background: var(--red); animation: pulse .6s infinite; }
-  @keyframes pulse { 50% { opacity: .35; } }
-  .combat-tag {
-    display: inline-block; margin-top: 4px; font-size: 10px;
-    letter-spacing: 2px; color: var(--red); opacity: 0;
-  }
-  .combat-tag.on { opacity: 1; animation: pulse .5s infinite; }
+  canvas#core { width: 150px; height: 150px; display: block; }
 
-  /* ==================================================================
-     HLAVNÝ PANEL — otázka + odpoveď + stavový tag v jednom, dole na
-     stred. Nahrádza samostatný stavový indikátor (hore už nie je
-     miesto — obsadené webcamom a donation barom).
-     ================================================================== */
-  .voice-panel {
-    left: 50%; bottom: 20px; transform: translateX(-50%);
-    width: min(74vw, 920px);
-    padding: 14px 26px 16px;
-    --panel-accent: var(--yellow);
-    text-align: left;
+  .text { min-width: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .status {
+    font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 12px;
+    letter-spacing: 3px; text-transform: uppercase; color: var(--accent);
+    display: inline-flex; align-items: center; gap: 8px; transition: color .3s;
   }
-  .voice-head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 6px;
-  }
-  .status-tag {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-family: 'Rajdhani', sans-serif; font-weight: 600;
-    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-    color: rgba(255,255,255,.4); transition: color .25s;
-  }
-  .status-dot { width: 6px; height: 6px; border-radius: 1px; background: currentColor; }
-  .status-tag.listening  { color: var(--cyan); }
-  .status-tag.processing { color: var(--yellow); }
-  .status-tag.processing .status-dot { animation: blink .5s steps(1) infinite; }
-  .status-tag.speaking   { color: var(--yellow); }
-  .status-tag.speaking .status-dot { animation: pulse .4s infinite; }
-  @keyframes blink { 50% { opacity: .15; } }
+  .status .dot { width: 6px; height: 6px; background: currentColor; border-radius: 1px; }
+  .panel.processing .status .dot { animation: blink .5s steps(1) infinite; }
+  .panel.speaking   .status .dot { animation: pulse .35s infinite; }
+  .panel.listening  .status .dot { animation: pulse 1.1s infinite; }
+  @keyframes blink { 50% { opacity: .1; } }
+  @keyframes pulse { 50% { opacity: .3; } }
 
-  .queue-tag { font-size: 11px; color: var(--cyan); opacity: .8; letter-spacing: 1px; }
-
-  .question {
-    font-size: 13px; color: rgba(255,255,255,.5); margin-bottom: 6px;
-    min-height: 16px; letter-spacing: .3px;
+  .telemetry {                  /* lokácia · quest — len keď prídu dáta (Fáza 4) */
+    font-family: 'Rajdhani', sans-serif; font-weight: 500; font-size: 12px;
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;
   }
+  .telemetry:empty { display: none; }
+  .telemetry b { color: var(--cyan); font-weight: 500; }
+
+  .sub {                        /* filler / systémová hláška — malé, tlmené, kurzíva */
+    font-size: 13px; color: var(--dim); min-height: 17px; letter-spacing: .4px;
+    font-style: italic; margin-bottom: 4px;
+  }
+  .sub.system { font-style: normal; color: var(--cyan); }
+
   .answer {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 22px; color: var(--yellow); line-height: 1.42;
-    min-height: 32px;
+    font-size: 22px; line-height: 1.42; color: var(--yellow); min-height: 32px;
+    text-shadow: 0 0 12px rgba(252,238,10,.25);
+    transition: color .3s;
   }
-  .answer::after { content: "▌"; opacity: .8; animation: blink2 0.9s step-start infinite; }
+  .answer::after { content: "▌"; opacity: .8; animation: caret .9s step-start infinite; }
   .answer.done::after { content: ""; }
-  @keyframes blink2 { 50% { opacity: 0; } }
+  .answer.cut { color: rgba(252,238,10,.55); }      /* prerušená odpoveď (barge-in) zostane, len zbledne */
+  @keyframes caret { 50% { opacity: 0; } }
 
-  .glitch { animation: glitchIn .16s steps(2); }
+  .glitch { animation: glitchIn .18s steps(2); }
   @keyframes glitchIn {
-    0% { transform: translateX(-2px); opacity: .3; clip-path: inset(15% 0 45% 0); }
-    50% { transform: translateX(2px); opacity: .75; clip-path: inset(55% 0 5% 0); }
+    0%   { transform: translateX(-3px); opacity: .2; clip-path: inset(10% 0 50% 0); }
+    50%  { transform: translateX(3px);  opacity: .7; clip-path: inset(55% 0 5% 0); }
     100% { transform: none; opacity: 1; clip-path: none; }
   }
-
-  /* jemný "systémový" glitch na celom hlavnom paneli, zriedkavý */
-  .voice-panel.pglitch { animation: panelGlitch .22s steps(3); }
+  .panel.pglitch { animation: panelGlitch .22s steps(3); }
   @keyframes panelGlitch {
-    0% { transform: translateX(-50%) translateY(0); filter: none; }
-    40% { transform: translateX(calc(-50% - 3px)) translateY(-1px); filter: hue-rotate(8deg); }
-    100% { transform: translateX(-50%) translateY(0); filter: none; }
+    0%   { transform: translateX(-50%); filter: none; }
+    40%  { transform: translateX(calc(-50% - 3px)) translateY(-1px); filter: hue-rotate(10deg) brightness(1.2); }
+    100% { transform: translateX(-50%); filter: none; }
   }
 </style>
 </head>
 <body>
 
-<div class="hud" id="hud">
-
-  <!-- TELEMETRIA — pravý dolný roh -->
-  <div class="panel telemetry" id="telemetry">
-    <div class="panel-label">BIOMON // NCPD LINK</div>
-    <div class="t-row"><span>HP</span><b id="t-hp">—</b></div>
-    <div class="hpbar"><div class="hpfill" id="hpfill"></div></div>
-    <div class="t-row"><span>LOKÁCIA</span><b id="t-loc">—</b></div>
-    <div class="t-row"><span>QUEST</span><b id="t-quest">—</b></div>
-    <div class="combat-tag" id="combat-tag">⚠ COMBAT ENGAGED</div>
-  </div>
-
-  <!-- HLAVNÝ HLASOVÝ PANEL — dole na stred -->
-  <div class="panel voice-panel" id="voice-panel">
-    <div class="voice-head">
-      <div class="status-tag idle" id="status-tag">
-        <span class="status-dot"></span><span id="status-label">MIRANA · STANDBY</span>
+<div class="hud">
+  <div class="panel offline" id="panel">
+    <canvas id="core" width="300" height="300"></canvas>
+    <div class="text">
+      <div class="head">
+        <div class="status"><span class="dot"></span><span id="status-label">MIRANA · OFFLINE</span></div>
+        <div class="telemetry" id="telemetry"></div>
       </div>
-      <div class="queue-tag" id="queue-tag"></div>
+      <div class="sub" id="sub"></div>
+      <div class="answer done" id="answer"></div>
     </div>
-    <div class="question" id="question"></div>
-    <div class="answer done" id="answer"></div>
   </div>
-
 </div>
 
 <script>
 /* ==========================================================
-   WebSocket klient (Fáza 3). Server: outputs/overlay.py na tom istom
-   porte, z ktorého je servírovaná táto stránka. Eventy (JSON):
-     {type:"state", state}              -> setState
-     {type:"filler", text}              -> filler hláška, odlíšená od odpovede
-     {type:"answer", text, ms_per_char} -> typeAnswer
-     {type:"question", text}            -> showQuestion (len [SYSTÉM] hlášky)
-     {type:"telemetry", hp, location, quest, combat} -> setTelemetry
-     {type:"queue", n}                  -> setQueue
-   Reconnect každé 2 s, kým Mirana nebeží.
+   Eventy z outputs/overlay.py (JSON cez WebSocket na tom istom porte):
+     state {state}                     idle | listening | processing | speaking
+     level {v}                         0..1, ~20x/s: hlas Mirany (speaking/filler) alebo mikrofón (listening)
+     filler {text}                     hláška do riadku "sub"
+     answer {text, ms_per_char}        písací stroj
+     question {text}                   [SYSTÉM] hlášky do "sub" (Erikove otázky sa neposielajú)
+     telemetry {location, quest, combat}
+     queue {n}                         nepoužíva sa
    ========================================================== */
-
 const el = (id) => document.getElementById(id);
-const statusTag = el('status-tag'), statusLabel = el('status-label');
-const voicePanel = el('voice-panel');
+const panel = el('panel'), statusLabel = el('status-label');
 
 const LABELS = {
-  idle: 'MIRANA · STANDBY',
-  listening: 'MIRANA · POČÚVAM',
-  processing: 'MIRANA · SPRACOVÁVAM',
-  speaking: 'MIRANA · HOVORÍ'
+  idle: 'MIRANA · STANDBY', listening: 'MIRANA · POČÚVAM',
+  processing: 'MIRANA · SPRACOVÁVAM', speaking: 'MIRANA · HOVORÍ', offline: 'MIRANA · OFFLINE',
+};
+const COLORS = {
+  idle: [252,238,10], listening: [0,240,255], processing: [252,238,10],
+  speaking: [252,238,10], offline: [160,160,160], combat: [255,0,60],
 };
 
-let typing = 0;  // generácia písania — zmena stavu mimo "speaking" ho zastaví (barge-in)
+let state = 'offline', combat = false;
+let typing = 0;
 
 function setState(s) {
-  statusTag.className = 'status-tag ' + s;
+  const prev = state; state = s;
+  panel.className = 'panel ' + s + (combat ? ' combat' : '');
   statusLabel.textContent = LABELS[s] || s;
-  if (s !== 'speaking') { typing++; el('answer').classList.add('done'); }
-  if (s === 'listening' || s === 'idle') el('question').textContent = '';
+  if (s !== 'speaking') {
+    typing++;
+    const a = el('answer'); a.classList.add('done');
+    if (prev === 'speaking' && s === 'listening') a.classList.add('cut');   // barge-in: odpoveď zbledne
+  }
+  if (s === 'listening' || s === 'idle') { el('sub').textContent = ''; el('sub').className = 'sub'; }
+  if (prev !== s) { panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); }
 }
-function setQueue(n) { el('queue-tag').textContent = n > 0 ? 'FRONTA · ' + n : ''; }
-function setTelemetry(t) {
-  el('t-hp').textContent = t.hp + '%';
-  el('t-loc').textContent = t.location;
-  el('t-quest').textContent = t.quest;
-  const fill = el('hpfill');
-  fill.style.width = t.hp + '%';
-  fill.className = 'hpfill' + (t.hp <= 25 ? ' low' : '');
-  el('combat-tag').className = 'combat-tag' + (t.combat ? ' on' : '');
+function showSub(text, system) {
+  const q = el('sub');
+  q.textContent = text; q.className = 'sub' + (system ? ' system' : '');
+  q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
 }
-function showQuestion(text) {
-  const q = el('question');
-  q.textContent = text; q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
-}
-/* filler ide do riadku "question" (malé, tlmené písmo) — vizuálne oddelený od odpovede */
-function showFiller(text) { showQuestion('· ' + text + ' ·'); }
-
 function typeAnswer(fullText, msPerChar) {
-  const a = el('answer'); a.classList.remove('done'); a.textContent = '';
-  el('question').textContent = '';
-  const gen = ++typing;
-  let i = 0;
+  const a = el('answer'); a.className = 'answer'; a.textContent = '';
+  el('sub').textContent = '';
+  const gen = ++typing; let i = 0;
   (function step() {
     if (gen !== typing) return;
     if (i <= fullText.length) { a.textContent = fullText.slice(0, i); i++; setTimeout(step, msPerChar); }
     else a.classList.add('done');
   })();
 }
+function setTelemetry(t) {
+  combat = !!t.combat;
+  el('telemetry').innerHTML = (t.location ? `<b>${t.location}</b>` : '') + (t.quest ? ` · ${t.quest}` : '');
+  setState(state);
+}
 
-/* zriedkavý systémový glitch na hlavnom paneli */
+/* ---------- ŽIVÉ JADRO ---------------------------------------------------
+   Vrstvy zvonka dovnútra: pomaly rotujúce segmentované prstence (rýchlosť
+   podľa stavu), "thinking" oblúk pri processing, dýchajúce tenké kruhy a
+   vnútorný obrys, ktorý deformuje skutočná hlasitosť (level) — hlas Mirany
+   pri hovorení, mikrofón pri počúvaní. Všetko kreslené na canvas 2x DPI.
+   ----------------------------------------------------------------------- */
+const cv = el('core'), ctx = cv.getContext('2d');
+const S = 300, C = S / 2;
+let level = 0, target = 0, energy = 0;         // energy = pomaly doznievajúca hlasitosť
+const N = 96, noise = Array.from({ length: N }, () => Math.random() * 6.28);
+let rot = 0, t0 = performance.now();
+
+function lerpColor(a, b, k) { return a.map((v, i) => Math.round(v + (b[i] - v) * k)); }
+let colorNow = COLORS.offline;
+
+function draw(now) {
+  const dt = Math.min(0.05, (now - t0) / 1000); t0 = now;
+  const time = now / 1000;
+  const want = combat ? COLORS.combat : (COLORS[state] || COLORS.offline);
+  colorNow = lerpColor(colorNow, want, 0.08);
+  const [r, g, b] = colorNow;
+  const rgba = (a) => `rgba(${r},${g},${b},${a})`;
+
+  // hlasitosť: rýchly nábeh, pomalý dozvuk; v idle jemné "dýchanie"
+  target = (state === 'speaking' || state === 'listening') ? target : 0;
+  level += (target - level) * (target > level ? 0.55 : 0.18);
+  energy = Math.max(level, energy - dt * 0.9);
+  const breath = 0.5 + 0.5 * Math.sin(time * (state === 'processing' ? 4 : 1.2));
+  panel.style.setProperty('--breath', (0.25 + 0.35 * breath + 0.4 * energy).toFixed(2));
+
+  ctx.clearRect(0, 0, S, S);
+  ctx.lineCap = 'round';
+
+  // vonkajší segmentovaný prstenec — rotuje (idle pomaly, processing rýchlo, speaking podľa energie)
+  const speed = state === 'processing' ? 1.6 : state === 'speaking' ? 0.5 + energy : state === 'listening' ? 0.35 : 0.12;
+  rot += dt * speed;
+  ctx.strokeStyle = rgba(state === 'offline' ? .25 : .55); ctx.lineWidth = 2;
+  for (let i = 0; i < 12; i++) {
+    const a0 = rot + i * Math.PI / 6, gap = 0.16;
+    ctx.beginPath(); ctx.arc(C, C, 128, a0 + gap, a0 + Math.PI / 6 - gap); ctx.stroke();
+  }
+  // druhý prstenec opačným smerom, jemnejší
+  ctx.strokeStyle = rgba(.28); ctx.lineWidth = 1;
+  for (let i = 0; i < 24; i++) {
+    const a0 = -rot * 0.6 + i * Math.PI / 12;
+    ctx.beginPath(); ctx.arc(C, C, 116, a0 + 0.05, a0 + Math.PI / 12 - 0.08); ctx.stroke();
+  }
+  // "thinking" oblúk — len počas processing
+  if (state === 'processing') {
+    ctx.strokeStyle = rgba(.95); ctx.lineWidth = 3;
+    ctx.shadowColor = rgba(.8); ctx.shadowBlur = 14;
+    const a = time * 3.2;
+    ctx.beginPath(); ctx.arc(C, C, 122, a, a + 1.1); ctx.stroke();
+    ctx.beginPath(); ctx.arc(C, C, 122, a + Math.PI, a + Math.PI + 0.5); ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  // dýchajúce tenké kruhy
+  for (let k = 0; k < 3; k++) {
+    const rr = 62 + k * 14 + breath * 4 + energy * 10 * (k + 1) / 3;
+    ctx.strokeStyle = rgba(0.10 + 0.08 * k + energy * 0.25); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(C, C, rr, 0, 6.2832); ctx.stroke();
+  }
+  // vnútorný hlasový obrys — deformovaný hlasitosťou
+  const base = 40 + breath * 2, amp = 4 + energy * 34;
+  ctx.beginPath();
+  for (let i = 0; i <= N; i++) {
+    const ang = (i % N) / N * 6.2832;
+    const n = Math.sin(noise[i % N] + time * 9 + i * 0.7) * 0.5 + Math.sin(time * 5.3 + i * 1.9) * 0.5;
+    const rad = base + amp * (0.35 + 0.65 * Math.abs(n)) * (state === 'speaking' || state === 'listening' ? 1 : 0.25);
+    const x = C + Math.cos(ang) * rad, y = C + Math.sin(ang) * rad;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+  ctx.shadowColor = rgba(.9); ctx.shadowBlur = 10 + energy * 28;
+  ctx.strokeStyle = rgba(.9); ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = rgba(0.06 + energy * 0.22); ctx.fill();
+  ctx.shadowBlur = 0;
+  // jadro
+  const glow = ctx.createRadialGradient(C, C, 0, C, C, 30);
+  glow.addColorStop(0, rgba(0.85 * (0.5 + 0.5 * breath) + energy * 0.15));
+  glow.addColorStop(1, rgba(0));
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(C, C, 30, 0, 6.2832); ctx.fill();
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* zriedkavý glitch panelu */
 (function randomGlitch() {
   setTimeout(() => {
-    voicePanel.classList.add('pglitch');
-    setTimeout(() => voicePanel.classList.remove('pglitch'), 240);
-    randomGlitch();
-  }, 15000 + Math.random() * 10000);
+    panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); randomGlitch();
+  }, 18000 + Math.random() * 12000);
 })();
 
 function handle(ev) {
   switch (ev.type) {
     case 'state':     setState(ev.state); break;
-    case 'filler':    showFiller(ev.text); break;
+    case 'level':     target = ev.v; break;
+    case 'filler':    showSub('· ' + ev.text + ' ·', false); break;
     case 'answer':    typeAnswer(ev.text, ev.ms_per_char || 26); break;
-    case 'question':  showQuestion(ev.text); break;
+    case 'question':  showSub(ev.text, true); break;
     case 'telemetry': setTelemetry(ev); break;
-    case 'queue':     setQueue(ev.n); break;
+    case 'queue':     break;
   }
 }
 
 (function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(proto + '://' + location.host + '/ws');
+  ws.onopen = () => { if (state === 'offline') setState('idle'); };
   ws.onmessage = (m) => { try { handle(JSON.parse(m.data)); } catch (e) { console.error(e); } };
-  ws.onclose = () => { setState('idle'); statusLabel.textContent = 'MIRANA · OFFLINE'; setTimeout(connect, 2000); };
+  ws.onclose = () => { setState('offline'); setTimeout(connect, 2000); };
   ws.onerror = () => ws.close();
 })();
 </script>

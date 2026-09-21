@@ -47,15 +47,24 @@ class Overlay:
     def filler(self, text: str) -> None:
         self._send({"type": "filler", "text": text}, remember=False)
 
-    def answer(self, text: str) -> None:
-        self._send({"type": "answer", "text": text, "ms_per_char": self.ms_per_char})
+    def answer(self, text: str, duration_sec: float | None = None) -> None:
+        """Pisaci stroj; ak pozname dlzku audia, tempo sa nastavi tak, aby text dobehol s hlasom."""
+        ms_per_char = self.ms_per_char
+        if duration_sec and text:
+            ms_per_char = max(15, int(duration_sec * 1000 / len(text)))
+        self._send({"type": "answer", "text": text, "ms_per_char": ms_per_char})
 
     def question(self, text: str) -> None:
         """Len pre [SYSTEM] hlasky — Erikove otazky sa na HUD nezobrazuju (rozhodnutie 2026-09-21)."""
         self._send({"type": "question", "text": text})
 
-    def telemetry(self, hp: int, location: str, quest: str, combat: bool) -> None:
-        self._send({"type": "telemetry", "hp": hp, "location": location, "quest": quest, "combat": combat})
+    def telemetry(self, location: str, quest: str, combat: bool = False) -> None:
+        """HP sa na HUD neukazuje (ma ho hra), len lokacia + quest; combat zafarbi jadro."""
+        self._send({"type": "telemetry", "location": location, "quest": quest, "combat": combat})
+
+    def level(self, value: float) -> None:
+        """Hlasitost 0..1 (hlas Mirany alebo Erikov mikrofon), ~20x/s. Nepamata sa."""
+        self._send({"type": "level", "v": round(value, 3)}, remember=False)
 
     def queue(self, n: int) -> None:
         self._send({"type": "queue", "n": n})

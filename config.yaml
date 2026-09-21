@@ -109,7 +109,7 @@ overlay:
   enabled: true
   host: "0.0.0.0"             # 0.0.0.0 kvôli prístupu z notebooku
   port: 8080
-  typewriter_ms_per_char: 26
+  typewriter_ms_per_char: 26  # zaloha; pri odpovedi sa tempo pocita z dlzky audia, aby text dobehol s hlasom
 
 game_state:
   enabled: false              # zapni vo Fáze 4

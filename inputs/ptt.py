@@ -31,6 +31,8 @@ class PushToTalk:
     def __init__(self, config: dict, on_recording=None, on_start=None):
         self.on_recording = on_recording
         self.on_start = on_start
+        self.on_level = None  # callback(0..1) pocas nahravania, ~20x/s — HUD reaguje na Erikov hlas
+        self._level_frames = 0
 
         audio_cfg = config["audio"]
         self.input_device = audio_cfg["input_device"]
@@ -46,6 +48,12 @@ class PushToTalk:
     def _audio_callback(self, indata, frames, time_info, status):
         if self._recording:
             self._frames.append(indata.copy())
+            if self.on_level is not None:
+                self._level_frames += frames
+                if self._level_frames >= self.sample_rate // 20:
+                    self._level_frames = 0
+                    rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32767.0
+                    self.on_level(min(1.0, (rms * 6.0) ** 0.6))
 
     def _on_press(self, key):
         # pynput posiela opakovane press eventy pocas drzania — flag to zachyti
@@ -58,6 +66,8 @@ class PushToTalk:
     def _on_release(self, key):
         if key == self.ptt_key and self._recording:
             self._recording = False
+            if self.on_level is not None:
+                self.on_level(0.0)
             audio = np.concatenate(self._frames, axis=0) if self._frames else np.zeros((0, 1), dtype=np.int16)
             self._frames = []
             # peak < ~100 = mikrofon je mute alebo zly input_device
