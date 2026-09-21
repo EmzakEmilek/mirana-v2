@@ -126,7 +126,8 @@ kick_chat:
   channel_id: null
   command: "!mira"
   allowed_badges: ["subscriber", "moderator", "og", "founder", "broadcaster"]
-  nesub_reply_every_n: 10
+  nesub_reply_every_n: 10     # kazdy N-ty nesub dostane predvolenu vetu len na HUD (bez API, bez hlasu)
+  nesub_reply_text: "Prístup k palubnému počítaču majú subovia. Night City nič nedáva zadarmo."
   queue_max_size: 10
   cooldown_global_sec: 30
   cooldown_per_user_sec: 180

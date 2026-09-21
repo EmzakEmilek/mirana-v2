@@ -158,8 +158,9 @@ Pred písaním si načítaj aktuálnu dokumentáciu na docs.kick.com. Modul drž
 izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 
 1. `inputs/kick_chat.py` — pripojenie, parsovanie správ a badges odosielateľa.
-2. Sub / mod / OG → `!mira <otázka>` ide do fronty. Nesub → ignoruj, približne
-   každú desiatu krátko odmietni v charaktere.
+2. Sub / mod / OG → `!mira <otázka>` ide do fronty. Nesub → žiadne volanie API a žiadny
+   hlas: približne každému desiatemu sa na HUD vypíše predvolená veta z config.yaml
+   (`kick_chat.nesub_reply_text`), s jeho nickom v `showQuestion`. Nula kreditov.
 3. Fronta max 10. Cooldown 30 s globálne, 3 min na diváka. Orchestrátor berie
    z fronty len v stave IDLE a mimo combatu.
 4. Nick pred TTS prečisti (čísla, symboly, `xX...Xx`).
