@@ -64,7 +64,13 @@ Navrh routingu (na potvrdenie):
   po 800 ms, barge-in z PTT vlakna (stop < 100 ms). voice.py: vlastny OutputStream po 50 ms kusoch
   (sd.stop z ineho vlakna padal, WASAPI z ineho vlakna potrebuje CoInitializeEx).
   Automaticky test 4 scenarov presiel. CAKA NA TEST cez F12 (krok 17).
-- Faza 3-7: nezacate
+- Faza 3 (overlay): KOD HOTOVY (2026-09-21). outputs/overlay.py = websockets server na :8080,
+  HTTP GET servíruje overlay/index.html, WS posiela JSON eventy (state, filler, answer, question,
+  telemetry, queue); novy klient dostane posledny stav. index.html: demo slucka nahradena WS klientom
+  s reconnectom (vzhlad nezmeneny). Rozhodnutia: Erikova otazka sa NEzobrazuje, filler sa zobrazuje
+  v riadku "question" ako "· text ·". Test: HTTP + WS sekvencia OK. CAKA NA TEST v prehliadaci
+  (localhost:8080) a neskor OBS na notebooku (firewall: povolit TCP 8080 na hernom PC).
+- Faza 4-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
 - SPEC.md, persona.md, config.yaml, POSTUP.md ulozene v korene (COWORK-FAZA-0.md splneny a zmazany)

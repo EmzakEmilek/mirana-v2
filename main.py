@@ -19,6 +19,7 @@ from core.config import load_config
 from core.memory import Memory
 from inputs.ptt import PushToTalk
 from outputs.fillers import Fillers
+from outputs.overlay import Overlay
 from outputs.voice import Voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -53,6 +54,7 @@ class Mirana:
         self.brain = Brain(config)
         self.voice = Voice(config)
         self.fillers = Fillers(config, self.voice)
+        self.overlay = Overlay(config)
         self.ptt = PushToTalk(
             config,
             on_start=self._on_ptt_press,
@@ -62,6 +64,7 @@ class Mirana:
     def _set_state(self, state: State) -> None:
         self.state = state
         logger.info("stav: %s", state.name)
+        self.overlay.state(state.name.lower())
 
     # --- PTT vlakno ---------------------------------------------------------------------------
 
@@ -115,7 +118,9 @@ class Mirana:
 
     def _play_filler(self, job: Job) -> None:
         if self._is_current(job):
-            self.fillers.play_random()
+            line = self.fillers.play_random()
+            if line:
+                self.overlay.filler(line)
 
     def _handle_recording(self, wav_bytes: bytes) -> None:
         with self._lock:
@@ -141,6 +146,7 @@ class Mirana:
             with self._lock:
                 if job.gen != self._gen:
                     return
+            self.overlay.answer(text)  # HUD pise sucasne s hlasom; Erikova otazka sa nezobrazuje
             self.voice.play_audio(audio, block=True)
         except Exception:
             logger.exception("voice zlyhal")
@@ -165,6 +171,7 @@ class Mirana:
             self._say(job, answer)
 
     def run(self) -> None:
+        self.overlay.start()
         self.ptt.start()
         logger.info("Mirana bezi. Drz %s pre PTT.", self.config["audio"]["ptt_key"])
 

@@ -49,15 +49,16 @@ class Fillers:
             self._clips.append((line, self._voice.to_device_audio(path.read_bytes())))
         logger.info("fillery: %d hlasok (%d novo vygenerovanych)", len(self._clips), generated)
 
-    def play_random(self) -> None:
-        """Neblokujuce prehratie nahodnej hlasky (ina nez naposledy)."""
+    def play_random(self) -> str | None:
+        """Neblokujuce prehratie nahodnej hlasky (ina nez naposledy). Vrati jej text pre HUD."""
         if not self._clips:
-            return
+            return None
         choices = [i for i in range(len(self._clips)) if i != self._last_index] or [0]
         self._last_index = random.choice(choices)
         line, audio = self._clips[self._last_index]
         logger.info("filler: %s", line)
         self._voice.play_audio(audio, block=False)
+        return line
 
     def wait(self) -> None:
         """Pocka, kym hlaska dohra — odpoved nesmie zacat cez nu."""

@@ -12,3 +12,4 @@ faster-whisper
 # CUDA runtime pre faster-whisper bez instalacie CUDA toolkitu (core/stt.py ich registruje)
 nvidia-cublas-cu12
 nvidia-cudnn-cu12
+websockets

@@ -164,11 +164,15 @@
 
 <script>
 /* ==========================================================
-   DEMO REŽIM. Claude Code vo Fáze 3 nahradí demoLoop() reálnym
-   WebSocket pripojením — kontrakt eventov (state_change, user_text,
-   elena_text_chunk, telemetry, queue) ostáva rovnaký ako v SPEC.md,
-   len cieľové DOM uzly sa zmenili (status-tag namiesto samostatného
-   corner-indikátora, telemetry presunutá vpravo dole).
+   WebSocket klient (Fáza 3). Server: outputs/overlay.py na tom istom
+   porte, z ktorého je servírovaná táto stránka. Eventy (JSON):
+     {type:"state", state}              -> setState
+     {type:"filler", text}              -> filler hláška, odlíšená od odpovede
+     {type:"answer", text, ms_per_char} -> typeAnswer
+     {type:"question", text}            -> showQuestion (len [SYSTÉM] hlášky)
+     {type:"telemetry", hp, location, quest, combat} -> setTelemetry
+     {type:"queue", n}                  -> setQueue
+   Reconnect každé 2 s, kým Mirana nebeží.
    ========================================================== */
 
 const el = (id) => document.getElementById(id);
@@ -182,11 +186,15 @@ const LABELS = {
   speaking: 'MIRANA · HOVORÍ'
 };
 
+let typing = 0;  // generácia písania — zmena stavu mimo "speaking" ho zastaví (barge-in)
+
 function setState(s) {
   statusTag.className = 'status-tag ' + s;
   statusLabel.textContent = LABELS[s] || s;
+  if (s !== 'speaking') { typing++; el('answer').classList.add('done'); }
+  if (s === 'listening' || s === 'idle') el('question').textContent = '';
 }
-function setQueue(n) { el('queue-tag').textContent = n > 0 ? `FRONTA · ${n}` : ''; }
+function setQueue(n) { el('queue-tag').textContent = n > 0 ? 'FRONTA · ' + n : ''; }
 function setTelemetry(t) {
   el('t-hp').textContent = t.hp + '%';
   el('t-loc').textContent = t.location;
@@ -200,16 +208,20 @@ function showQuestion(text) {
   const q = el('question');
   q.textContent = text; q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
 }
-let buffer = '';
+/* filler ide do riadku "question" (malé, tlmené písmo) — vizuálne oddelený od odpovede */
+function showFiller(text) { showQuestion('· ' + text + ' ·'); }
+
 function typeAnswer(fullText, msPerChar) {
   const a = el('answer'); a.classList.remove('done'); a.textContent = '';
+  el('question').textContent = '';
+  const gen = ++typing;
   let i = 0;
   (function step() {
+    if (gen !== typing) return;
     if (i <= fullText.length) { a.textContent = fullText.slice(0, i); i++; setTimeout(step, msPerChar); }
     else a.classList.add('done');
   })();
 }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* zriedkavý systémový glitch na hlavnom paneli */
 (function randomGlitch() {
@@ -220,31 +232,23 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   }, 15000 + Math.random() * 10000);
 })();
 
-const demo = [
-  { q: 'Mirana, aký build mi odporúčaš na netrunnera?',
-    a: 'Intelligence na max, Cyberdeck s Overclock, a nauč sa Contagion skôr než ťa niekto rozoberie na súčiastky.',
-    t: { hp: 87, location: 'Watson / Kabuki', quest: 'Ghost Town', combat: false } },
-  { q: '[SYSTÉM] pokles HP',
-    a: 'HP pätnásť percent. Lekárnička, chum. Teraz.',
-    t: { hp: 15, location: 'Watson / Kabuki', quest: 'Ghost Town', combat: true } },
-  { q: 'Marek sa pýta: oplatí sa Phantom Liberty?',
-    a: 'Marek, drahý, to je najlepší kus Night City za posledné roky. Choď do toho.',
-    t: { hp: 92, location: 'Dogtown', quest: 'Firestarter', combat: false } },
-];
-let i = 0;
-(async function demoLoop() {
-  setTelemetry(demo[0].t);
-  await sleep(2200);
-  while (true) {
-    const d = demo[i++ % demo.length];
-    setState('listening'); showQuestion(d.q); setQueue(i % 3 === 0 ? 2 : 0);
-    await sleep(1300);
-    setState('processing'); await sleep(850);
-    setState('speaking'); setTelemetry(d.t);
-    typeAnswer(d.a, 26);
-    await sleep(d.a.length * 26 + 1500);
-    setState('idle'); await sleep(2400);
+function handle(ev) {
+  switch (ev.type) {
+    case 'state':     setState(ev.state); break;
+    case 'filler':    showFiller(ev.text); break;
+    case 'answer':    typeAnswer(ev.text, ev.ms_per_char || 26); break;
+    case 'question':  showQuestion(ev.text); break;
+    case 'telemetry': setTelemetry(ev); break;
+    case 'queue':     setQueue(ev.n); break;
   }
+}
+
+(function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/ws');
+  ws.onmessage = (m) => { try { handle(JSON.parse(m.data)); } catch (e) { console.error(e); } };
+  ws.onclose = () => { setState('idle'); statusLabel.textContent = 'MIRANA · OFFLINE'; setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
 })();
 </script>
 </body>
