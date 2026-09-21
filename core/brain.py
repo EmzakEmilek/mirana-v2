@@ -49,13 +49,23 @@ class Brain:
             system.append({"type": "text", "text": game_state_line})
         return system
 
+    def _route(self, user_text: str) -> tuple[str, str]:
+        if user_text.startswith("[CHAT_") and self.llm_cfg.get("chat_model"):
+            return self.llm_cfg["chat_model"], self.llm_cfg.get("chat_effort", self.llm_cfg["effort"])
+        return self.llm_cfg["model"], self.llm_cfg["effort"]
+
     def ask(self, user_text: str, game_state_line: str | None, memory_messages: list[dict]) -> str | None:
-        """Claude Sonnet 5, system = persona (cacheable) + stav hry. None pri zlyhani."""
+        """Claude, system = persona (cacheable) + stav hry. None pri zlyhani.
+
+        Erik a herne eventy idu na llm.model, chat divakov na llm.chat_model (lacnejsi).
+        Persona sa cachuje na kazdom modeli zvlast, pamat je spolocna (cisty text).
+        """
+        model, effort = self._route(user_text)
         try:
             response = self.anthropic_client.messages.create(
-                model=self.llm_cfg["model"],
+                model=model,
                 max_tokens=self.llm_cfg["max_tokens"],
-                output_config={"effort": self.llm_cfg["effort"]},
+                output_config={"effort": effort},
                 system=self._build_system(game_state_line),
                 messages=[*memory_messages, {"role": "user", "content": user_text}],
             )
@@ -65,8 +75,8 @@ class Brain:
 
         usage = response.usage
         logger.info(
-            "tokens: input=%s cache_read=%s cache_create=%s output=%s",
-            usage.input_tokens, usage.cache_read_input_tokens, usage.cache_creation_input_tokens, usage.output_tokens,
+            "tokens (%s): input=%s cache_read=%s cache_create=%s output=%s",
+            model, usage.input_tokens, usage.cache_read_input_tokens, usage.cache_creation_input_tokens, usage.output_tokens,
         )
         # Jednorazova kontrola, ci sa persona naozaj cachuje (min. 1024 tokenov pre Sonnet 5).
         if not self._cache_checked and memory_messages:
