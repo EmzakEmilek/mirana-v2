@@ -130,9 +130,13 @@ kick_chat:
   queue_max_size: 10
   cooldown_global_sec: 30
   cooldown_per_user_sec: 180
+  voice_toggle: true          # "Mirana, chat off" / "chat on"
+  mute_hp_below: 25           # fronta sa neberie pri nizkom HP, v combate a chvilu po Erikovej otazke
+  mute_in_combat: true
+  mute_after_erik_sec: 60
 
 limits:
-  daily_usd_cap: 3.00         # tvrdý strop, chráni pred bugom v slučke (Opus ~0.9 c/otazka => ~$0.35/hod streamu)
+  daily_usd_cap: 5.00         # tvrdý strop na stream (Erik ~$0.35/hod + chat max ~$0.45/hod), chráni aj pred bugom v slučke
   proactive_cooldown_sec: 300
   api_timeout_sec: 20
   api_retries: 1               # retry robí SDK (429, 5xx, timeout)

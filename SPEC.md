@@ -163,6 +163,10 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 3. Fronta max 10. Cooldown 30 s globálne, 3 min na diváka. Orchestrátor berie
    z fronty len v stave IDLE a mimo combatu.
 4. Nick pred TTS prečisti (čísla, symboly, `xX...Xx`).
+6. Hlasový prepínač: „Mirana, chat off" / „chat on" — Erik vypne a zapne spracovanie
+   fronty uprostred streamu. Stav sa hlási na HUD (`setQueue`) a v logu.
+7. Auto-mute chatu: fronta sa neberie pri HP < 25 %, v combate a 60 s po Erikovej
+   otázke. Správy sa medzitým hromadia len do limitu fronty, staršie padajú.
 5. Pamäť divákov (`core/longterm.py`, tá istá `data/memory.json`):
    `{nick: {prvýkrát, naposledy, počet návštev, posledné 2–3 témy}}`, trvá medzi
    sessions. Zápis deterministický, bez LLM, pri každej `[CHAT_SUB]` správe. Čítanie:
@@ -185,7 +189,7 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 ## 8. Fáza 7 — Hardening
 
 1. `core/budget.py` — počítaj tokeny a odhadovanú cenu za deň.
-   `limits.daily_usd_cap` (3.00). Pri dosiahnutí prestaň volať API, Mirana povie
+   `limits.daily_usd_cap` (5.00, jeden stream). Pri dosiahnutí prestaň volať API, Mirana povie
    hlášku v charaktere, zaloguj varovanie. Reset o polnoci.
 2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS
    a osobné údaje divákov. Pri zachytení preskoč vetu.
@@ -204,7 +208,7 @@ inputu, Azure TTS Free F0 500K znakov/mesiac, Whisper lokálne $0.
 
 Merané 2026-09-21 (Opus 5, effort low, persona ~2 600 tok cachovaná, pamäť 8 výmen):
 **~0,9 c na otázku od Erika, ~0,65 c na správu z chatu** → pri 40 otázkach/hod
-**~$0.35/hod streamu**, 100 hodín ≈ $35. `limits.daily_usd_cap: 3.00`.
+**~$0.35/hod streamu**, 100 hodín ≈ $35. Chat (Sonnet) ~0,4 c/správa, cooldown 30 s ⇒ najviac ~$0.45/hod. `limits.daily_usd_cap: 5.00` = tvrdý strop na stream.
 
 Sonnet 5 by stál ~0,4 c/otázku, ale v teste mal 3 lore halucinácie, jazykové artefakty
 a prezradil spoiler — pre živý stream nepoužiteľné. Rozhodnutie: Opus.
