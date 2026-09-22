@@ -149,7 +149,7 @@ class Mirana:
                 if job.gen != self._gen:
                     return
             # HUD pise v tempe hlasu; Erikova otazka sa nezobrazuje
-            self.overlay.answer(text, duration_sec=audio.shape[0] / self.voice.device_rate)
+            self.overlay.answer(text, duration_sec=audio.shape[0] / self.voice.device_rate * 0.93)
             self.voice.play_audio(audio, block=True)
         except Exception:
             logger.exception("voice zlyhal")

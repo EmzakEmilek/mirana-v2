@@ -18,7 +18,7 @@
     --cyan: #00F0FF;
     --red: #FF003C;
     --dim: rgba(255,255,255,.38);
-    --panel-bg: rgba(6,8,8,0.78);
+    --panel-bg: rgba(0,0,0,0.62);
     --accent: var(--yellow);
   }
 
@@ -32,10 +32,11 @@
   .panel {
     position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
     width: min(78vw, 980px); height: 150px; box-sizing: border-box;
-    display: grid; grid-template-columns: 150px 1fr; gap: 0 18px; align-items: center;
+    display: grid; grid-template-columns: 116px 1fr; gap: 0 20px; align-items: center;
     padding: 12px 26px 14px 12px;
     background: var(--panel-bg);
-    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    backdrop-filter: blur(3px);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
     clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
     transition: border-color .4s;
   }
@@ -56,7 +57,7 @@
   .panel.speaking   { --accent: var(--yellow); }
   .panel.combat     { --accent: var(--red); }
 
-  canvas#core { width: 150px; height: 150px; display: block; }
+  canvas#core { width: 116px; height: 116px; display: block; margin: 0 auto; }
 
   .text { min-width: 0; height: 126px; display: flex; flex-direction: column; }
   .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
@@ -80,9 +81,9 @@
   .telemetry:empty { display: none; }
   .telemetry b { color: var(--cyan); font-weight: 500; }
 
-  .sub {                        /* filler / systémová hláška — malé, tlmené, kurzíva */
-    font-size: 13px; color: var(--dim); min-height: 17px; letter-spacing: .4px;
-    font-style: italic; margin-bottom: 4px;
+  .sub {                        /* filler / systémová hláška — biela, oddelená od žltej odpovede */
+    font-size: 14px; color: #fff; min-height: 18px; letter-spacing: .4px;
+    font-style: italic; margin-bottom: 4px; text-shadow: 0 0 8px rgba(255,255,255,.2);
   }
   .sub.system { font-style: normal; color: var(--cyan); }
 
@@ -156,7 +157,7 @@ const COLORS = {
 };
 
 let state = 'offline', combat = false;
-let typing = 0, fadeTimer = null;
+let typing = 0, fadeTimer = null, typeState = null;
 const FADE_AFTER_MS = 5000;   // odpoveď zmizne 5 s po tom, čo Mirana dohovorí
 
 function scheduleFade() {
@@ -172,10 +173,13 @@ function setState(s) {
   panel.className = 'panel ' + s + (combat ? ' combat' : '');
   statusLabel.textContent = LABELS[s] || s;
   if (s !== 'speaking') {
-    typing++;
-    const a = el('answer'); a.classList.add('done');
-    if (prev === 'speaking' && s === 'listening') a.classList.add('cut');   // barge-in: odpoveď zbledne
-    if (prev === 'speaking') scheduleFade();
+    const a = el('answer');
+    if (s === 'idle') finishTyping();          // dohovorila — text sa dopíše celý, nikdy sa neutne
+    else { typing++; typeState = null; a.classList.add('done'); }
+    if (prev === 'speaking') {
+      if (s === 'listening') a.classList.add('cut');   // barge-in: prerušená veta zbledne
+      scheduleFade();
+    }
   }
   if (s === 'listening' || s === 'idle') { el('sub').textContent = ''; el('sub').className = 'sub'; }
   if (prev !== s) { panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); }
@@ -185,20 +189,38 @@ function showSub(text, system) {
   q.textContent = text; q.className = 'sub' + (system ? ' system' : '');
   q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
 }
+/* Písanie riadené časom (nie setTimeout krokom) — inak sa nazbiera oneskorenie
+   a posledné slovo sa nestihne, kým skončí hlas. */
 function typeAnswer(fullText, msPerChar) {
   clearTimeout(fadeTimer);
   const a = el('answer'), box = el('answer-box');
   a.className = 'answer'; a.textContent = ''; box.scrollTop = 0;
   el('sub').textContent = '';
-  const gen = ++typing; let i = 0;
-  (function step() {
+  const gen = ++typing;
+  const total = Math.max(1, fullText.length * msPerChar);
+  const start = performance.now();
+  typeState = { gen, fullText, a, box };
+  (function step(now) {
     if (gen !== typing) return;
-    if (i <= fullText.length) {
-      a.textContent = fullText.slice(0, i); i++;
-      box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });   // dlhší text sa posúva, panel nerastie
-      setTimeout(step, msPerChar);
-    } else a.classList.add('done');
-  })();
+    const k = Math.min(1, (now - start) / total);
+    const n = Math.round(k * fullText.length);
+    if (a.textContent.length !== n) {
+      a.textContent = fullText.slice(0, n);
+      box.scrollTop = box.scrollHeight;        // dlhší text sa posúva, panel nerastie
+    }
+    if (k < 1) requestAnimationFrame(step);
+    else { a.classList.add('done'); typeState = null; }
+  })(start);
+}
+/* Dopíše zvyšok naraz — volá sa, keď Mirana dohovorila. */
+function finishTyping() {
+  const a = el('answer');
+  if (typeState && typeState.gen === typing) {
+    a.textContent = typeState.fullText;
+    typeState.box.scrollTop = typeState.box.scrollHeight;
+    typing++; typeState = null;
+  }
+  a.classList.add('done');
 }
 function setTelemetry(t) {
   combat = !!t.combat;
