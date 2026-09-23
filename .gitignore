@@ -7,3 +7,4 @@ fillers/
 *.wav
 mirana_state.json
 data/
+logs/

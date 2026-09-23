@@ -84,7 +84,8 @@ class LocalStt:
             if prompt_tokens > 224:
                 logger.warning("stt.local_vocabulary ma %d tokenov (max 224), zaciatok zoznamu sa ignoruje", prompt_tokens)
         # Prvy prepis po starte je ~3x pomalsi (CUDA kernely) — zahrejeme sekundou ticha, nie Erikovou vetou.
-        self.model.transcribe(np.zeros(16000, dtype=np.float32), language=self.language)
+        # vad_filter=True: VAD model (Silero) sa inak nacita az pri prvej otazke a ta trva o 2-3 s dlhsie
+        list(self.model.transcribe(np.zeros(16000, dtype=np.float32), language=self.language, vad_filter=True)[0])
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
         try:

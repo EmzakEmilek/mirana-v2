@@ -2,8 +2,10 @@
 # nahradí sa len text, ktorý ide do Azure.
 #
 # Pravidlá:
-#  - kľúč sa hľadá bez ohľadu na veľkosť písmen, na začiatku slova; koniec slova sa neviaže,
-#    takže "Silverhand" chytí aj "Silverhandom", "Arasak" aj "Arasakou" (skloňovanie)
+#  - kľúč sa hľadá ako celé slovo; kľúč od 5 znakov smie mať slovenskú koncovku (max 4 písmená),
+#    takže "Silverhand" chytí aj "Silverhandom", ale "OS" nechytí "ostatní"
+#  - kľúč do 3 znakov písaný veľkými (OS, RAM, HP) platí len s presnou veľkosťou písmen
+#  - nepridávaj kľúč, ktorý je aj bežné slovenské slovo (chaos, body, gig...)
 #  - dlhší kľúč má prednosť ("Night City" pred "City")
 #  - veľké začiatočné písmeno sa zachová
 #  - kľúč = pravopis, hodnota = ako to má Slovák prečítať
@@ -96,6 +98,7 @@ quickhacking: kvikheking
 quickhack: kvikhek
 cyberdeck: sajberdek
 cyberware: sajbervér
+cyberwar: sajbervér
 cyberpsycho: sajbersajko
 ripperdoc: riperdok
 Sandevistan: Sandevistan
@@ -179,7 +182,6 @@ Jinchu-Maru: Džinču Maru
 Cocktail Stick: Koktejl Stik
 Byakko: Bjako
 Nehan: Nehan
-Chaos: Kejos
 Doom Doom: Dúm Dúm
 Fenrir: Fenrir
 Archangel: Arkejndžel

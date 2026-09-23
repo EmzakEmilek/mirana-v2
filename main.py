@@ -1,28 +1,31 @@
 """Orchestrator: event fronta, stavovy automat IDLE -> LISTENING -> PROCESSING -> SPEAKING.
 
-Vstupy hadzu eventy do fronty, o poradi a fallbackoch rozhoduje jedine tento subor.
+Vstupy hadzu eventy do fronty, o poradi, fallbackoch a pamati rozhoduje jedine tento subor.
 
-Faza 2: STT + LLM bezia vo worker vlakne, aby slucka ostala responzivna. Kazda uloha ma
-generaciu; barge-in (F12 pocas PROCESSING/SPEAKING) generaciu zvysi, takze vysledok starej
-ulohy sa zahodi. Filler hlaska sa spusti z casovaca, ak odpoved nepride do
-fillers.skip_if_faster_than_ms.
+STT + LLM bezia vo worker vlakne; odpoved sa streamuje po vetach do Speakera, ktory prvu vetu
+hovori, kym model pise dalsie. Kazda otazka je Job; barge-in (F12 pocas PROCESSING/SPEAKING)
+job zrusi — Speaker ho zahodi, stream sa preruší a do pamate ide len to, co Erik stihol pocut.
+Filler hlaska sa spusti z casovaca, ak prva veta nepride do fillers.skip_if_faster_than_ms.
 """
 
 import logging
 import queue
 import threading
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from core.brain import Brain
+from core.brain import Answer, Brain
+from core.budget import Budget
 from core.config import load_config
 from core.memory import Memory
+from core.session import ConversationLog, ensure_single_instance, setup_logging
 from inputs.ptt import PushToTalk
 from outputs.fillers import Fillers
 from outputs.overlay import Overlay
+from outputs.speaker import Speaker
 from outputs.voice import Voice
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -36,26 +39,41 @@ class State(Enum):
 @dataclass
 class Job:
     gen: int
+    released_at: float                       # pustenie F12 — od neho meriame cas do prveho zvuku
     filler_timer: threading.Timer | None = None
+    cancelled: bool = False                  # barge-in; cita ho Speaker aj stream v Brain
+    started: bool = False                    # prva veta uz znie (nastavuje Speaker)
+    tts_failed: bool = False
+    first_sentence: bool = True
+    remember: bool = True                    # fallback hlasky sa do pamate nedavaju
+    user_text: str | None = None
+    answer: Answer | None = None
+    spoken: list[str] = field(default_factory=list)
+    remembered: bool = False
 
 
 class Mirana:
-    """Sklada ptt -> brain -> voice."""
+    """Sklada ptt -> brain -> speaker/voice -> overlay."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, session_id: str):
         self.config = config
         self.fallback = config["fallback_phrases"]
         self.state = State.IDLE
-        self._lock = threading.Lock()  # chrani state a _gen (menia ich 3 vlakna: ptt, worker, slucka)
+        self._lock = threading.Lock()  # chrani state, _gen a _job (menia ich ptt, worker, speaker aj slucka)
         self._gen = 0
+        self._job: Job | None = None
         self._events: queue.Queue = queue.Queue()
 
+        self.conversation = ConversationLog(session_id)
+        self.budget = Budget(config)
         self.memory = Memory(config)
-        self.brain = Brain(config)
+        self.brain = Brain(config, self.budget)
         self.voice = Voice(config)
         self.fillers = Fillers(config, self.voice)
         self.overlay = Overlay(config)
         self.voice.on_level = self.overlay.level
+        self.speaker = Speaker(config, self.voice, self.overlay, on_start=self._on_speech_start,
+                               on_done=lambda job: self._events.put(("spoken", job)))
         self.ptt = PushToTalk(
             config,
             on_start=self._on_ptt_press,
@@ -77,7 +95,12 @@ class Mirana:
                 self._set_state(State.LISTENING)
                 return
             if self.state in (State.PROCESSING, State.SPEAKING):
-                self._gen += 1  # bezucu ulohu zahodime, jej vysledok uz nikto neprehra
+                self._gen += 1
+                job = self._job
+                if job is not None:
+                    job.cancelled = True
+                    self._cancel_filler(job)
+                    self._events.put(("interrupted", job))
                 logger.info("barge-in pocas %s", self.state.name)
                 self.voice.stop()
                 self._set_state(State.LISTENING)
@@ -85,9 +108,11 @@ class Mirana:
     # --- worker vlakno ------------------------------------------------------------------------
 
     def _work(self, job: Job, wav_bytes: bytes) -> None:
-        """STT -> LLM. Vysledok posiela do fronty, slucka rozhodne, ci je este aktualny."""
+        """STT -> LLM stream. Vety idu rovno do Speakera, vysledok do fronty."""
         try:
+            stt_started = time.perf_counter()
             transcript = self.brain.transcribe(wav_bytes)
+            stt_sec = time.perf_counter() - stt_started
             if transcript is None:
                 self._events.put(("fallback", job, "stt_failed"))
                 return
@@ -95,31 +120,50 @@ class Mirana:
                 self._cancel_filler(job)  # omylom stlacene F12 — ticho, bez fillera
                 self._events.put(("silent", job, None))
                 return
-            logger.info("Erik: %s", transcript)
-
-            user_text = f"[ERIK] {transcript}"  # tag zdroja podla persona.md
-            game_state_line = None  # inputs/game_state.py pride vo Faze 4
-            answer = self.brain.ask(user_text, game_state_line, self.memory.as_messages())
-            if answer is None:
-                self._events.put(("fallback", job, "llm_failed"))
+            logger.info("Erik: %s  (STT %.1f s)", transcript, stt_sec)
+            if self.budget.exceeded():
+                self._events.put(("fallback", job, "budget_reached"))
                 return
-            self._events.put(("answer", job, (user_text, answer)))
+
+            job.user_text = f"[ERIK] {transcript}"  # tag zdroja podla persona.md
+            game_state_line = None  # telemetriu doplni Erik (Faza 4)
+            answer = self.brain.ask_stream(
+                job.user_text, game_state_line, self.memory.as_messages(),
+                on_sentence=lambda sentence: self._on_sentence(job, sentence),
+                should_stop=lambda: job.cancelled,
+            )
+            self._events.put(("answer", job, (answer, stt_sec)))
         except Exception:
             logger.exception("neocakavana chyba vo workeri")
             self._events.put(("fallback", job, "general_error"))
 
-    # --- hlavna slucka ------------------------------------------------------------------------
+    def _on_sentence(self, job: Job, sentence: str) -> None:
+        if job.cancelled:
+            return
+        if job.first_sentence:
+            job.first_sentence = False
+            self._cancel_filler(job)
+        self.speaker.say(job, sentence)
 
-    def _is_current(self, job: Job) -> bool:
+    # --- speaker vlakno -----------------------------------------------------------------------
+
+    def _on_speech_start(self, job: Job) -> None:
         with self._lock:
-            return job.gen == self._gen and self.state is State.PROCESSING
+            if job.cancelled or job.gen != self._gen or self.state is not State.PROCESSING:
+                return
+            self._set_state(State.SPEAKING)
+        logger.info("prvy zvuk %.1f s po pusteni F12", time.perf_counter() - job.released_at)
+
+    # --- hlavna slucka ------------------------------------------------------------------------
 
     def _cancel_filler(self, job: Job) -> None:
         if job.filler_timer is not None:
             job.filler_timer.cancel()
 
     def _play_filler(self, job: Job) -> None:
-        if self._is_current(job):
+        with self._lock:
+            current = not job.cancelled and job.gen == self._gen and self.state is State.PROCESSING
+        if current and not job.started:
             line = self.fillers.play_random()
             if line:
                 self.overlay.filler(line)
@@ -129,62 +173,89 @@ class Mirana:
             if self.state is not State.LISTENING:
                 return
             self._set_state(State.PROCESSING)
-            job = Job(gen=self._gen)
+            job = Job(gen=self._gen, released_at=time.perf_counter())
+            self._job = job
+        self.voice.arm()  # novy job: zrus stop z predchadzajuceho barge-inu
         if self.fillers.enabled:
             job.filler_timer = threading.Timer(self.fillers.delay_sec, self._play_filler, args=(job,))
             job.filler_timer.start()
         threading.Thread(target=self._work, args=(job, wav_bytes), daemon=True).start()
 
-    def _say(self, job: Job, text: str) -> None:
-        """Prehra odpoved, ak je uloha stale aktualna. Barge-in pocas reci ju zastavi z PTT vlakna."""
-        self._cancel_filler(job)
-        with self._lock:
-            if job.gen != self._gen or self.state is not State.PROCESSING:
-                return
-            self._set_state(State.SPEAKING)
-        try:
-            audio = self.voice.to_device_audio(self.voice.synthesize(text))
-            self.fillers.wait()  # nech filler dohra, odpoved nesmie zacat cez neho
-            with self._lock:
-                if job.gen != self._gen:
-                    return
-            # HUD pise v tempe hlasu; Erikova otazka sa nezobrazuje
-            self.overlay.answer(text, duration_sec=audio.shape[0] / self.voice.device_rate * 0.93)
-            self.voice.play_audio(audio, block=True)
-        except Exception:
-            logger.exception("voice zlyhal")
-        finally:
-            with self._lock:
-                if job.gen == self._gen and self.state is State.SPEAKING:
-                    self._set_state(State.IDLE)
+    def _remember(self, job: Job, interrupted: bool) -> None:
+        """Do pamate ide to, co Erik naozaj pocul — pri preruseni len vyslovene vety."""
+        if job.remembered or not job.remember or job.user_text is None:
+            return
+        if interrupted:
+            if not job.spoken:
+                return  # nepocul nic, otazka ako keby nebola
+            text = " ".join(job.spoken) + " …"
+        elif job.answer is not None and job.answer.text:
+            text = job.answer.text
+        else:
+            return
+        job.remembered = True
+        self.memory.add_exchange(job.user_text, text)
 
-    def _handle_result(self, event: str, job: Job, payload) -> None:
-        if not self._is_current(job):
-            logger.info("vysledok zahodeny (barge-in)")
+    def _handle_event(self, event: str, job: Job, payload) -> None:
+        if event == "interrupted":
+            self._remember(job, interrupted=True)
+            return
+        if event == "spoken":
+            self._remember(job, interrupted=False)
+            with self._lock:
+                if job.gen == self._gen and self.state in (State.PROCESSING, State.SPEAKING):
+                    self._set_state(State.IDLE)
+            return
+        if event == "answer":
+            answer, stt_sec = payload
+            job.answer = answer
+            self.conversation.write(
+                erik=job.user_text, mirana=answer.text, model=answer.model, stop=answer.stop_reason,
+                stt_s=round(stt_sec, 2), prva_veta_s=answer.first_sentence_sec and round(answer.first_sentence_sec, 2),
+                spolu_s=round(answer.total_sec, 2), usd=round(answer.cost, 5), prerusene=job.cancelled,
+                chyba=answer.error,
+            )
+            if job.cancelled:
+                return
+            logger.info("Mirana: %s", answer.text)
+            if not answer.ok and not answer.sentences:
+                job.remember = False
+                self.speaker.say_all(job, self.fallback["llm_failed"])
+                return
+            self.speaker.end(job)
+            return
+        if job.cancelled or job.gen != self._gen:
             return
         if event == "silent":
             with self._lock:
-                self._set_state(State.IDLE)
+                if self.state is State.PROCESSING:
+                    self._set_state(State.IDLE)
         elif event == "fallback":
-            self._say(job, self.fallback[payload])
-        elif event == "answer":
-            user_text, answer = payload
-            logger.info("Mirana: %s", answer)
-            self.memory.add_exchange(user_text, answer)
-            self._say(job, answer)
+            logger.info("fallback: %s", payload)
+            job.remember = False
+            self._cancel_filler(job)
+            self.speaker.say_all(job, self.fallback[payload])
 
     def run(self) -> None:
         self.overlay.start()
         self.ptt.start()
-        logger.info("Mirana bezi. Drz %s pre PTT.", self.config["audio"]["ptt_key"])
+        logger.info("Mirana bezi (%s, effort %s). Drz %s pre PTT. Dnes minute $%.3f z $%.2f.",
+                    self.config["llm"]["model"], self.config["llm"]["effort"], self.config["audio"]["ptt_key"],
+                    self.budget.spent, self.budget.cap)
 
         while True:
             event, *rest = self._events.get()
-            if event == "recording":
-                self._handle_recording(rest[0])
-            else:
-                self._handle_result(event, *rest)
+            try:
+                if event == "recording":
+                    self._handle_recording(rest[0])
+                else:
+                    job, payload = (rest + [None])[:2]
+                    self._handle_event(event, job, payload)
+            except Exception:
+                logger.exception("chyba v hlavnej slucke (%s)", event)
 
 
 if __name__ == "__main__":
-    Mirana(load_config()).run()
+    ensure_single_instance()
+    cfg = load_config()
+    Mirana(cfg, setup_logging(cfg)).run()

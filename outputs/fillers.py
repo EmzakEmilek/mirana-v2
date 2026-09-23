@@ -44,7 +44,7 @@ class Fillers:
         for i, line in enumerate(lines, 1):
             path = FILLERS_DIR / f"{i:02d}_{_slug(line)}.wav"
             if not path.exists():
-                path.write_bytes(self._voice.synthesize(line))
+                path.write_bytes(self._voice.synthesize(line, timeout=15))
                 generated += 1
             self._clips.append((line, self._voice.to_device_audio(path.read_bytes())))
         logger.info("fillery: %d hlasok (%d novo vygenerovanych)", len(self._clips), generated)

@@ -47,16 +47,22 @@ class Overlay:
     def filler(self, text: str) -> None:
         self._send({"type": "filler", "text": text}, remember=False)
 
-    def answer(self, text: str, duration_sec: float | None = None) -> None:
-        """Pisaci stroj; ak pozname dlzku audia, tempo sa nastavi tak, aby text dobehol s hlasom."""
-        ms_per_char = self.ms_per_char
-        if duration_sec and text:
-            ms_per_char = max(15, int(duration_sec * 1000 / len(text)))
-        self._send({"type": "answer", "text": text, "ms_per_char": ms_per_char})
+    def answer_start(self) -> None:
+        """Nova odpoved — HUD vymaze staru. Odpovede sa nepamataju: po reconnecte (refresh v OBS)
+        by sa inak stara odpoved vypisala znova."""
+        self._send({"type": "answer_start"}, remember=False)
+
+    def answer_append(self, text: str, duration_sec: float | None = None, ms_per_char: int | None = None) -> None:
+        """Dalsia veta odpovede. Tempo pisania z dlzky jej audia, aby text dobehol s hlasom."""
+        if ms_per_char is None:
+            ms_per_char = self.ms_per_char
+            if duration_sec and text:
+                ms_per_char = max(15, int(duration_sec * 1000 / len(text)))
+        self._send({"type": "answer_append", "text": text, "ms_per_char": ms_per_char}, remember=False)
 
     def question(self, text: str) -> None:
         """Len pre [SYSTEM] hlasky — Erikove otazky sa na HUD nezobrazuju (rozhodnutie 2026-09-21)."""
-        self._send({"type": "question", "text": text})
+        self._send({"type": "question", "text": text}, remember=False)
 
     def telemetry(self, location: str, quest: str, combat: bool = False) -> None:
         """HP sa na HUD neukazuje (ma ho hra), len lokacia + quest; combat zafarbi jadro."""

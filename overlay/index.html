@@ -139,7 +139,7 @@
      state {state}                     idle | listening | processing | speaking
      level {v}                         0..1, ~20x/s: hlas Mirany (speaking/filler) alebo mikrofón (listening)
      filler {text}                     hláška do riadku "sub"
-     answer {text, ms_per_char}        písací stroj
+     answer_start / answer_append {text, ms_per_char}   odpoveď po vetách (streaming)
      question {text}                   [SYSTÉM] hlášky do "sub" (Erikove otázky sa neposielajú)
      telemetry {location, quest, combat}
      queue {n}                         nepoužíva sa
@@ -157,14 +157,18 @@ const COLORS = {
 };
 
 let state = 'offline', combat = false;
-let typing = 0, fadeTimer = null, typeState = null;
+let fadeTimer = null;
 const FADE_AFTER_MS = 5000;   // odpoveď zmizne 5 s po tom, čo Mirana dohovorí
+
+/* Odpoveď prichádza po vetách (streaming). full = všetok doteraz prijatý text, shown = koľko
+   znakov je vypísaných; jedna rAF slučka dopisuje v tempe poslednej vety (z dĺžky jej audia). */
+let full = '', shown = 0, rate = 26, lastT = 0, running = false;
 
 function scheduleFade() {
   clearTimeout(fadeTimer);
   fadeTimer = setTimeout(() => {
     const a = el('answer'); a.classList.add('fade');
-    setTimeout(() => { if (a.classList.contains('fade')) { a.textContent = ''; a.className = 'answer done'; } }, 1300);
+    setTimeout(() => { if (a.classList.contains('fade')) { a.textContent = ''; a.className = 'answer done'; full = ''; shown = 0; } }, 1300);
   }, FADE_AFTER_MS);
 }
 
@@ -172,14 +176,10 @@ function setState(s) {
   const prev = state; state = s;
   panel.className = 'panel ' + s + (combat ? ' combat' : '');
   statusLabel.textContent = LABELS[s] || s;
-  if (s !== 'speaking') {
-    const a = el('answer');
-    if (s === 'idle') finishTyping();          // dohovorila — text sa dopíše celý, nikdy sa neutne
-    else { typing++; typeState = null; a.classList.add('done'); }
-    if (prev === 'speaking') {
-      if (s === 'listening') a.classList.add('cut');   // barge-in: prerušená veta zbledne
-      scheduleFade();
-    }
+  if (s !== 'speaking' && prev === 'speaking') {
+    if (s === 'idle') finishTyping();            // dohovorila — text sa dopíše celý, nikdy sa neutne
+    else cutTyping();                            // barge-in: prerušená veta ostane, zbledne
+    scheduleFade();
   }
   if (s === 'listening' || s === 'idle') { el('sub').textContent = ''; el('sub').className = 'sub'; }
   if (prev !== s) { panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); }
@@ -189,38 +189,39 @@ function showSub(text, system) {
   q.textContent = text; q.className = 'sub' + (system ? ' system' : '');
   q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
 }
-/* Písanie riadené časom (nie setTimeout krokom) — inak sa nazbiera oneskorenie
-   a posledné slovo sa nestihne, kým skončí hlas. */
-function typeAnswer(fullText, msPerChar) {
+function answerStart() {
   clearTimeout(fadeTimer);
-  const a = el('answer'), box = el('answer-box');
-  a.className = 'answer'; a.textContent = ''; box.scrollTop = 0;
+  full = ''; shown = 0;
+  const a = el('answer'); a.className = 'answer'; a.textContent = '';
+  el('answer-box').scrollTop = 0;
   el('sub').textContent = '';
-  const gen = ++typing;
-  const total = Math.max(1, fullText.length * msPerChar);
-  const start = performance.now();
-  typeState = { gen, fullText, a, box };
-  (function step(now) {
-    if (gen !== typing) return;
-    const k = Math.min(1, (now - start) / total);
-    const n = Math.round(k * fullText.length);
-    if (a.textContent.length !== n) {
-      a.textContent = fullText.slice(0, n);
-      box.scrollTop = box.scrollHeight;        // dlhší text sa posúva, panel nerastie
-    }
-    if (k < 1) requestAnimationFrame(step);
-    else { a.classList.add('done'); typeState = null; }
-  })(start);
 }
-/* Dopíše zvyšok naraz — volá sa, keď Mirana dohovorila. */
+function answerAppend(text, msPerChar) {
+  clearTimeout(fadeTimer);
+  full += (full ? ' ' : '') + text;
+  rate = msPerChar || 26;
+  el('answer').classList.remove('done', 'fade');
+  if (!running) { running = true; lastT = performance.now(); requestAnimationFrame(typeStep); }
+}
+/* Písanie riadené časom (nie setTimeout krokom) — inak sa nazbiera oneskorenie. */
+function typeStep(now) {
+  const a = el('answer'), box = el('answer-box');
+  shown = Math.min(full.length, shown + (now - lastT) / rate);
+  lastT = now;
+  const n = Math.floor(shown);
+  if (a.textContent.length !== n) { a.textContent = full.slice(0, n); box.scrollTop = box.scrollHeight; }
+  if (n < full.length) requestAnimationFrame(typeStep);
+  else running = false;
+}
 function finishTyping() {
+  shown = full.length;
   const a = el('answer');
-  if (typeState && typeState.gen === typing) {
-    a.textContent = typeState.fullText;
-    typeState.box.scrollTop = typeState.box.scrollHeight;
-    typing++; typeState = null;
-  }
-  a.classList.add('done');
+  a.textContent = full; a.classList.add('done');
+  el('answer-box').scrollTop = el('answer-box').scrollHeight;
+}
+function cutTyping() {
+  full = full.slice(0, Math.floor(shown));
+  el('answer').classList.add('done', 'cut');
 }
 function setTelemetry(t) {
   combat = !!t.combat;
@@ -327,7 +328,8 @@ function handle(ev) {
     case 'state':     setState(ev.state); break;
     case 'level':     target = ev.v; break;
     case 'filler':    showSub('· ' + ev.text + ' ·', false); break;
-    case 'answer':    typeAnswer(ev.text, ev.ms_per_char || 26); break;
+    case 'answer_start':  answerStart(); break;
+    case 'answer_append': answerAppend(ev.text, ev.ms_per_char); break;
     case 'question':  showSub(ev.text, true); break;
     case 'telemetry': setTelemetry(ev); break;
     case 'queue':     break;

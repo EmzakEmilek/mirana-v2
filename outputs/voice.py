@@ -1,4 +1,4 @@
-"""Voice: Azure TTS (sk-SK-ViktoriaNeural) do pamate, prehratie cez sounddevice na audio.output_device."""
+"""Voice: Azure TTS do pamate (s timeoutom), prehratie cez sounddevice na audio.output_device."""
 
 import ctypes
 import io
@@ -7,6 +7,7 @@ import re
 import sys
 import threading
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from xml.sax.saxutils import escape as xml_escape
 
 import azure.cognitiveservices.speech as speechsdk
@@ -67,17 +68,25 @@ def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
 _NON_LATIN_PATTERN = re.compile(r"[Ѐ-ӿԀ-ԯ　-鿿가-힯豈-﫿]")
 
 
+# Slovenske koncovky, ktore sa smu pripojit k dlhsiemu klucu (Silverhandom, Dogtownu, questy, netrunnera)
+_SUFFIX = r"(?P<suf>[a-záäčďéíĺľňóôŕšťúýž]{0,4})"
+
+
 def load_phonetics(path) -> list[tuple[re.Pattern, str]]:
     """Nacita phonetics.yaml -> zoznam (regex, nahrada), najdlhsi kluc prvy.
 
-    Regex chyta kluc na zaciatku slova bez ohladu na velkost pismen; koniec slova neviaze,
-    aby preslo aj sklonovanie (Silverhandom -> Silverhendom).
+    Vzdy cele slovo. Kluc od 5 znakov smie mat slovensku koncovku (Silverhandom -> Silverhendom);
+    kratsi kluc (OS, RAM, HP, tech) plati len ako samostatne slovo a pri skratkach aj s presnou
+    velkostou pismen — inak by prepisal bezne slova (ostatni -> "ó estatní", technika -> "teknika").
     """
     with open(path, "r", encoding="utf-8") as f:
         mapping = yaml.safe_load(f) or {}
     rules = []
-    for key, value in sorted(mapping.items(), key=lambda kv: -len(kv[0])):
-        pattern = re.compile(r"(?<![\w])" + re.escape(str(key)), re.IGNORECASE)
+    for key, value in sorted(mapping.items(), key=lambda kv: -len(str(kv[0]))):
+        key = str(key)
+        suffix = _SUFFIX if len(key) >= 5 else "(?P<suf>)"
+        flags = 0 if (len(key) <= 3 and key.isupper()) else re.IGNORECASE
+        pattern = re.compile(r"(?<!\w)" + re.escape(key) + suffix + r"(?!\w)", flags)
         rules.append((pattern, str(value)))
     return rules
 
@@ -87,11 +96,12 @@ def apply_phonetics(text: str, rules: list[tuple[re.Pattern, str]]) -> str:
     for pattern, replacement in rules:
         def _sub(match, replacement=replacement):
             found = match.group(0)
-            if found[:1].isupper() and not replacement[:1].isupper():
-                return replacement[:1].upper() + replacement[1:]
-            if found[:1].islower() and replacement[:1].isupper():
-                return replacement[:1].lower() + replacement[1:]
-            return replacement
+            out = replacement
+            if found[:1].isupper() and not out[:1].isupper():
+                out = out[:1].upper() + out[1:]
+            elif found[:1].islower() and out[:1].isupper():
+                out = out[:1].lower() + out[1:]
+            return out + match.group("suf")
         text = pattern.sub(_sub, text)
     return text
 
@@ -136,6 +146,8 @@ class Voice:
         output_format = _AZURE_FORMATS.get(self.device_rate, speechsdk.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
         speech_config.set_speech_synthesis_output_format(output_format)
         self._synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
+        # Jedno vlakno: Azure synthesizer nie je stavany na paralelne volania z viacerych vlakien
+        self._synth_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts")
 
     def _build_ssml(self, clean_text: str) -> str:
         return (
@@ -145,10 +157,11 @@ class Voice:
             "</voice></speak>"
         )
 
-    def synthesize(self, text: str) -> bytes:
-        """Sanitizuje text a syntetizuje ho do WAV bytes v pamati."""
+    def synthesize(self, text: str, timeout: float | None = None) -> bytes:
+        """Sanitizuje text a syntetizuje ho do WAV bytes v pamati. Pri prekroceni timeoutu TimeoutError."""
         spoken = apply_phonetics(sanitize_text(text), self._phonetics)
-        result = self._synthesizer.speak_ssml_async(self._build_ssml(spoken)).get()
+        future = self._synth_pool.submit(lambda: self._synthesizer.speak_ssml_async(self._build_ssml(spoken)).get())
+        result = future.result(timeout=timeout)  # concurrent.futures.TimeoutError je podtrieda TimeoutError
         if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
             details = result.cancellation_details
             reason = details.reason if details else result.reason
@@ -180,10 +193,22 @@ class Voice:
         self._thread = threading.Thread(target=self._play_blocking, args=(audio,), daemon=True)
         self._thread.start()
 
+    def arm(self) -> None:
+        """Zrusi predchadzajuci stop — volat na zaciatku novej ulohy (novy job), nie pred kazdou vetou.
+
+        Keby sa stop nuloval pri kazdom prehrati, barge-in tesne pred startom vety by sa stratil.
+        """
+        self._stop_event.clear()
+
+    @property
+    def stopped(self) -> bool:
+        return self._stop_event.is_set()
+
     def _play_blocking(self, audio: np.ndarray) -> None:
         _ensure_com()  # WASAPI stream z ineho vlakna (filler timer, worker) inak zlyha
         with self._play_lock:
-            self._stop_event.clear()
+            if self._stop_event.is_set():
+                return
             chunk = int(self.device_rate * 0.05)
             with sd.OutputStream(
                 samplerate=self.device_rate, device=self.output_device, channels=audio.shape[1], dtype="int16"
@@ -199,7 +224,8 @@ class Voice:
                 self.on_level(0.0)
 
     def play(self, wav_bytes: bytes) -> None:
-        """Prehra WAV bytes na nakonfigurovane vystupne zariadenie (blokuje do konca)."""
+        """Prehra WAV bytes na nakonfigurovane vystupne zariadenie (blokuje do konca). Pre testy a nastroje."""
+        self.arm()
         self.play_audio(self.to_device_audio(wav_bytes))
 
     def wait(self) -> None:
