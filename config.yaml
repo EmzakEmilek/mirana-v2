@@ -86,6 +86,7 @@ llm:
   chat_effort: "medium"
                               # (temperature Sonnet 5 neprijíma, štýl rieši persona.md)
   cache_persona: true         # persona ako cacheable blok — zásadné pre rozpočet
+  cache_memory: true          # aj pamäť rozhovoru ide do cache (breakpoint na novej otázke)
 
 tts:
   voice: "sk-SK-ViktoriaNeural"   # rodená SK + phonetics.yaml; Emma (multilingválna) čítala fonetický prepis ako ruštinu
@@ -94,7 +95,8 @@ tts:
   phonetics_file: "phonetics.yaml"   # anglicizmy -> slovenská fonetika, len pre TTS (titulky ostávajú v origináli)
 
 memory:
-  max_exchanges: 8            # vyššie číslo = výrazne drahší input
+  max_exchanges: 12           # pri prekroceni sa pamat oreze naraz na trim_to (nie po jednej) — kvoli prompt cache
+  trim_to: 6                  # priemerne ~9 vymen v pamati; cachovana historia stoji 5 % ceny vstupu
 
 fillers:
   enabled: true

@@ -111,6 +111,14 @@ class Brain:
             system.append({"type": "text", "text": game_state_line})
         return system
 
+    def _user_message(self, user_text: str) -> dict:
+        """Nova otazka s cache breakpointom: persona + cela doterajsia pamat + tato otazka sa ulozi
+        do cache, dalsia otazka ich precita za zlomok ceny (kym sa pamat neoreze, prefix sa nemeni)."""
+        block = {"type": "text", "text": user_text}
+        if self.llm_cfg.get("cache_memory", True):
+            block["cache_control"] = {"type": "ephemeral"}
+        return {"role": "user", "content": [block]}
+
     def _route(self, user_text: str) -> tuple[str, str]:
         if user_text.startswith("[CHAT_") and self.llm_cfg.get("chat_model"):
             return self.llm_cfg["chat_model"], self.llm_cfg.get("chat_effort", self.llm_cfg["effort"])
@@ -130,7 +138,7 @@ class Brain:
             max_tokens=self.llm_cfg["max_tokens"],
             output_config={"effort": effort},
             system=self._build_system(game_state_line),
-            messages=[*memory_messages, {"role": "user", "content": user_text}],
+            messages=[*memory_messages, self._user_message(user_text)],
         )
         fallbacks = self.llm_cfg.get("fallbacks")
         if fallbacks and model.startswith("claude-opus"):
