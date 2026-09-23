@@ -39,20 +39,23 @@ mirana-v2/
 │
 ├── core/
 │   ├── config.py        # načítanie config.yaml + .env, jediné miesto s cestami
-│   ├── brain.py         # STT (core/stt.py) → LLM (Opus 5) → text
+│   ├── brain.py         # STT (core/stt.py) → LLM (Opus 5.5, streaming po vetách)
 │   ├── stt.py           # Whisper: api (OpenAI) | local (faster-whisper, CUDA)
 │   ├── memory.py        # posledných 8 výmen (RAM)
 │   ├── longterm.py      # data/memory.json: Erik (postup, fakty) + diváci, medzi sessions
-│   ├── budget.py        # denný strop, počítadlo tokenov
+│   ├── budget.py        # denný strop (data/budget.json), cena každej odpovede
+│   ├── session.py       # logy do logs/, záznam rozhovoru (jsonl), zámok proti 2. inštancii
 │   └── safety.py        # výstupný filter pred TTS
 │
 ├── outputs/
-│   ├── voice.py         # TTS, prehrávanie, okamžitý stop
+│   ├── voice.py         # TTS (s timeoutom), fonetika, prehrávanie, okamžitý stop
+│   ├── speaker.py       # streaming reči: vety → TTS vlákno → prehrávacie vlákno
 │   ├── fillers.py       # generovanie a prehrávanie filler hlášok
 │   └── overlay.py       # WebSocket server pre OBS
 │
 ├── fillers/             # predgenerované WAV, vznikne pri prvom spustení
-├── data/                # memory.json (necommitovať)
+├── data/                # memory.json, budget.json (necommitovať)
+├── logs/                # mirana-<čas>.log, rozhovor-<čas>.jsonl (necommitovať)
 ├── overlay/
 │   └── index.html       # diegetický HUD — HOTOVÝ, needituj vzhľad
 └── mod/
@@ -190,32 +193,29 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 ## 8. Fáza 7 — Hardening
 
 1. `core/budget.py` — počítaj tokeny a odhadovanú cenu za deň.
-   `limits.daily_usd_cap` (5.00, jeden stream). Pri dosiahnutí prestaň volať API, Mirana povie
-   hlášku v charaktere, zaloguj varovanie. Reset o polnoci.
+   HOTOVÉ 2026-09-23 (`limits.daily_usd_cap`, stav v data/budget.json, hláška budget_reached).
 2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS
    a osobné údaje divákov. Pri zachytení preskoč vetu.
 3. `run.py` — supervisor: sleduj heartbeat, pri páde alebo zamrznutí (>60 s)
    reštartuj. Max 5 reštartov za hodinu.
 4. Panic mute na F11 — okamžite umlčí Miranu a pozastaví spracovanie.
-5. Log per session.
+5. Log per session. HOTOVÉ 2026-09-23 (logs/, core/session.py).
 6. Pred prvým ostrým streamom 8-hodinový suchý beh. Sleduj RAM a počet API chýb.
 
 ---
 
 ## 9. Náklady
 
-Sadzby (september 2026): Claude Opus 5 $5/$25 za milión tokenov, cache hit 10 % ceny
-inputu, Azure TTS Free F0 500K znakov/mesiac, Whisper lokálne $0.
+Model: Claude Opus 5.5 (`claude-opus-5-5`), effort `low`, $4/$20 za milión tokenov, cache read $0.20.
+Opus 5.5 premýšľa vždy (aj na low) — prvý zvuk ~4,4 s po F12; Opus 5 ~3,6 s pri podobnej cene
+(test 2026-09-23). Prepnutie = jeden riadok `llm.model` v config.yaml.
 
-Merané 2026-09-21 (Opus 5, effort low, persona ~2 600 tok cachovaná, pamäť 8 výmen):
-**~0,9 c na otázku od Erika, ~0,65 c na správu z chatu** → pri 40 otázkach/hod
-**~$0.35/hod streamu**, 100 hodín ≈ $35. Chat (Sonnet) ~0,4 c/správa, cooldown 30 s ⇒ najviac ~$0.45/hod. `limits.daily_usd_cap: 5.00` = tvrdý strop na stream.
+Merané 2026-09-23: **~0,6 c na otázku** → pri 40 otázkach/hod ~$0.25/hod streamu.
+Chat divákov (Sonnet 5) ~0,4 c/správa, cooldown 30 s ⇒ najviac ~$0.45/hod.
+`limits.daily_usd_cap: 5.00` vynucuje `core/budget.py` (stav prežije reštart, reset o polnoci).
+`llm.fallbacks: "default"`: odmietnutie bezpečnostným filtrom sa zopakuje na inom modeli.
 
-Sonnet 5 by stál ~0,4 c/otázku, ale v teste mal 3 lore halucinácie, jazykové artefakty
-a prezradil spoiler — pre živý stream nepoužiteľné. Rozhodnutie: Opus.
-
-Rozpočet rozbije: effort nad low, pamäť nad 8 výmen, nezacachovaná persona
-(persona sa nesmie meniť za behu), alebo bug v slučke.
+Rozpočet rozbije: effort nad low, pamäť nad 8 výmen, meniaca sa persona (zruší cache), bug v slučke.
 
 ---
 

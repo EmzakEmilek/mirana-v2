@@ -70,6 +70,15 @@ Navrh routingu (na potvrdenie):
   s reconnectom (vzhlad nezmeneny). Rozhodnutia: Erikova otazka sa NEzobrazuje, filler sa zobrazuje
   v riadku "question" ako "· text ·". Test: HTTP + WS sekvencia OK. CAKA NA TEST v prehliadaci
   (localhost:8080) a neskor OBS na notebooku (firewall: povolit TCP 8080 na hernom PC).
+- Review + opravy (2026-09-23):
+  * phonetics.yaml kazil SK slova ("ostatni" -> "ó estatni", ~9 % odpovedi) — teraz cele slova,
+    kratke kluce len presne; "Chaos" vyhodeny
+  * Opus 5.5 low + server-side fallbacks, osetrenie stop_reason (refusal/max_tokens/prazdne)
+  * streaming: vety idu do outputs/speaker.py hned, ako vzniknu; prvy zvuk ~4 s (predtym 5-7 s)
+  * denny strop naozaj vynuteny (core/budget.py), logy + rozhovor do logs/, zamok proti 2 instanciam,
+    TTS timeout (veta sa aspon vypise na HUD), barge-in bez race, do pamate len vypocuta cast
+  * persona v4: menej pravidiel, ziadne "senzory", neistotu priznava nahlas; telemetriu doplni Erik
+    (persona ocakava riadok zacinajuci "[HRA]")
 - Faza 4-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
