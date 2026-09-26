@@ -33,7 +33,7 @@ STATES = {
     "speaking": ("HOVORÍ", YELLOW),
     "muted": ("STLMENÁ", RED),
 }
-STARTUP_TIMEOUT_SEC = 90  # nacitanie Whispera a fillerov
+STARTUP_TIMEOUT_SEC = 180  # nacitanie Whispera; pri vytazenom disku (napr. Steam stahuje) aj minutu
 
 
 class App(ctk.CTk):
@@ -76,6 +76,9 @@ class App(ctk.CTk):
 
         self.info = ctk.CTkLabel(self, text="", font=ctk.CTkFont("Segoe UI", 12), text_color=DIM, anchor="w")
         self.info.pack(fill="x", padx=20)
+        self.game_label = ctk.CTkLabel(self, text="Hra: čakám na údaje", font=ctk.CTkFont("Segoe UI", 12),
+                                       text_color=DIM, anchor="w", wraplength=520, justify="left")
+        self.game_label.pack(fill="x", padx=20)
 
         buttons = ctk.CTkFrame(self, fg_color=BG)
         buttons.pack(fill="x", padx=16, pady=10)
@@ -276,6 +279,12 @@ class App(ctk.CTk):
             self.budget_label.configure(text=f"Dnes minuté: ${spent:.2f} z ${cap:.2f}")
             self.budget_bar.set(min(1.0, spent / cap) if cap else 0)
             self.budget_bar.configure(progress_color=RED if spent >= cap * 0.8 else YELLOW)
+        elif kind == "game":
+            if ev.get("live"):
+                line = (ev.get("line") or "").removeprefix("[HRA] ")
+                self.game_label.configure(text="Hra: " + line, text_color=CYAN)
+            else:
+                self.game_label.configure(text="Hra: nebeží (alebo menu) — Mirana ide bez telemetrie", text_color=DIM)
         elif kind == "info":
             self.info.configure(text=f"Model: {ev.get('model')}  ·  effort {ev.get('effort')}  ·  HUD http://localhost:{self.port}")
 

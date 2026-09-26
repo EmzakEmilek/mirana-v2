@@ -28,7 +28,7 @@ from core.config import BASE_DIR
 from core.session import EXIT_ALREADY_RUNNING, HEARTBEAT_PATH, LOGS_DIR
 
 HEARTBEAT_TIMEOUT_SEC = 60
-STARTUP_GRACE_SEC = 90        # nacitanie Whispera a fillerov, heartbeat este nebezi
+STARTUP_GRACE_SEC = 180       # nacitanie Whispera pri vytazenom disku, heartbeat este nebezi
 MAX_RESTARTS_PER_HOUR = 5
 CHECK_EVERY_SEC = 5
 

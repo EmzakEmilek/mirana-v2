@@ -127,14 +127,14 @@ OBS na notebooku: Browser Source na `http://IP-herného-PC:8080`.
 
 ## 5. Fáza 4 — Oči (CET mod + proaktívna Mirana)
 
-1. `mod/mirana_state/init.lua` — každé 2 s zapíš do `%TEMP%/mirana_state.json`:
+1. `mod/mirana_state/init.lua` — každé 2 s zapíš `state.json` do priečinka modu (CET inam zapisovať nedovolí):
    HP %, level, street cred, eddies, quest, distrikt, in_combat, in_vehicle.
    Začni s HP + lokácia + quest.
 2. `inputs/game_state.py` — čítaj JSON (mtime check), generuj eventy:
    `hp_low` (<25 %), `hp_critical` (<10 %), `district_change`, `level_up`,
    `quest_completed`, `combat_start/end`.
-3. Do každého promptu pridaj jeden riadok kontextu:
-   `HP 87% | Watson/Kabuki | lvl 23 | quest: Ghost Town | combat: nie`
+3. Do každej správy (nie do system promptu — rušilo by to cache) pridaj slovenský riadok, nikdy surový JSON:
+   `[HRA] zdravie 87 % | Watson, Kabuki | úroveň 23, street cred 18 | quest Ghost Town, cieľ „…“ | mimo boja`
 4. Proaktívne hlášky: max 1 / 5 min, nikdy počas SPEAKING. `hp_critical` má
    výnimku z cooldownu.
 5. Keď mod nebeží, Mirana funguje ďalej bez kontextu.

@@ -54,6 +54,21 @@ alebo zamrznutí reštartuje (najviac 5× za hodinu). Druhá inštancia sa nespu
 
 Prvý štart stiahne Whisper model (~1,5 GB) a vygeneruje filler hlášky do `fillers/`.
 
+## Telemetria z hry (CET)
+
+Mirana vie, kde si, aký máš quest a cieľ, HP, level, peniaze a či bojuješ, a sama sa ozve pri kritickom HP,
+smrti, level-upe, novej štvrti či queste (najviac raz za 5 min, kritické HP hneď).
+
+1. Nainštaluj [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks/releases) (rozbaliť do priečinka hry).
+2. Okno MIRANA → Nastavenia → **Hra** → **Nainštalovať mod** (skopíruje `mod/mirana_state` do CET).
+3. Spusti hru. V hlavnom okne sa ukáže riadok „Hra: …".
+
+Mod zapisuje každé 2 s `state.json` do svojho priečinka; do promptu ide krátky slovenský riadok `[HRA]`,
+nikdy surový JSON (v teste model zo surového JSON zle prepočítal HP).
+
+Bez hry: `venv\Scripts\python tools\simulate_game.py` zapisuje falošný stav (jazda, boj, nízke HP, level, quest)
+do `data/sim_state.json`; Miranu vtedy spusti s `set MIRANA_GAME_STATE_PATH=C:\mirana-v2\data\sim_state.json`.
+
 ## Konfigurácia
 
 Všetko sa dá nastaviť v okne (Nastavenia) alebo priamo v `config.yaml`:
@@ -90,6 +105,8 @@ je vo free tieri (500 000 znakov/mesiac, ~15 streamov). Podrobnosti v [SPEC.md](
 | `core/stt.py` | lokálny faster-whisper alebo Whisper API |
 | `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |
 | `inputs/ptt.py` | F12 / F11 a nahrávanie |
+| `inputs/game_state.py`, `mod/mirana_state/init.lua` | telemetria z hry (CET mod), udalosti, riadok [HRA] |
+| `tools/simulate_game.py` | simulátor hry na testovanie bez Cyberpunku |
 | `outputs/speaker.py`, `outputs/voice.py` | TTS po vetách, prehrávanie, fonetika |
 | `outputs/fillers.py`, `outputs/overlay.py` | filler hlášky, HUD server |
 | `overlay/index.html` | HUD |

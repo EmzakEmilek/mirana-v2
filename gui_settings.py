@@ -92,6 +92,7 @@ class SettingsWindow(ctk.CTkToplevel):
                               segmented_button_selected_hover_color="#a39a00")
         tabs.pack(fill="both", expand=True, padx=12, pady=(8, 4))
         for name, build in (("Zvuk", self._tab_audio), ("Hlas", self._tab_voice), ("Model", self._tab_model),
+                            ("Hra", self._tab_game),
                             ("Prepis", self._tab_stt), ("Fillery", self._tab_fillers), ("HUD", self._tab_hud),
                             ("Bezpečnosť", self._tab_safety), ("Persona", self._tab_persona)):
             build(tabs.add(name))
@@ -223,6 +224,57 @@ class SettingsWindow(ctk.CTkToplevel):
         self._entry(tab, "memory.max_exchanges", "Pamäť (výmen)", memory["max_exchanges"],
                     hint="Koľko otázok a odpovedí si pamätá. Viac = lepšie nadväzuje, mierne drahšie.")
         self._entry(tab, "memory.trim_to", "Po zaplnení ponechať", memory.get("trim_to", memory["max_exchanges"]))
+
+    def _tab_game(self, tab):
+        from inputs.game_state import cet_installed, find_game_dir
+
+        gs, limits = self.cfg["game_state"], self.cfg["limits"]
+        self.game_dir = find_game_dir()
+        if self.game_dir is None:
+            status, color = "Cyberpunk 2077 sa nenašiel (Steam / GOG / Epic). Po inštalácii otvor nastavenia znova.", RED
+        elif not cet_installed(self.game_dir):
+            status, color = f"Hra: {self.game_dir}\nCyber Engine Tweaks nie je nainštalovaný — rozbaľ ho do bin\\x64.", RED
+        else:
+            status, color = f"Hra: {self.game_dir}\nCyber Engine Tweaks: nainštalovaný", CYAN
+        ctk.CTkLabel(tab, text=status, text_color=color, anchor="w", justify="left").pack(fill="x", padx=10, pady=(6, 2))
+        row = ctk.CTkFrame(tab, fg_color="transparent")
+        row.pack(fill="x", padx=10, pady=4)
+        ctk.CTkButton(row, text="Nainštalovať / aktualizovať mod", width=230, fg_color=YELLOW, text_color="#000",
+                      command=self._install_mod,
+                      state="normal" if self.game_dir and cet_installed(self.game_dir) else "disabled").pack(side="left")
+        self.mod_label = ctk.CTkLabel(row, text="", text_color=DIM)
+        self.mod_label.pack(side="left", padx=10)
+
+        self._switch(tab, "game_state.enabled", "Telemetria z hry", gs["enabled"],
+                     hint="Mirana vie, kde si, aký máš quest, HP a či bojuješ. Bez bežiacej hry sa nič nedeje.")
+        self._entry(tab, "game_state.json_path", "Súbor stavu", gs.get("json_path", "auto"), width=420,
+                    hint="auto = nájde hru sama. Inak cesta k state.json z CET modu.")
+        self._entry(tab, "game_state.hp_low_threshold", "Nízke HP (%)", gs["hp_low_threshold"], width=60)
+        self._entry(tab, "game_state.hp_critical_threshold", "Kritické HP (%)", gs["hp_critical_threshold"], width=60)
+        self._entry(tab, "limits.proactive_cooldown_sec", "Pauza medzi hláškami (s)", limits["proactive_cooldown_sec"],
+                    width=60, hint="Sama od seba sa ozve najviac raz za tento čas. Kritické HP a smrť majú výnimku.")
+        ctk.CTkLabel(tab, text="Kedy sa ozve sama:", text_color=TEXT, anchor="w").pack(fill="x", padx=10, pady=(8, 2))
+        grid = ctk.CTkFrame(tab, fg_color="transparent")
+        grid.pack(fill="x", padx=30)
+        self.speak_vars = {}
+        events = [("hp_critical", "kritické HP"), ("hp_low", "nízke HP"), ("death", "smrť"), ("level_up", "nový level"),
+                  ("district_change", "nová štvrť"), ("quest_changed", "nový quest"), ("combat_start", "začiatok boja"),
+                  ("combat_end", "koniec boja")]
+        current = set(gs.get("speak_on", []))
+        for i, (key, label) in enumerate(events):
+            var = ctk.BooleanVar(value=key in current)
+            self.speak_vars[key] = var
+            ctk.CTkCheckBox(grid, text=label, variable=var, fg_color=YELLOW, text_color=TEXT).grid(
+                row=i // 4, column=i % 4, sticky="w", padx=6, pady=3)
+
+    def _install_mod(self):
+        from inputs.game_state import install_mod
+
+        try:
+            path = install_mod(self.game_dir)
+            self.mod_label.configure(text="Hotovo — po štarte hry zapisuje " + path.name, text_color=CYAN)
+        except Exception as e:
+            self.mod_label.configure(text=f"Chyba: {e}", text_color=RED)
 
     def _tab_stt(self, tab):
         stt = self.cfg["stt"]
@@ -372,6 +424,15 @@ class SettingsWindow(ctk.CTkToplevel):
         _put(c["memory"], "trim_to", number("memory.trim_to", int, 0))
         if c["memory"]["trim_to"] > c["memory"]["max_exchanges"]:
             raise ValueError("„Po zaplnení ponechať“ nemôže byť viac ako veľkosť pamäte.")
+
+        _put(c["game_state"], "enabled", v["game_state.enabled"].get())
+        _put(c["game_state"], "json_path", v["game_state.json_path"].get().strip() or "auto")
+        _put(c["game_state"], "hp_low_threshold", number("game_state.hp_low_threshold", int, 1))
+        _put(c["game_state"], "hp_critical_threshold", number("game_state.hp_critical_threshold", int, 1))
+        if c["game_state"]["hp_critical_threshold"] >= c["game_state"]["hp_low_threshold"]:
+            raise ValueError("Kritické HP musí byť nižšie ako nízke HP.")
+        _put(c["limits"], "proactive_cooldown_sec", number("limits.proactive_cooldown_sec", int, 0))
+        _put(c["game_state"], "speak_on", [k for k, var in self.speak_vars.items() if var.get()])
 
         _put(c["stt"], "provider", v["stt.provider"].get())
         _put(c["stt"], "local_model", v["stt.local_model"].get())

@@ -68,11 +68,12 @@ class LocalStt:
         prefix = stt_cfg.get("local_prompt_prefix") or ""
         self.initial_prompt = f"{prefix} {', '.join(vocabulary)}.".strip() if vocabulary else None
         started = time.perf_counter()
-        self.model = WhisperModel(
-            stt_cfg["local_model"],
-            device=stt_cfg["local_device"],
-            compute_type=stt_cfg["local_compute_type"],
-        )
+        args = dict(device=stt_cfg["local_device"], compute_type=stt_cfg["local_compute_type"])
+        try:
+            # Z disku bez kontroly novej verzie na internete — Mirana nastartuje aj offline
+            self.model = WhisperModel(stt_cfg["local_model"], local_files_only=True, **args)
+        except Exception:
+            self.model = WhisperModel(stt_cfg["local_model"], **args)  # prvy start: stiahne model
         logger.info(
             "faster-whisper %s (%s/%s) nacitany za %.1f s",
             stt_cfg["local_model"], stt_cfg["local_device"], stt_cfg["local_compute_type"],

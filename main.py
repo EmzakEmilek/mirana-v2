@@ -31,6 +31,7 @@ from core.config import load_config
 from core.memory import Memory
 from core.safety import Safety
 from core.session import HEARTBEAT_PATH, ConversationLog, ensure_single_instance, setup_logging
+from inputs.game_state import GameState, event_text
 from inputs.ptt import PushToTalk
 from outputs.fillers import Fillers
 from outputs.overlay import Overlay
@@ -74,6 +75,10 @@ class Mirana:
         self._gen = 0
         self._job: Job | None = None
         self._muted = False            # panic mute (F11): Mirana mlci a ignoruje F12, kym sa F11 nestlaci znova
+        self._last_proactive = 0.0     # cas poslednej hlasky z hernej udalosti
+        self._last_erik = 0.0          # cas poslednej Erikovej otazky — proaktivne hlasky mu neskacu do reci
+        self._telemetry_shown = None   # posledny stav poslany na HUD (posiela sa len zmena)
+        self._pending_urgent = None    # (nazov, snapshot, cas) — kriticke HP pocas reci pocka, kym dohovori
         self._events: queue.Queue = queue.Queue()
 
         self.conversation = ConversationLog(session_id)
@@ -92,6 +97,12 @@ class Mirana:
             on_recording=lambda wav: self._events.put(("recording", wav)),
         )
         self.ptt.on_level = self.overlay.level
+        gs = config.get("game_state", {})
+        self.speak_on = set(gs.get("speak_on", []))
+        self.proactive_cooldown = config["limits"].get("proactive_cooldown_sec", 300)
+        self.quiet_after_erik = gs.get("quiet_after_erik_sec", 30)
+        self.game = GameState(config, on_event=lambda name, snap: self._events.put(("game_event", None, (name, snap))),
+                              on_snapshot=self._on_game_snapshot)
         self.ptt.on_panic = self._on_panic
         self.overlay.on_command = self._on_command
 
@@ -166,17 +177,63 @@ class Mirana:
                 self._events.put(("fallback", job, "budget_reached"))
                 return
 
-            job.user_text = f"[ERIK] {transcript}"  # tag zdroja podla persona.md
-            game_state_line = None  # telemetriu doplni Erik (Faza 4)
-            answer = self.brain.ask_stream(
-                job.user_text, game_state_line, self.memory.as_messages(),
-                on_sentence=lambda sentence: self._on_sentence(job, sentence),
-                should_stop=lambda: job.cancelled,
-            )
-            self._events.put(("answer", job, (answer, stt_sec)))
+            self._last_erik = time.time()
+            self._ask(job, f"[ERIK] {transcript}", stt_sec)  # tag zdroja podla persona.md
         except Exception:
             logger.exception("neocakavana chyba vo workeri")
             self._events.put(("fallback", job, "general_error"))
+
+    def _ask(self, job: Job, tagged_text: str, stt_sec: float = 0.0) -> None:
+        """LLM stream. Stav hry ide ako riadok [HRA] na zaciatok spravy — v system prompte by
+        kazda zmena HP zrusila cache pamate, v sprave sa ulozi do historie a cache nerusi."""
+        line = self.game.line()
+        job.user_text = f"{line}\n{tagged_text}" if line else tagged_text
+        answer = self.brain.ask_stream(
+            job.user_text, None, self.memory.as_messages(),
+            on_sentence=lambda sentence: self._on_sentence(job, sentence),
+            should_stop=lambda: job.cancelled,
+        )
+        self._events.put(("answer", job, (answer, stt_sec)))
+
+    def _work_game_event(self, job: Job, name: str, snap) -> None:
+        try:
+            self._ask(job, f"[GAME_EVENT] {event_text(name, snap)}")
+        except Exception:
+            logger.exception("chyba pri hernej udalosti")
+            self._events.put(("fallback", job, "general_error"))
+
+    # --- telemetria (vlakno game-state) ---------------------------------------------------------
+
+    def _on_game_snapshot(self, snap) -> None:
+        shown = (snap.location, snap.get("quest") or "", bool(snap.get("combat"))) if snap else ("", "", False)
+        if shown != self._telemetry_shown:
+            self._telemetry_shown = shown
+            self.overlay.telemetry(*shown)
+            self.overlay.game(live=snap is not None, line=self.game.line())
+
+    def _handle_game_event(self, name: str, snap) -> None:
+        """Proaktivna hlaska: len ked Mirana mlci a nie hned po Erikovej otazke; max raz za cooldown.
+        Kriticke HP a smrt maju vynimku z cooldownu."""
+        if name not in self.speak_on or self._muted or self.budget.exceeded():
+            return
+        urgent = name in ("hp_critical", "death")
+        now = time.time()
+        if not urgent and (now - self._last_proactive < self.proactive_cooldown or now - self._last_erik < self.quiet_after_erik):
+            logger.info("herna udalost %s bez hlasky (cooldown)", name)
+            return
+        with self._lock:
+            if self.state is not State.IDLE:
+                if urgent:
+                    self._pending_urgent = (name, snap, now)  # povie ju hned, ako dohovori
+                return
+            self._set_state(State.PROCESSING)
+            job = Job(gen=self._gen, released_at=time.perf_counter())
+            self._job = job
+        self._pending_urgent = None
+        if not urgent:  # urgentna hlaska (kriticke HP) nema blokovat bezne hlasky na 5 minut
+            self._last_proactive = now
+        self.voice.arm()
+        threading.Thread(target=self._work_game_event, args=(job, name, snap), daemon=True).start()
 
     def _on_sentence(self, job: Job, sentence: str) -> None:
         if job.cancelled:
@@ -193,7 +250,7 @@ class Mirana:
             if job.cancelled or job.gen != self._gen or self.state is not State.PROCESSING:
                 return
             self._set_state(State.SPEAKING)
-        logger.info("prvy zvuk %.1f s po pusteni F12", time.perf_counter() - job.released_at)
+        logger.info("prvy zvuk %.1f s po pusteni F12 / udalosti", time.perf_counter() - job.released_at)
 
     # --- hlavna slucka ------------------------------------------------------------------------
 
@@ -238,6 +295,9 @@ class Mirana:
         self.memory.add_exchange(job.user_text, text)
 
     def _handle_event(self, event: str, job: Job, payload) -> None:
+        if event == "game_event":
+            self._handle_game_event(*payload)
+            return
         if event == "interrupted":
             self._remember(job, interrupted=True)
             return
@@ -246,6 +306,9 @@ class Mirana:
             with self._lock:
                 if job.gen == self._gen and self.state in (State.PROCESSING, State.SPEAKING):
                     self._set_state(State.IDLE)
+            pending, self._pending_urgent = self._pending_urgent, None
+            if pending and time.time() - pending[2] < 10:
+                self._handle_game_event(pending[0], pending[1])
             return
         if event == "answer":
             answer, stt_sec = payload
@@ -280,6 +343,7 @@ class Mirana:
 
     def run(self) -> None:
         self.overlay.start()
+        self.game.start()
         self.ptt.start()
         logger.info("Mirana bezi (%s, effort %s). Drz %s pre PTT. Dnes minute $%.3f z $%.2f.",
                     self.config["llm"]["model"], self.config["llm"]["effort"], self.config["audio"]["ptt_key"],

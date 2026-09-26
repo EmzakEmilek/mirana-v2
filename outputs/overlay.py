@@ -80,6 +80,10 @@ class Overlay:
     def budget(self, spent: float, cap: float) -> None:
         self._send({"type": "budget", "spent": round(spent, 4), "cap": cap})
 
+    def game(self, live: bool, line: str | None) -> None:
+        """Stav telemetrie pre ovladacie okno (HUD ma vlastny setTelemetry)."""
+        self._send({"type": "game", "live": live, "line": line})
+
     def info(self, **data) -> None:
         """Staticke info o behu (model, effort) pre ovladacie okno."""
         self._send({"type": "info", **data})

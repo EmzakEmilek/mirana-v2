@@ -13,7 +13,7 @@ audio:
 stt:
   provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)
   api_model: "whisper-1"
-  local_model: "medium"       # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
+  local_model: "large-v3"     # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
   local_device: "cuda"
   local_compute_type: "float16"
   language: "sk"
@@ -115,9 +115,12 @@ overlay:
   typewriter_ms_per_char: 26  # zaloha; pri odpovedi sa tempo pocita z dlzky audia, aby text dobehol s hlasom
 
 game_state:
-  enabled: false              # zapni vo Fáze 4
-  json_path: "%TEMP%/mirana_state.json"
+  enabled: true               # bez bežiacej hry sa nič nedeje, Mirana funguje ďalej bez telemetrie
+  json_path: "auto"           # auto = nájde hru (Steam/GOG/Epic) a číta state.json z CET modu mirana_state
   poll_interval_sec: 2
+  stale_after_sec: 10         # starší stav = hra nebeží alebo je v menu, riadok [HRA] sa neposiela
+  quiet_after_erik_sec: 30    # proaktívna hláška nepríde skôr ako 30 s po Erikovej otázke
+  speak_on: ["hp_critical", "hp_low", "death", "level_up", "district_change", "quest_changed"]   # combat_start/combat_end len do logu
   hp_low_threshold: 25
   hp_critical_threshold: 10
 

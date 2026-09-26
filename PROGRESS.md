@@ -81,6 +81,11 @@ Navrh routingu (na potvrdenie):
     (persona ocakava riadok zacinajuci "[HRA]")
 - Hardening (2026-09-26): panic mute F11 (HUD 'STLMENA'), supervisor run.py (restart pri pade alebo zamrznuti,
   heartbeat data/heartbeat, max 5/h), core/safety.py (osobne udaje + safety.blocked_words), start.bat, README. Otestovane.
+- Faza 4 (telemetria) KOD HOTOVY (2026-09-26): mod/mirana_state/init.lua (API z CP77-DiscordRPC2, pcall na kazdy udaj),
+  inputs/game_state.py (riadok [HRA] po slovensky, udalosti, auto-najdenie hry, instalacia modu), proaktivne hlasky
+  (cooldown 300 s, 30 s po Erikovi ticho, kriticke HP/smrt hned a pockaju, kym dohovori), HUD + okno + Nastavenia -> Hra.
+  Otestovane so simulatorom (tools/simulate_game.py). A/B: slovensky riadok OK, surovy JSON zle citaL HP (74 -> 'stvrtina').
+  Hra sa instaluje cez GOG (C:\Program Files (x86)\GOG Galaxy\Games\Cyberpunk 2077). CAKA NA: CET + test v hre.
 - Faza 4-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
