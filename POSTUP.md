@@ -1,7 +1,7 @@
 # MIRANA — POSTUP
 
-Finálny plán stavby. **[COWORK]** = Claude Cowork na hernom PC,
-**[CODE]** = Claude Code, **[ERIK]** = ty ručne.
+Plán stavby. **[COWORK]** = Claude Cowork na hernom PC, **[CODE]** = Claude Code, **[ERIK]** = ty ručne.
+✅ = hotové, ⏳ = zostáva. Stav k 2026-09-26.
 
 ---
 
@@ -9,12 +9,11 @@ Finálny plán stavby. **[COWORK]** = Claude Cowork na hernom PC,
 
 | Herný PC (i7 10th, RTX 4060 Ti 16 GB, 32 GB) | Notebook (i5 9th, GTX 1660 Ti, 16 GB) |
 |---|---|
-| Cyberpunk 2077 + CET mod | OBS + enkódovanie (NVENC) |
-| Mirana (celý Python proces) | Browser Source: Mirana HUD |
-| Druhý mikrofón (PTT) | Browser Source: donation bar |
-| Whisper (ak lokálny) | VoiceMeeter — príjem VBAN |
-| VoiceMeeter + VST reťaz (DSP) | Capture karta (obraz hry) |
-| Overlay server `:8080` | |
+| Cyberpunk 2077 (GOG) + CET + mod mirana_state | OBS + enkódovanie (NVENC) |
+| Mirana (celý Python proces, ovládacie okno) | Browser Source: Mirana HUD |
+| Whisper lokálne na GPU | Browser Source: donation bar |
+| Efekty hlasu (v Mirane) → Voicemeeter | VoiceMeeter — príjem VBAN |
+| Overlay server `:8080` | Capture karta (obraz hry) |
 | Claude Code (vývoj) | |
 
 Medzi strojmi vedú dve linky: **VBAN** (zvuk Mirany) a **WebSocket :8080** (dáta pre HUD).
@@ -22,97 +21,92 @@ Herný PC na kábli, nie Wi-Fi.
 
 ---
 
-## Fáza 0 — Príprava (~1,5 h)
+## Fáza 0 — Príprava ✅
 
-1. **[COWORK]** Nainštaluje Git, GitHub CLI, Python 3.12, VoiceMeeter Banana (winget)
-   a Claude Code (PowerShell). Overí verzie.
-2. **[COWORK]** Vytvorí `C:\mirana-v2` + podpriečinky, `git init`, `.gitignore`,
-   `.env` šablónu, venv so základnými balíkmi.
-3. **[COWORK]** Presunie z Downloads: `SPEC.md`, `persona.md`, `config.yaml`,
-   `overlay-index.html` → `overlay\index.html`.
-4. **[COWORK]** Nájde priečinok Cyberpunku, po potvrdení rozbalí CET do `bin\x64`.
-5. **[COWORK]** Spustí `python -m sounddevice`, vypíše zariadenia.
-6. **[ERIK]** `gh auth login` cez prehliadač.
-7. **[ERIK]** Účty a API kľúče (Anthropic, OpenAI, Azure) → ručne do `.env`.
-8. **[ERIK]** Reštart PC po VoiceMeeteri. Zapojí druhý mikrofón, overí vo Windows Sound.
-9. **[ERIK]** Určí audio zariadenia → Cowork ich zapíše do `config.yaml`.
-10. **[ERIK]** Spustí Cyberpunk, overí že sa CET ozve.
+1. ✅ **[COWORK]** Git, GitHub CLI, Python 3.12, VoiceMeeter Banana, Claude Code.
+2. ✅ **[COWORK]** `C:\mirana-v2`, `git init`, `.gitignore`, `.env` šablóna, venv.
+3. ✅ **[COWORK]** SPEC, persona, config, HUD na svojich miestach.
+4. ✅ **[CODE]** CET 1.37.1 rozbalený do hry (GOG, hra 2.31).
+5. ✅ **[COWORK]** Zoznam zvukových zariadení (`audio-devices.txt`).
+6. ✅ **[ERIK]** `gh auth login`; repo je verejné: github.com/EmzakEmilek/mirana-v2.
+7. ✅ **[ERIK]** API kľúče (Anthropic, Azure) v `.env`. OpenAI netreba (Whisper beží lokálne).
+8. ⏳ **[ERIK]** Druhý mikrofón do herného PC (zatiaľ mikrofón slúchadiel G733).
+9. ✅ **[ERIK]** Audio zariadenia vybrané v okne Nastavenia → Zvuk.
+10. ✅ **[ERIK]** Cyberpunk beží, CET sa ozve, mod mirana_state zapisuje.
 
-## Fáza 1 — Jadro
+## Fáza 1 — Jadro ✅
 
-11. **[CODE]** Päť promptov podľa SPEC sekcia 2 (PTT → Whisper API → Sonnet → Azure TTS → main).
-12. **[ERIK]** Test: drž F12, povedz vetu, počuj odpoveď. Polož 10 otázok o Cyberpunku,
-    over tón persóny.
-13. **[CODE]** `gh repo create mirana-v2 --private --source=. --push`
+11. ✅ **[CODE]** PTT → Whisper → Claude → Azure TTS → main (dnes Opus 5.5 low, streaming po vetách).
+12. ✅ **[ERIK]** Testy tónu a výslovnosti (hlas Viktoria + fonetika anglických názvov).
+13. ✅ **[CODE]** Repo na GitHube.
 
-## Fáza 1b — Lokálny Whisper
+## Fáza 1b — Lokálny Whisper ✅
 
-14. **[CODE]** Implementuje prepínač `stt.provider: local|api`, faster-whisper `medium` na CUDA.
-15. **[ERIK]** Porovná 20 otázok oproti API. Sadne slovenčina → prepni natrvalo,
-    zruš OpenAI účet. Nesadne → späť na `api`.
+14. ✅ **[CODE]** `stt.provider: local|api`, faster-whisper `medium` na CUDA.
+15. ✅ **[ERIK]** Slovenčina sedí, lokálny prepis natrvalo.
 
-## Fáza 2 — Filler hlášky + barge-in
+## Fáza 2 — Filler hlášky + barge-in ✅
 
-16. **[CODE]** SPEC sekcia 3.
-17. **[ERIK]** Test: po pustení klávesy žiadne ticho; stlačenie uprostred odpovede ju preruší.
+16. ✅ **[CODE]** SPEC sekcia 3.
+17. ✅ **[ERIK]** Po pustení tlačidla žiadne ticho; stlačenie uprostred odpovede ju preruší.
 
-## Fáza 3 — Overlay
+## Fáza 3 — Overlay ✅
 
-18. **[CODE]** SPEC sekcia 4 — WebSocket server, napojenie na hotový HUD.
-    **Vzhľad HUD-u neupravovať.**
-19. **[ERIK]** Otvorí `localhost:8080` v prehliadači na hernom PC, položí otázku,
-    sleduje titulky a stav.
+18. ✅ **[CODE]** SPEC sekcia 4 — WebSocket server, HUD v4 (živé jadro).
+19. ✅ **[ERIK]** `localhost:8080` v prehliadači.
 
-## Fáza 4 — CET mod
+## Fáza 4 — CET mod ✅ (okrem dlhodobej pamäte)
 
-20. **[CODE]** SPEC sekcia 5.
-21. **[ERIK]** Spustí Cyberpunk, hrá 2 min, overí že sa JSON mení a že Mirana pozná
-    quest bez toho, aby ho povedal. Nechá klesnúť HP pod 25 % — musí sa ozvať sama.
+20. ✅ **[CODE]** SPEC sekcia 5, body 1–5 (mod v3, riadok [HRA], proaktívne hlášky).
+21. ✅ **[ERIK]** Hra 2026-09-26: Mirana pozná quest, auto, políciu, cieľ; sama sa ozvala pri 3 hviezdach.
+22. ⏳ **[ERIK]** Ďalšie hranie po oprave modu v3: skontrolovať liečenie („5 z 6"), počasie a log bez
+    „CET mod: tieto udaje nejdu".
+23. ⏳ **[CODE]** SPEC sekcia 5 bod 6 — `core/longterm.py` (po reštarte vie, kde Erik skončil).
 
-## Fáza 5 — Kick chat
+## Fáza 5 — Kick chat ⏳
 
-22. **[COWORK]** Stiahne aktuálnu dokumentáciu z docs.kick.com do repa.
-23. **[CODE]** SPEC sekcia 6.
-24. **[ERIK]** Test z druhého účtu — sub prejde, nesub nie.
+24. ⏳ **[COWORK]** Stiahne aktuálnu dokumentáciu z docs.kick.com do repa.
+25. ⏳ **[ERIK]** Kick kľúče do `.env` (`KICK_CLIENT_ID`, `KICK_CLIENT_SECRET`, `KICK_CHANNEL_ID`).
+26. ⏳ **[CODE]** SPEC sekcia 6.
+27. ⏳ **[ERIK]** Test z druhého účtu — sub prejde, nesub dostane len vetu na HUD.
 
-## Fáza 6 — Zvuk a napojenie notebooku
+## Fáza 6 — Zvuk a napojenie notebooku (čiastočne)
 
-25. **[COWORK]** Stiahne free VST pluginy (bitcrusher, ring mod, EQ, limiter).
-26. **[ERIK]** Herný PC: `voice.py` hrá do VoiceMeeter Input, VST reťaz na kanáli,
-    VBAN send `VoiceToStream` na IP notebooku.
-27. **[ERIK]** Notebook: VoiceMeeter VBAN receive → OBS Audio Input Capture
-    ako samostatná stopa.
-28. **[ERIK]** Notebook: OBS Browser Source na `http://IP-herného-PC:8080`.
+28. ✅ **[CODE]** Efekty hlasu priamo v Mirane (`outputs/voice_fx.py`) — VST pluginy netreba.
+    Preset sa vyberá v Nastaveniach → Hlas (teraz `robot`).
+29. ⏳ **[ERIK]** Herný PC: Nastavenia → Zvuk → Výstup = `Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI`,
+    vo Voicemeeteri VBAN send `VoiceToStream` na IP notebooku. Do slúchadiel si Miranu pusti cez Voicemeeter (A1).
+30. ⏳ **[ERIK]** Notebook: VoiceMeeter VBAN receive → OBS Audio Input Capture ako samostatná stopa.
+31. ⏳ **[ERIK]** Notebook: OBS Browser Source na `http://IP-herného-PC:8080`.
     **Shutdown source when not visible musí byť vypnuté** — inak zomrie WebSocket.
-29. **[ERIK]** Firewall na hernom PC: TCP 8080 a UDP 6980, obe len Private.
+32. ⏳ **[ERIK]** Firewall na hernom PC: TCP 8080 a UDP 6980, obe len Private.
     Statická IP alebo DHCP rezervácia pre herný PC.
 
-## Fáza 7 — Hardening
+## Fáza 7 — Hardening ✅ (okrem suchého behu)
 
-30. **[CODE]** SPEC sekcia 8 — budget cap, safety filter, supervisor, panic mute F11.
-31. **[ERIK]** 8-hodinový suchý beh: skript + hra + mod + overlay + chat.
-    Sleduj RAM a chyby v logu.
-32. **[ERIK]** Prvý ostrý stream.
+33. ✅ **[CODE]** Budget cap, safety filter, supervisor, panic mute, logy, zámok proti 2 inštanciám.
+34. ⏳ **[ERIK]** 8-hodinový suchý beh: Mirana + hra + mod + overlay (+ chat, ak bude). Sleduj RAM a chyby v logu.
+35. ⏳ **[ERIK]** Prvý ostrý stream.
 
 ---
 
 ## Checklist pred každým streamom
 
-- [ ] Herný PC: Mirana beží (okno bez červených chýb)
-- [ ] Cyberpunk beží, CET načítaný, `mirana_state.json` sa mení
-- [ ] Testovacia otázka cez F12 → počuť odpoveď
-- [ ] Notebook: overlay v OBS svieti (stav IDLE)
-- [ ] Miranin hlas vidno v OBS audio mixeri
-- [ ] Kick chat pripojený
-- [ ] Vieš, kde je panic mute (F11)
+- [ ] Herný PC: okno MIRANA svieti STANDBY, bez červených chýb; dnešná útrata ďaleko od stropu
+- [ ] Cyberpunk beží, v okne je riadok „Hra: …" (mod posiela údaje)
+- [ ] Testovacia otázka cez zadné bočné tlačidlo myši → počuť odpoveď s efektom
+- [ ] Výstup je Voicemeeter (nie slúchadlá), Miranin hlas vidno v OBS audio mixeri
+- [ ] Notebook: overlay v OBS svieti (stav STANDBY)
+- [ ] Kick chat pripojený (až po fáze 5)
+- [ ] Vieš, kde je panic mute (predné bočné tlačidlo myši)
 
 ---
 
 ## Práca s Claude Code
 
-1. Jeden prompt = jeden krok: „Postav len `inputs/ptt.py` podľa SPEC.md sekcia 2
+1. Jeden prompt = jeden krok: „Postav len `inputs/kick_chat.py` podľa SPEC.md sekcia 6
    krok 1. Nič iné."
-2. Po každom kroku to spustíš a overíš — Claude Code nepočuje reproduktory.
-3. Commit po každom funkčnom kroku, tag po fáze (`v0.1-core`, `v0.2-fillers`…).
-4. Pri páde vkladaj celý traceback a log, nie parafrázu.
-5. Po každej fáze nechaj Cowork aktualizovať `PROGRESS.md`.
+2. Po každom kroku to spustíš a overíš — Claude Code nepočuje reproduktory a nevidí hru.
+3. Commit po každom funkčnom kroku.
+4. Pri páde vkladaj celý traceback a log, alebo povedz „pozri log" (logs/ je v projekte).
+5. Po každej fáze aktualizovať `PROGRESS.md`.

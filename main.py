@@ -3,7 +3,7 @@
 Vstupy hadzu eventy do fronty, o poradi, fallbackoch a pamati rozhoduje jedine tento subor.
 
 STT + LLM bezia vo worker vlakne; odpoved sa streamuje po vetach do Speakera, ktory prvu vetu
-hovori, kym model pise dalsie. Kazda otazka je Job; barge-in (F12 pocas PROCESSING/SPEAKING)
+hovori, kym model pise dalsie. Kazda otazka je Job; barge-in (PTT pocas PROCESSING/SPEAKING)
 job zrusi — Speaker ho zahodi, stream sa preruší a do pamate ide len to, co Erik stihol pocut.
 Filler hlaska sa spusti z casovaca, ak prva veta nepride do fillers.skip_if_faster_than_ms.
 """
@@ -51,7 +51,7 @@ class State(Enum):
 @dataclass
 class Job:
     gen: int
-    released_at: float                       # pustenie F12 — od neho meriame cas do prveho zvuku
+    released_at: float                       # pustenie PTT — od neho meriame cas do prveho zvuku
     filler_timer: threading.Timer | None = None
     cancelled: bool = False                  # barge-in; cita ho Speaker aj stream v Brain
     started: bool = False                    # prva veta uz znie (nastavuje Speaker)
@@ -74,7 +74,7 @@ class Mirana:
         self._lock = threading.Lock()  # chrani state, _gen a _job (menia ich ptt, worker, speaker aj slucka)
         self._gen = 0
         self._job: Job | None = None
-        self._muted = False            # panic mute (F11): Mirana mlci a ignoruje F12, kym sa F11 nestlaci znova
+        self._muted = False            # panic mute: Mirana mlci a ignoruje PTT, kym sa panic klaves nestlaci znova
         self._last_proactive = 0.0     # cas poslednej hlasky z hernej udalosti
         self._last_erik = 0.0          # cas poslednej Erikovej otazky — proaktivne hlasky mu neskacu do reci
         self._telemetry_shown = None   # posledny stav poslany na HUD (posiela sa len zmena)
@@ -124,14 +124,14 @@ class Mirana:
         self.voice.stop()
 
     def _on_panic(self) -> None:
-        """F11: okamzite umlcat a pozastavit. Druhe stlacenie Miranu vrati."""
+        """Panic mute: okamzite umlcat a pozastavit. Druhe stlacenie Miranu vrati."""
         with self._lock:
             self._muted = not self._muted
             if self._muted:
                 self._cancel_current()
                 self.state = State.IDLE
                 self.overlay.state("muted")
-                logger.warning("PANIC MUTE (F11) — Mirana mlci, F12 sa ignoruje. Znova F11 = spat.")
+                logger.warning("PANIC MUTE — Mirana mlci, PTT sa ignoruje. Znova panic klaves = spat.")
             else:
                 self._set_state(State.IDLE)
                 logger.info("panic mute vypnuty")
@@ -168,7 +168,7 @@ class Mirana:
                 self._events.put(("fallback", job, "stt_failed"))
                 return
             if not transcript.strip():
-                self._cancel_filler(job)  # omylom stlacene F12 — ticho, bez fillera
+                self._cancel_filler(job)  # omylom stlacene PTT — ticho, bez fillera
                 self._events.put(("silent", job, None))
                 return
             logger.info("Erik: %s  (STT %.1f s)", transcript, stt_sec)
@@ -253,7 +253,7 @@ class Mirana:
             if job.cancelled or job.gen != self._gen or self.state is not State.PROCESSING:
                 return
             self._set_state(State.SPEAKING)
-        logger.info("prvy zvuk %.1f s po pusteni F12 / udalosti", time.perf_counter() - job.released_at)
+        logger.info("prvy zvuk %.1f s po pusteni PTT / udalosti", time.perf_counter() - job.released_at)
 
     # --- hlavna slucka ------------------------------------------------------------------------
 

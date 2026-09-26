@@ -7,8 +7,8 @@ audio:
   # "názov, hostapi" = presný match; samotný názov by trafil aj MME variant, index sa mení po pripojení zariadenia
   output_device: "Speakers (Logitech G733 Gaming Headset), Windows WASAPI"     # docasne; pre stream: "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
   sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
-  ptt_key: "mouse_x1"          # klaves ("f4") alebo tlacidlo mysi: mouse_x1 = zadne bocne, mouse_x2 = predne bocne
-  panic_mute_key: "mouse_x2"
+  ptt_key: "mouse_x1"         # kláves ("f4") alebo tlačidlo myši: mouse_x1 = zadné bočné, mouse_x2 = predné bočné, mouse_middle
+  panic_mute_key: "mouse_x2"  # to isté; okamžite stíši Miranu, druhé stlačenie ju vráti
 
 stt:
   provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)

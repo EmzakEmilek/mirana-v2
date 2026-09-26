@@ -1,42 +1,67 @@
 # Mirana v2 - PROGRESS
 
-Datum setupu: 2026-09-20
+Datum setupu: 2026-09-20 · Posledna aktualizacia: 2026-09-26
 Projekt: C:\mirana-v2
-Repo: https://github.com/EmzakEmilek/mirana-v2 (privatne)
+Repo: https://github.com/EmzakEmilek/mirana-v2 (verejne)
 
-## Nainstalovane / verzie
-- git: 2.55.0.windows.3
-- gh: 2.101.0
-- python: 3.12.10
-- Voicemeeter Banana: nainstalovany a bezi (zariadenia viditelne)
-- Claude Code: nainstalovany, `claude --version` v starej session nenajdene (neriesime)
+## Aktualny stav (2026-09-26)
 
-## Struktura
-C:\mirana-v2\
-  inputs/ core/ outputs/ overlay/ mod/ fillers/
-  .gitignore, .env (prazdna sablona), venv/, audio-devices.txt
+| faza | stav |
+|---|---|
+| 0 priprava | HOTOVA (okrem druheho mikrofonu) |
+| 1 jadro + 1b lokalny Whisper | HOTOVA |
+| 2 fillery + barge-in | HOTOVA |
+| 3 HUD | HOTOVA (v4, zive jadro) |
+| 4 telemetria z hry | HOTOVA (mod v3, 30+ udajov, proaktivne hlasky); ZOSTAVA dlhodoba pamat core/longterm.py |
+| 5 Kick chat | NEZACATA (vypnuta, navrh v SPEC) |
+| 6 zvuk | efekty hlasu HOTOVE; ZOSTAVA vystup na Voicemeeter, VBAN na notebook, OBS |
+| 7 hardening | HOTOVA; ZOSTAVA 8 h suchy beh |
+| navyse | ovladacie okno + Nastavenia (vsetko bez editovania suborov), ikona na ploche, simulator hry |
 
-venv balicky: pozri requirements.txt (pip install -r requirements.txt)
+Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk median 5.9 s
+(max 10.1 s), prepis v hre 1.6 s. 0 padov.
 
-## Audio zariadenia (cely zoznam: audio-devices.txt)
-Vstup (mikrofon):
-- Microphone (Logitech G733 Gaming Headset) - MME #8, DirectSound #32, WASAPI #67
-- Druhy mikrofon do herneho PC: zatial nie je pripojeny (odlozene)
+## Aktualne nastavenie
 
-Vystup pre Miranin hlas:
-- Voicemeeter Input (VAIO)      - MME #20, WASAPI #57
-- Voicemeeter AUX Input (VAIO2) - MME #15, WASAPI #52
-- Voicemeeter VAIO3 Input       - MME #11, WASAPI #51  <- navrh: samostatna linka pre Miranu
+- LLM: claude-opus-5-5, effort low, server-side fallbacks, cache persony aj pamate; pamat 12 -> 6 vymen
+- STT: faster-whisper medium, cuda/float16, slovensky prefix + slovnik (211/224 tokenov), filter halucinacie promptu
+- TTS: Azure sk-SK-ViktoriaNeural + phonetics.yaml; efekty hlasu preset "robot"
+- PTT: zadne bocne tlacidlo mysi (mouse_x1), panic mute: predne bocne (mouse_x2)
+- Audio: Logitech G733 (mikrofon aj vystup, WASAPI) — pred streamom vystup na Voicemeeter Input
+- Fillery: 5 hlasok, az po 1.3 s
+- Hra: Cyberpunk 2077 2.31 (GOG, cesky preklad), CET 1.37.1, mod mirana_state v3 nainstalovany
+- Proaktivne hlasky: hp_critical, hp_low, death, level_up, district_change, quest_changed, quest_completed, wanted_up
+- Persona: Friday, 1-2 vety, spoiler pravidla, ceske nazvy z hry, rozkazovaci sposob, obcasne nadavky
+- Denny strop $5
 
-Navrh routingu (na potvrdenie):
-  Mirana TTS -> VAIO3 Input -> Voicemeeter B1/B2 -> capture karta / notebook -> OBS
+## Verzie (2026-09-26)
+- python 3.12.10, git 2.55.0, gh 2.101.0
+- anthropic 1.8.0 (oficialna podpora claude-opus-5-5), faster-whisper 1.2.1, ctranslate2 4.8.2,
+  pedalboard 0.9.25, customtkinter 6.0.0, websockets 17.1, numpy 2.5.3
+- pip check: bez konfliktov; zastarane len openai 3.16 (pouziva sa len pri stt.provider: api)
+- CET 1.37.1 = najnovsi release
 
-## Cyberpunk 2077 / CyberEngineTweaks
-- Hra zatial NENAINSTALOVANA. Krok 8 odlozeny.
-- Po instalacii: najst ...\Cyberpunk 2077\bin\x64\ a rozbalit tam najnovsi release
-  z https://github.com/maximegmd/CyberEngineTweaks/releases
+## Caka na Erika
+- [ ] zahrat si po oprave modu v3: liecenie ma byt "5 z 6", pocasie v riadku, v logu ziadne "CET mod: tieto udaje nejdu"
+- [ ] vyskusat efekt hlasu v hre (robot vs night_city) a nadavky
+- [ ] pred streamom: vystup na Voicemeeter, VBAN na notebook, OBS Browser Source, firewall (POSTUP faza 6)
+- [ ] Kick kluce do .env, az pojde faza 5
+- [ ] druhy mikrofon do herneho PC (odlozene)
 
-## Stav faz
+## Dalsie kroky (navrh poradia)
+1. test modu v3 v hre
+2. core/longterm.py — po restarte vie, kde Erik skoncil (SPEC 5.6)
+3. audio routing na notebook (SPEC 7.2-7.3) a 8 h suchy beh
+4. Kick chat (SPEC 6)
+
+## Zname slabiny
+- odozva v hre ~6 s (GPU vytazuje hra); filler ju zakryje, ale je citelna
+- Whisper v akcii: skomoleniny ("gig" -> "gęk", "utekáme" -> "učekámo"); Mirana si vacsinou domysli alebo prizna, ze nerozumela
+- ciel pod zameriavacom: civil, na ktoreho Erik zautocil, sa hlasi ako nepriatel (hra ho tak vedie)
+- scena (rozhovor/cutscena): v hre este neoverene, ci PSM HighLevel naozaj prichadza
+
+## Historia
+
 - Faza 0 (priprava): HOTOVA (2026-09-20), okrem hry/CET a druheho mikrofonu
 - Faza 1 (jadro PTT -> Whisper -> Sonnet 5 -> Azure TTS): HOTOVA (2026-09-21).
   5 testovacich kol, ~25 otazok, 0 padov, 0 chyb. Od pustenia F12 po hlas 3-5 s.
@@ -63,13 +88,12 @@ Navrh routingu (na potvrdenie):
   pri prvom starte), main.py prepisany: STT+LLM vo worker vlakne, generacia ulohy, filler z casovaca
   po 800 ms, barge-in z PTT vlakna (stop < 100 ms). voice.py: vlastny OutputStream po 50 ms kusoch
   (sd.stop z ineho vlakna padal, WASAPI z ineho vlakna potrebuje CoInitializeEx).
-  Automaticky test 4 scenarov presiel. CAKA NA TEST cez F12 (krok 17).
+  Automaticky test 4 scenarov presiel, potom otestovane nazivo.
 - Faza 3 (overlay): KOD HOTOVY (2026-09-21). outputs/overlay.py = websockets server na :8080,
   HTTP GET servíruje overlay/index.html, WS posiela JSON eventy (state, filler, answer, question,
   telemetry, queue); novy klient dostane posledny stav. index.html: demo slucka nahradena WS klientom
   s reconnectom (vzhlad nezmeneny). Rozhodnutia: Erikova otazka sa NEzobrazuje, filler sa zobrazuje
-  v riadku "question" ako "· text ·". Test: HTTP + WS sekvencia OK. CAKA NA TEST v prehliadaci
-  (localhost:8080) a neskor OBS na notebooku (firewall: povolit TCP 8080 na hernom PC).
+  v riadku "question" ako "· text ·". Test: HTTP + WS sekvencia OK, v prehliadaci otestovane. OBS na notebooku zostava (faza 6).
 - Review + opravy (2026-09-23):
   * phonetics.yaml kazil SK slova ("ostatni" -> "ó estatni", ~9 % odpovedi) — teraz cele slova,
     kratke kluce len presne; "Chaos" vyhodeny
@@ -92,26 +116,28 @@ Navrh routingu (na potvrdenie):
   pocas sceny ziadne proaktivne hlasky; "Neobjevene" sa neberie ako quest. Persona: ceske nazvy z hry,
   rozkazovaci sposob namiesto neurcitku. Whisper slovnik + gig/gigy (211/224 tokenov).
   Overene: mock hry v Lua (lupa), simulator, pisomny test Opus low (14 otazok, $0.12, slovencina OK).
-  CAKA NA: test v hre — skontrolovat pole "errors" v state.json (API volania v2 su z dekompilovanych skriptov).
+  Test v hre 2026-09-26: vacsina udajov OK; liecenie (84x = percenta), pocasie a naboje pri melee opravene v3 (nizsie).
 - Efekty hlasu + PTT na mysi (2026-09-26): outputs/voice_fx.py (pedalboard: HP/LP filter, bitcrush, ring mod,
   chorus, echo, kompresor, vyrovnanie hlasitosti), presety jemny/night_city/robot, ~25 ms na vetu, platia aj pre fillery.
   Nahradza VST retaz z Fazy 6 (funguje na sluchadlach aj cez Voicemeeter). PTT: audio.ptt_key moze byt mouse_x1/x2/middle,
   v Nastaveniach tlacidlo "Stlacit...". Predvolene mouse_x1 + night_city.
-- Faza 4 (dlhodoba pamat core/longterm.py), Faza 5 (Kick chat), Faza 6 (routing Voicemeeter/VBAN/OBS), 8 h suchy beh: nezacate
+- HUD v4 (2026-09-21/22): canvas "zive jadro" reaguje na skutocny hlas, bez HP, text po vetach sa vzdy dopise,
+  zmizne 5 s po dohovoreni, biely filler, tmavsie pozadie.
+- Cache pamate (2026-09-23): breakpoint na novej otazke, pamat sa oreze po blokoch 12 -> 6.
+- Ovladacie okno (2026-09-26): gui.py (stav, rozhovor, utrata, tlacidla), ikona na ploche a v Start menu
+  (install_shortcut.py); Nastavenia (gui_settings.py): vsetko z config.yaml a persona.md bez editovania suborov,
+  zalohy do data/, zapisuje len zmenene hodnoty (ruamel.yaml zachova komentare).
+- Opravy po hre (2026-09-26, mod v3): nabitia liecenia/granatov = percenta poolu x max (bolo "84x"), pocasie cez
+  weather.name.value, naboje len pre strelne zbrane + kapacita zasobnika, "Neobjevene" aj podla quest_id
+  generic_sts_quest, chyby modu do logu ako warning. Whisper: prepis, ktory zopakuje initial_prompt, sa zahodi.
+  Hra 2026-09-26: 53 otazok, $0.38, PTT na mysi bez chyby, proaktivna hlaska pri 3 hviezdach.
+- Persona (2026-09-26): obcasne nadavky (sakra, do riti...), len ked to situacia prinesie; test 2 z 12 odpovedi.
+- Kontrola projektu (2026-09-26): anthropic SDK 1.7.0 -> 1.8.0 (overene ostrou otazkou), dokumentacia
+  (README, SPEC, POSTUP, PROGRESS) prepisana na aktualny stav, zmienky F12/F11 v kode -> PTT/panic, audio-devices.txt obnoveny,
+  z requirements.txt vyhodene nepouzivane pillow a soundfile.
 
-## Podklady (HOTOVE, 2026-09-20)
-- SPEC.md, persona.md, config.yaml, POSTUP.md ulozene v korene (COWORK-FAZA-0.md splneny a zmazany)
-- overlay/index.html (diegeticky HUD) ulozeny
-- .gitignore prepisany na plnu verziu (+ *.pyc, mirana_state.json)
-- .env.example ulozeny (obsahuje aj KICK_* pre Fazu 5)
-- config.yaml: audio.output_device = "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
-  (presny match nazov+hostapi, index 57 sa moze menit); input_device ostava null
-
-## Caka na Erika
-- [x] gh auth login + repo vytvorene
-- [ ] pridat do .env riadky KICK_CLIENT_ID / KICK_CLIENT_SECRET / KICK_CHANNEL_ID
-      (rucne - .env sa neda zapisovat vzdialene; predloha je v .env.example)
-- [ ] doplnit API kluce do .env (ANTHROPIC_API_KEY, OPENAI_API_KEY, AZURE_SPEECH_KEY)
-- [ ] nainstalovat Cyberpunk 2077, potom CyberEngineTweaks
-- [ ] pripojit druhy mikrofon do herneho PC (odlozene)
-- [ ] potvrdit audio routing vyssie
+## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
+Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.
+Vystup teraz: Speakers (Logitech G733 Gaming Headset), WASAPI.
+Pre stream: Voicemeeter Input (VB-Audio Voicemeeter VAIO), WASAPI -> VBAN -> notebook -> OBS (samostatna stopa).
+Indexy zariadeni sa menia; config pouziva presny tvar "nazov, Windows WASAPI".

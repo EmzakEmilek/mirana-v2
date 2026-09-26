@@ -1,4 +1,4 @@
-"""Filler hlasky: kratke WAV zakryvaju ticho medzi pustenim F12 a odpovedou.
+"""Filler hlasky: kratke WAV zakryvaju ticho medzi pustenim PTT a odpovedou.
 
 Pri prvom spusteni sa vygeneruju cez TTS do fillers/*.wav (len chybajuce). Prehravanie je
 neblokujuce — bezi z casovaca v main.py, kym worker cakal na Whisper a Claude.

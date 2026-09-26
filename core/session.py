@@ -18,7 +18,7 @@ HEARTBEAT_PATH = BASE_DIR / "data" / "heartbeat"
 
 
 def ensure_single_instance() -> None:
-    """Druha Mirana by pocuvala na ten isty F12 a odpovedala dvakrat. Ak uz jedna bezi, skonci."""
+    """Druha Mirana by pocuvala na ten isty PTT a odpovedala dvakrat. Ak uz jedna bezi, skonci."""
     global _lock_socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:

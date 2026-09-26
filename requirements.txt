@@ -4,9 +4,8 @@ PyYAML
 numpy
 pedalboard
 sounddevice
-soundfile
 pynput
-anthropic>=1.7
+anthropic>=1.8
 openai>=3
 azure-cognitiveservices-speech
 faster-whisper
@@ -16,5 +15,4 @@ nvidia-cudnn-cu12
 websockets
 # ovladacie okno (gui.py)
 customtkinter
-pillow
 ruamel.yaml   # nastavenia z okna zapisuju config.yaml so zachovanim komentarov
