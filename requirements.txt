@@ -2,6 +2,7 @@
 python-dotenv
 PyYAML
 numpy
+pedalboard
 sounddevice
 soundfile
 pynput

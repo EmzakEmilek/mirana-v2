@@ -1,11 +1,11 @@
 # MIRANA
 
-Hlasová AI parťáčka pre stream Cyberpunku 2077 na Kicku. Držíš F12, povieš otázku po slovensky, pustíš,
+Hlasová AI parťáčka pre stream Cyberpunku 2077 na Kicku. Držíš PTT (bočné tlačidlo myši), povieš otázku po slovensky, pustíš,
 a Mirana odpovie hlasom do slúchadiel aj na HUD v OBS. Štýl Friday z Iron Mana: pokojná, bystrá,
 s ľahkým suchým humorom, bez spoilerov.
 
 ```
-F12 ─► mikrofón ─► Whisper (lokálne, GPU) ─► Claude Opus 5.5 (streaming) ─► po vetách ─► Azure TTS ─► slúchadlá / Voicemeeter
+PTT ─► mikrofón ─► Whisper (lokálne, GPU) ─► Claude Opus 5.5 (streaming) ─► po vetách ─► Azure TTS ─► efekty ─► slúchadlá / Voicemeeter
                                                                       └─► HUD (WebSocket, OBS Browser Source)
 ```
 
@@ -13,9 +13,9 @@ F12 ─► mikrofón ─► Whisper (lokálne, GPU) ─► Claude Opus 5.5 (stre
 
 | kláves | čo robí |
 |---|---|
-| **F12** (drž) | nahrávanie otázky; pustenie = odoslanie |
-| **F12** počas odpovede | preruší ju a počúva novú otázku |
-| **F11** | panic mute: okamžite stíchne a ignoruje F12; znova F11 = späť |
+| **PTT** (drž; predvolene zadné bočné tlačidlo myši) | nahrávanie otázky; pustenie = odoslanie |
+| **PTT** počas odpovede | preruší ju a počúva novú otázku |
+| **F11** | panic mute: okamžite stíchne a ignoruje PTT; znova F11 = späť |
 
 HUD: `http://localhost:8080` (na notebooku v OBS: `http://IP-herného-PC:8080`).
 
@@ -88,7 +88,11 @@ Všetko sa dá nastaviť v okne (Nastavenia) alebo priamo v `config.yaml`:
 - `llm.model`: `claude-opus-5-5` (presnejší) alebo `claude-opus-5` (o ~1 s rýchlejší, podobná cena)
 - `limits.daily_usd_cap`: tvrdý denný strop na LLM (predvolene $5)
 - `fillers.lines`: hlášky, ktoré zakryjú pauzu pred odpoveďou (po zmene zmaž `fillers/*.wav`)
+- `audio.ptt_key`: kláves (`f4`) alebo tlačidlo myši (`mouse_x1` zadné bočné, `mouse_x2` predné bočné, `mouse_middle`);
+  hra tlačidlo dostane tiež, nech v nej nemá priradenú akciu. V Nastaveniach sa dá nastaviť stlačením.
 - `tts.voice`: Azure hlas; `phonetics.yaml`: ako vysloviť anglické názvy z hry
+- `tts.effects.preset`: efekty hlasu `vypnute` | `jemny` | `night_city` | `robot` (filtre, bitcrusher, ring mod,
+  chorus, echo, kompresor; hlasitosť ostáva rovnaká). Doladenie v `tts.effects.params`, ukážka v Nastaveniach → Hlas.
 - `safety.blocked_words`: vety s týmito slovami sa nevyslovia
 
 Osobnosť Mirany je v `persona.md`.
@@ -116,7 +120,8 @@ je vo free tieri (500 000 znakov/mesiac, ~15 streamov). Podrobnosti v [SPEC.md](
 | `core/brain.py` | Whisper → Claude, streaming po vetách |
 | `core/stt.py` | lokálny faster-whisper alebo Whisper API |
 | `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |
-| `inputs/ptt.py` | F12 / F11 a nahrávanie |
+| `inputs/ptt.py` | PTT (klávesnica aj myš), panic mute, nahrávanie |
+| `outputs/voice_fx.py` | efekty hlasu (pedalboard) |
 | `inputs/game_state.py`, `mod/mirana_state/init.lua` | telemetria z hry (CET mod), udalosti, riadok [HRA] |
 | `tools/simulate_game.py` | simulátor hry na testovanie bez Cyberpunku |
 | `outputs/speaker.py`, `outputs/voice.py` | TTS po vetách, prehrávanie, fonetika |

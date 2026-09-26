@@ -16,6 +16,7 @@ import sounddevice as sd
 import yaml
 
 from core.config import BASE_DIR
+from outputs.voice_fx import VoiceFx
 
 _EMOJI_PATTERN = re.compile(
     "["
@@ -130,6 +131,7 @@ class Voice:
         # Fonetika anglicizmov ide len do TTS; log a titulky dostavaju povodny text.
         phonetics_file = tts_cfg.get("phonetics_file")
         self._phonetics = load_phonetics(BASE_DIR / phonetics_file) if phonetics_file else []
+        self.fx = VoiceFx(tts_cfg.get("effects"))
 
         speech_config = speechsdk.SpeechConfig(
             subscription=os.environ.get("AZURE_SPEECH_KEY"),
@@ -169,7 +171,7 @@ class Voice:
         return result.audio_data
 
     def to_device_audio(self, wav_bytes: bytes) -> np.ndarray:
-        """WAV bytes -> int16 pole vo frekvencii vystupneho zariadenia (pripravene na sd.play)."""
+        """WAV bytes -> int16 pole vo frekvencii vystupneho zariadenia, s efektmi hlasu (pripravene na prehratie)."""
         with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             channels = wav_file.getnchannels()
@@ -178,7 +180,7 @@ class Voice:
         audio = np.frombuffer(frames, dtype=np.int16).reshape(-1, channels)
         if sample_rate != self.device_rate:
             audio = _resample(audio, sample_rate, self.device_rate)
-        return audio
+        return self.fx.process(audio, self.device_rate)
 
     def play_audio(self, audio: np.ndarray, block: bool = True) -> None:
         """Prehra pripravene pole na vystupne zariadenie.

@@ -93,7 +93,11 @@ Navrh routingu (na potvrdenie):
   rozkazovaci sposob namiesto neurcitku. Whisper slovnik + gig/gigy (211/224 tokenov).
   Overene: mock hry v Lua (lupa), simulator, pisomny test Opus low (14 otazok, $0.12, slovencina OK).
   CAKA NA: test v hre — skontrolovat pole "errors" v state.json (API volania v2 su z dekompilovanych skriptov).
-- Faza 4-7: nezacate
+- Efekty hlasu + PTT na mysi (2026-09-26): outputs/voice_fx.py (pedalboard: HP/LP filter, bitcrush, ring mod,
+  chorus, echo, kompresor, vyrovnanie hlasitosti), presety jemny/night_city/robot, ~25 ms na vetu, platia aj pre fillery.
+  Nahradza VST retaz z Fazy 6 (funguje na sluchadlach aj cez Voicemeeter). PTT: audio.ptt_key moze byt mouse_x1/x2/middle,
+  v Nastaveniach tlacidlo "Stlacit...". Predvolene mouse_x1 + night_city.
+- Faza 4 (dlhodoba pamat core/longterm.py), Faza 5 (Kick chat), Faza 6 (routing Voicemeeter/VBAN/OBS), 8 h suchy beh: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)
 - SPEC.md, persona.md, config.yaml, POSTUP.md ulozene v korene (COWORK-FAZA-0.md splneny a zmazany)

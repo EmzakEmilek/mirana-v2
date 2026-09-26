@@ -19,6 +19,7 @@ import customtkinter as ctk
 from websockets.sync.client import connect
 
 from core.config import BASE_DIR, load_config
+from inputs.ptt import key_label
 from core.session import LOGS_DIR
 
 YELLOW, CYAN, RED, DIM = "#FCEE0A", "#00F0FF", "#FF003C", "#7d7d85"
@@ -86,7 +87,7 @@ class App(ctk.CTk):
         self.btn_power = ctk.CTkButton(buttons, text="Spustiť", command=self._toggle_power, width=120,
                                        fg_color=YELLOW, hover_color="#d9cc08", text_color="#000", **style)
         self.btn_power.pack(side="left", padx=4)
-        self.btn_mute = ctk.CTkButton(buttons, text="Stlmiť (F11)", command=lambda: self._send("mute"), width=120,
+        self.btn_mute = ctk.CTkButton(buttons, text="Stlmiť", command=lambda: self._send("mute"), width=120,
                                       fg_color=PANEL, hover_color="#26262c", border_width=1, border_color=RED, **style)
         self.btn_mute.pack(side="left", padx=4)
         for label, cmd in (("HUD", self._open_hud), ("Logy", lambda: os.startfile(LOGS_DIR)),
@@ -109,8 +110,14 @@ class App(ctk.CTk):
             self.log.tag_config(tag, foreground=color)
         self.log.configure(state="disabled")
 
-        ctk.CTkLabel(self, text="F12 drž = otázka  ·  F12 počas odpovede = prerušiť  ·  F11 = stlmiť",
-                     font=ctk.CTkFont("Segoe UI", 11), text_color=DIM).pack(pady=(0, 10))
+        self.keys_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont("Segoe UI", 11), text_color=DIM)
+        self.keys_label.pack(pady=(0, 10))
+        self._show_keys()
+
+    def _show_keys(self) -> None:
+        audio = load_config()["audio"]
+        ptt, self.panic_label = key_label(audio["ptt_key"]), key_label(audio.get("panic_mute_key"))
+        self.keys_label.configure(text=f"{ptt} drž = otázka  ·  {ptt} počas odpovede = prerušiť  ·  {self.panic_label} = stlmiť")
 
     def _write(self, text: str, tag: str, newline: bool = True) -> None:
         self.log.configure(state="normal")
@@ -124,7 +131,7 @@ class App(ctk.CTk):
         running = state not in ("offline",)
         self.btn_power.configure(text="Vypnúť" if running else "Spustiť",
                                  state="disabled" if state in ("starting", "stopping") else "normal")
-        self.btn_mute.configure(text="Zapnúť hlas" if state == "muted" else "Stlmiť (F11)",
+        self.btn_mute.configure(text="Zapnúť hlas" if state == "muted" else f"Stlmiť ({self.panic_label})",
                                 state="normal" if self.connected else "disabled")
 
     # --- akcie --------------------------------------------------------------------------------
@@ -180,6 +187,7 @@ class App(ctk.CTk):
 
     def on_settings_saved(self, restart: bool) -> None:
         self.port = load_config()["overlay"]["port"]
+        self._show_keys()
         running = self.connected or (self.proc is not None and self.proc.poll() is None)
         if restart and running:
             self._write("Nastavenia uložené, reštartujem Miranu…", "sys")

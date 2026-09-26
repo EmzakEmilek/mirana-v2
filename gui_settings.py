@@ -16,6 +16,8 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from core import settings
 from core.config import BASE_DIR
+from inputs.ptt import parse_key
+from outputs.voice_fx import PRESET_LABELS
 
 YELLOW, CYAN, RED, DIM = "#FCEE0A", "#00F0FF", "#FF003C", "#7d7d85"
 BG, PANEL, TEXT = "#0a0a0c", "#141418", "#e6e6e6"
@@ -26,7 +28,8 @@ MODELS = {
     "claude-opus-5": "o ~1 s rýchlejší, ~$1,00 / 4 h",
     "claude-sonnet-5": "~2× rýchlejší, ~$0,30 / 4 h, častejšie si vymýšľa lore",
 }
-KEYS = [f"f{i}" for i in range(1, 13)] + ["insert", "home", "end", "page_up", "page_down", "pause", "scroll_lock"]
+KEYS = [f"f{i}" for i in range(1, 13)] + ["insert", "home", "end", "page_up", "page_down", "pause", "scroll_lock",
+                                          "mouse_x1", "mouse_x2", "mouse_middle"]
 STT_MODELS = ["small", "medium", "large-v3", "large-v3-turbo"]
 SAMPLE = "Ahoj Emzo, takto znie môj hlas. Johnny Silverhand ťa čaká v Night City."
 
@@ -178,9 +181,53 @@ class SettingsWindow(ctk.CTkToplevel):
         self.mic_label = ctk.CTkLabel(tab, text="", text_color=DIM)
         self.mic_label.pack(anchor="w", padx=190)
 
-        self._combo(tab, "audio.ptt_key", "Kláves na hovor (drž)", KEYS, audio["ptt_key"], width=160,
-                    hint="F12 je v Steame predvolený screenshot — buď ho zmeň v Steame, alebo tu vyber iný kláves.")
-        self._combo(tab, "audio.panic_mute_key", "Panic mute", KEYS, audio.get("panic_mute_key", "f11"), width=160)
+        box = self._combo(tab, "audio.ptt_key", "Kláves na hovor (drž)", KEYS, audio["ptt_key"], width=160,
+                          hint="Aj tlačidlo myši: mouse_x1 = zadné bočné, mouse_x2 = predné bočné. Hra ho dostane tiež, "
+                               "tak nech v nej nemá priradenú akciu. „Stlačiť…“ = nastav stlačením.")
+        self._capture_button(box.master, "audio.ptt_key")
+        box = self._combo(tab, "audio.panic_mute_key", "Panic mute", KEYS, audio.get("panic_mute_key", "f11"), width=160)
+        self._capture_button(box.master, "audio.panic_mute_key")
+
+    def _capture_button(self, row, key):
+        button = ctk.CTkButton(row, text="Stlačiť…", width=80, fg_color=PANEL, border_width=1, border_color=YELLOW,
+                               text_color=TEXT)
+        button.configure(command=lambda: self._capture_key(key, button))
+        button.pack(side="left", padx=6)
+
+    def _capture_key(self, key, button):
+        """Nasledujuci klaves alebo bocne/stredne tlacidlo mysi sa zapise do pola. Lave a prave sa ignoruju."""
+        from pynput import keyboard, mouse
+
+        button.configure(text="stlač…", state="disabled")
+        listeners = []
+
+        def done(spec):
+            for listener in listeners:
+                listener.stop()
+
+            def apply():
+                if spec:
+                    self.v[key].set(spec)
+                button.configure(text="Stlačiť…", state="normal")
+            self.after(0, apply)
+            return False
+
+        def on_key(k):
+            if isinstance(k, keyboard.Key):
+                return done(k.name)
+            if getattr(k, "char", None):
+                return done(k.char.lower())
+            return None
+
+        def on_click(x, y, b, pressed):
+            if pressed and b.name in ("x1", "x2", "middle"):
+                return done(f"mouse_{b.name}")
+            return None
+
+        listeners += [keyboard.Listener(on_press=on_key), mouse.Listener(on_click=on_click)]
+        for listener in listeners:
+            listener.start()
+        self.after(8000, lambda: done(None) if str(button.cget("state")) == "disabled" else None)
 
     def _fill_devices(self):
         try:
@@ -200,6 +247,11 @@ class SettingsWindow(ctk.CTkToplevel):
         self._slider(tab, "tts.pitch", "Výška hlasu", _pct(tts["pitch"]), -20, 20, lambda v: f"{v:+d} %")
         self._switch(tab, "tts.phonetics", "Fonetika anglických názvov", bool(tts.get("phonetics_file")),
                      hint="Prepíše „Night City“ na „Najt Siti“ pre slovenský hlas (phonetics.yaml).")
+        effects = tts.get("effects") or {}
+        preset = effects.get("preset", "vypnute") if effects.get("enabled", True) else "vypnute"
+        self._combo(tab, "tts.effects", "Efekty hlasu", list(PRESET_LABELS.values()), PRESET_LABELS.get(preset, preset),
+                    width=160, hint="Night City = digitálna AI (filtre, zrnitosť, kovový nádych, echo). Platí aj pre fillery; "
+                                    "vyskúšaj tlačidlom Vypočuť.")
         self.sample = ctk.StringVar(value=SAMPLE)
         row = self._row(tab, "Ukážka")
         ctk.CTkEntry(row, textvariable=self.sample, width=330).pack(side="left")
@@ -372,6 +424,8 @@ class SettingsWindow(ctk.CTkToplevel):
         cfg["tts"]["rate"] = f"{self.v['tts.rate'].get():+d}%"
         cfg["tts"]["pitch"] = f"{self.v['tts.pitch'].get():+d}%"
         cfg["tts"]["phonetics_file"] = "phonetics.yaml" if self.v["tts.phonetics"].get() else None
+        cfg["tts"]["effects"] = {"enabled": True, "preset": self._effects_preset(),
+                                 "params": dict((cfg["tts"].get("effects") or {}).get("params") or {})}
         text = self.sample.get()
         self.hint.configure(text="Syntetizujem ukážku…", text_color=DIM)
 
@@ -385,6 +439,10 @@ class SettingsWindow(ctk.CTkToplevel):
                 self.after(0, lambda: self.hint.configure(text=f"Ukážka zlyhala: {e}", text_color=RED))
 
         threading.Thread(target=run, daemon=True).start()
+
+    def _effects_preset(self) -> str:
+        label = self.v["tts.effects"].get()
+        return next((k for k, v in PRESET_LABELS.items() if v == label), label)
 
     # --- ulozenie -----------------------------------------------------------------------------
 
@@ -409,13 +467,22 @@ class SettingsWindow(ctk.CTkToplevel):
         if c["audio"]["ptt_key"] == c["audio"]["panic_mute_key"]:
             raise ValueError("Kláves na hovor a panic mute musia byť rôzne.")
         for key in ("audio.ptt_key", "audio.panic_mute_key"):
-            if v[key].get() not in KEYS:
-                raise ValueError(f"Neznámy kláves „{v[key].get()}“")
+            try:
+                parse_key(v[key].get())
+            except ValueError:
+                raise ValueError(f"Neznámy kláves „{v[key].get()}“") from None
 
         _put(c["tts"], "voice", v["tts.voice"].get())
         _put(c["tts"], "rate", f"{v['tts.rate'].get():+d}%".replace("+0%", "0%"))
         _put(c["tts"], "pitch", f"{v['tts.pitch'].get():+d}%".replace("+0%", "0%"))
         _put(c["tts"], "phonetics_file", "phonetics.yaml" if v["tts.phonetics"].get() else None)
+        preset = self._effects_preset()
+        if preset not in PRESET_LABELS:
+            raise ValueError(f"Neznámy efekt hlasu „{preset}“")
+        if "effects" not in c["tts"]:
+            c["tts"]["effects"] = {"enabled": True, "preset": preset, "params": {}}
+        _put(c["tts"]["effects"], "enabled", True)
+        _put(c["tts"]["effects"], "preset", preset)
 
         _put(c["llm"], "model", v["llm.model"].get())
         _put(c["llm"], "effort", v["llm.effort"].get())

@@ -1,4 +1,8 @@
-"""Push-to-talk: drz F12, nahravaj z audio.input_device, pusti, vrat WAV v pamati.
+"""Push-to-talk: drz klaves alebo tlacidlo mysi (audio.ptt_key), nahravaj z audio.input_device, pusti, vrat WAV.
+
+ptt_key / panic_mute_key: klaves ("f4", "insert") alebo tlacidlo mysi ("mouse_x1" = zadne bocne,
+"mouse_x2" = predne bocne, "mouse_middle"). Tlacidlo sa neblokuje — hra ho dostane tiez, preto
+nech nema v hre priradenu akciu.
 
 Audio stream je otvoreny stale (otvorenie zariadenia trva 50-300 ms a prisiel by si o zaciatok vety);
 pri stlaceni sa len zapne zber ramcov.
@@ -6,13 +10,38 @@ pri stlaceni sa len zapne zber ramcov.
 
 import io
 import logging
+import threading
 import wave
 
 import numpy as np
 import sounddevice as sd
-from pynput import keyboard
+from pynput import keyboard, mouse
 
 logger = logging.getLogger(__name__)
+
+
+MOUSE_BUTTONS = {"mouse_x1": "x1", "mouse_x2": "x2", "mouse_middle": "middle"}
+BUTTON_LABELS = {"mouse_x1": "myš – zadné bočné", "mouse_x2": "myš – predné bočné", "mouse_middle": "myš – koliesko"}
+
+
+def parse_key(spec: str | None):
+    """Nazov z configu -> pynput Key/KeyCode alebo mouse.Button. None ked nie je nastavene."""
+    if not spec:
+        return None
+    spec = spec.strip().lower()
+    if spec in MOUSE_BUTTONS:
+        return getattr(mouse.Button, MOUSE_BUTTONS[spec])
+    if hasattr(keyboard.Key, spec):
+        return getattr(keyboard.Key, spec)
+    if len(spec) == 1:
+        return keyboard.KeyCode.from_char(spec)
+    raise ValueError(f"neznamy klaves alebo tlacidlo: {spec}")
+
+
+def key_label(spec: str | None) -> str:
+    """Nazov pre ludi: "F4", "myš – zadné bočné"."""
+    spec = (spec or "").strip().lower()
+    return BUTTON_LABELS.get(spec) or spec.replace("_", " ").upper()
 
 
 def _to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
@@ -39,14 +68,15 @@ class PushToTalk:
         self.input_device = audio_cfg["input_device"]
         # WASAPI neprevzorkuje: null = nativna frekvencia zariadenia (G733 = 48 kHz). Whisper si to prevzorkuje sam.
         self.sample_rate = audio_cfg["sample_rate"] or int(sd.query_devices(self.input_device, "input")["default_samplerate"])
-        self.ptt_key = getattr(keyboard.Key, audio_cfg["ptt_key"])
-        self.panic_key = getattr(keyboard.Key, audio_cfg["panic_mute_key"]) if audio_cfg.get("panic_mute_key") else None
+        self.ptt_key = parse_key(audio_cfg["ptt_key"])
+        self.panic_key = parse_key(audio_cfg.get("panic_mute_key"))
         self._panic_down = False
 
         self._recording = False
         self._frames: list[np.ndarray] = []
         self._stream: sd.InputStream | None = None
         self._listener: keyboard.Listener | None = None
+        self._mouse_listener: mouse.Listener | None = None
 
     def _audio_callback(self, indata, frames, time_info, status):
         if self._recording:
@@ -57,6 +87,12 @@ class PushToTalk:
                     self._level_frames = 0
                     rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32767.0
                     self.on_level(min(1.0, (rms * 6.0) ** 0.6))
+
+    def _on_click(self, x, y, button, pressed):
+        if pressed:
+            self._on_press(button)
+        else:
+            self._on_release(button)
 
     def _on_press(self, key):
         if key == self.panic_key and self.panic_key is not None:
@@ -79,14 +115,18 @@ class PushToTalk:
             self._recording = False
             if self.on_level is not None:
                 self.on_level(0.0)
-            audio = np.concatenate(self._frames, axis=0) if self._frames else np.zeros((0, 1), dtype=np.int16)
-            self._frames = []
-            # peak < ~100 = mikrofon je mute alebo zly input_device
-            peak = int(np.abs(audio).max()) if audio.size else 0
-            logger.info("nahravka %.1f s, peak %d/32767", audio.shape[0] / self.sample_rate, peak)
-            wav_bytes = _to_wav_bytes(audio, self.sample_rate)
-            if self.on_recording is not None:
-                self.on_recording(wav_bytes)
+            frames, self._frames = self._frames, []
+            # spracovanie mimo hooku: pomaly callback mysi by v hre sekal kurzor
+            threading.Thread(target=self._finish, args=(frames,), daemon=True).start()
+
+    def _finish(self, frames: list[np.ndarray]) -> None:
+        audio = np.concatenate(frames, axis=0) if frames else np.zeros((0, 1), dtype=np.int16)
+        # peak < ~100 = mikrofon je mute alebo zly input_device
+        peak = int(np.abs(audio).max()) if audio.size else 0
+        logger.info("nahravka %.1f s, peak %d/32767", audio.shape[0] / self.sample_rate, peak)
+        wav_bytes = _to_wav_bytes(audio, self.sample_rate)
+        if self.on_recording is not None:
+            self.on_recording(wav_bytes)
 
     def start(self) -> keyboard.Listener:
         self._stream = sd.InputStream(
@@ -99,12 +139,18 @@ class PushToTalk:
         self._stream.start()
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         self._listener.start()
+        if isinstance(self.ptt_key, mouse.Button) or isinstance(self.panic_key, mouse.Button):
+            self._mouse_listener = mouse.Listener(on_click=self._on_click)
+            self._mouse_listener.start()
         return self._listener
 
     def stop(self) -> None:
         if self._listener is not None:
             self._listener.stop()
             self._listener = None
+        if self._mouse_listener is not None:
+            self._mouse_listener.stop()
+            self._mouse_listener = None
         if self._stream is not None:
             self._stream.stop()
             self._stream.close()
@@ -114,7 +160,7 @@ class PushToTalk:
 if __name__ == "__main__":
     from core.config import load_config
 
-    print("Drz F12 pre nahravanie, pusti pre ulozenie do test.wav. Ctrl+C pre ukoncenie.")
+    print("Drz PTT (audio.ptt_key) pre nahravanie, pusti pre ulozenie do test.wav. Ctrl+C pre ukoncenie.")
 
     def _save(wav_bytes: bytes):
         with open("test.wav", "wb") as f:
