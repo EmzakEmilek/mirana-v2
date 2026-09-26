@@ -56,17 +56,29 @@ Prvý štart stiahne Whisper model (~1,5 GB) a vygeneruje filler hlášky do `fi
 
 ## Telemetria z hry (CET)
 
-Mirana vie, kde si, aký máš quest a cieľ, HP, level, peniaze a či bojuješ, a sama sa ozve pri kritickom HP,
-smrti, level-upe, novej štvrti či queste (najviac raz za 5 min, kritické HP hneď).
+Mirana vie z hry:
+
+- **stav**: HP, nabitia liečenia a granátov, náboje v zásobníku, RAM, peniaze, či bojuješ, či si v scéne
+- **svet**: štvrť, čas v hre, počasie, polícia (hviezdy)
+- **quest**: sledovaný quest a cieľ; **príbeh**: dokončené hlavné questy (kam až si došiel, pre spoilery)
+- **postava**: level, street cred, atribúty, nerozdelené body, voľná kapacita kybervýzbroje
+- **výbava**: OS (cyberdeck/Sandevistan/Berserk), zbrane v slotoch, zbraň v ruke, brnenie
+- **cieľ pod zameriavačom**: meno, nepriateľ/civil/boss, úroveň, zdravie
+- **auto**: vozidlo, rýchlosť, rádio a skladba
+
+Sama sa ozve pri kritickom HP, smrti, level-upe, novej štvrti, novom a dokončenom queste a keď ťa začne
+hľadať polícia (najviac raz za 5 min, kritické HP hneď, počas rozhovorov a cutscén mlčí). Názvy z hry
+prídu v jazyku hry (napr. po česky) a Mirana ich tak aj povie, reč okolo nich ostáva slovenská.
 
 1. Nainštaluj [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks/releases) (rozbaliť do priečinka hry).
 2. Okno MIRANA → Nastavenia → **Hra** → **Nainštalovať mod** (skopíruje `mod/mirana_state` do CET).
-3. Spusti hru. V hlavnom okne sa ukáže riadok „Hra: …".
+3. Spusti hru. V hlavnom okne sa ukáže riadok „Hra: …". Ak niektorý údaj po patchi hry prestane chodiť,
+   v `state.json` modu je v poli `errors`, ktorý (ostatné idú ďalej).
 
 Mod zapisuje každé 2 s `state.json` do svojho priečinka; do promptu ide krátky slovenský riadok `[HRA]`,
 nikdy surový JSON (v teste model zo surového JSON zle prepočítal HP).
 
-Bez hry: `venv\Scripts\python tools\simulate_game.py` zapisuje falošný stav (jazda, boj, nízke HP, level, quest)
+Bez hry: `venv\Scripts\python tools\simulate_game.py` zapisuje falošný stav (jazda, cutscéna, boj, polícia, nízke HP, level, quest)
 do `data/sim_state.json`; Miranu vtedy spusti s `set MIRANA_GAME_STATE_PATH=C:\mirana-v2\data\sim_state.json`.
 
 ## Konfigurácia

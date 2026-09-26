@@ -85,7 +85,14 @@ Navrh routingu (na potvrdenie):
   inputs/game_state.py (riadok [HRA] po slovensky, udalosti, auto-najdenie hry, instalacia modu), proaktivne hlasky
   (cooldown 300 s, 30 s po Erikovi ticho, kriticke HP/smrt hned a pockaju, kym dohovori), HUD + okno + Nastavenia -> Hra.
   Otestovane so simulatorom (tools/simulate_game.py). A/B: slovensky riadok OK, surovy JSON zle citaL HP (74 -> 'stvrtina').
-  Hra sa instaluje cez GOG (C:\Program Files (x86)\GOG Galaxy\Games\Cyberpunk 2077). CAKA NA: CET + test v hre.
+  Hra sa instaluje cez GOG (C:\Program Files (x86)\GOG Galaxy\Games\Cyberpunk 2077). CET 1.37.1 nainstalovany,
+  mod v1 overeny v hre (hra 2.31, cesky preklad — Erik ho necha).
+- Telemetria v2 (2026-09-26): mod posiela aj zasoby, postavu, vybavu, ciel pod zameriavacom, policiu, cas, pocasie,
+  scenu, rychlost/radio a dokoncene hlavne questy. Nove udalosti quest_completed, wanted_up, wanted_clear;
+  pocas sceny ziadne proaktivne hlasky; "Neobjevene" sa neberie ako quest. Persona: ceske nazvy z hry,
+  rozkazovaci sposob namiesto neurcitku. Whisper slovnik + gig/gigy (211/224 tokenov).
+  Overene: mock hry v Lua (lupa), simulator, pisomny test Opus low (14 otazok, $0.12, slovencina OK).
+  CAKA NA: test v hre — skontrolovat pole "errors" v state.json (API volania v2 su z dekompilovanych skriptov).
 - Faza 4-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)

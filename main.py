@@ -31,7 +31,7 @@ from core.config import load_config
 from core.memory import Memory
 from core.safety import Safety
 from core.session import HEARTBEAT_PATH, ConversationLog, ensure_single_instance, setup_logging
-from inputs.game_state import GameState, event_text
+from inputs.game_state import GameState
 from inputs.ptt import PushToTalk
 from outputs.fillers import Fillers
 from outputs.overlay import Overlay
@@ -78,7 +78,7 @@ class Mirana:
         self._last_proactive = 0.0     # cas poslednej hlasky z hernej udalosti
         self._last_erik = 0.0          # cas poslednej Erikovej otazky — proaktivne hlasky mu neskacu do reci
         self._telemetry_shown = None   # posledny stav poslany na HUD (posiela sa len zmena)
-        self._pending_urgent = None    # (nazov, snapshot, cas) — kriticke HP pocas reci pocka, kym dohovori
+        self._pending_urgent = None    # (nazov, snapshot, text, cas) — kriticke HP pocas reci pocka, kym dohovori
         self._events: queue.Queue = queue.Queue()
 
         self.conversation = ConversationLog(session_id)
@@ -101,7 +101,7 @@ class Mirana:
         self.speak_on = set(gs.get("speak_on", []))
         self.proactive_cooldown = config["limits"].get("proactive_cooldown_sec", 300)
         self.quiet_after_erik = gs.get("quiet_after_erik_sec", 30)
-        self.game = GameState(config, on_event=lambda name, snap: self._events.put(("game_event", None, (name, snap))),
+        self.game = GameState(config, on_event=lambda name, snap, text: self._events.put(("game_event", None, (name, snap, text))),
                               on_snapshot=self._on_game_snapshot)
         self.ptt.on_panic = self._on_panic
         self.overlay.on_command = self._on_command
@@ -195,9 +195,9 @@ class Mirana:
         )
         self._events.put(("answer", job, (answer, stt_sec)))
 
-    def _work_game_event(self, job: Job, name: str, snap) -> None:
+    def _work_game_event(self, job: Job, text: str) -> None:
         try:
-            self._ask(job, f"[GAME_EVENT] {event_text(name, snap)}")
+            self._ask(job, f"[GAME_EVENT] {text}")
         except Exception:
             logger.exception("chyba pri hernej udalosti")
             self._events.put(("fallback", job, "general_error"))
@@ -205,18 +205,21 @@ class Mirana:
     # --- telemetria (vlakno game-state) ---------------------------------------------------------
 
     def _on_game_snapshot(self, snap) -> None:
-        shown = (snap.location, snap.get("quest") or "", bool(snap.get("combat"))) if snap else ("", "", False)
+        shown = (snap.location, snap.quest or "", bool(snap.get("combat"))) if snap else ("", "", False)
         if shown != self._telemetry_shown:
             self._telemetry_shown = shown
             self.overlay.telemetry(*shown)
             self.overlay.game(live=snap is not None, line=self.game.line())
 
-    def _handle_game_event(self, name: str, snap) -> None:
+    def _handle_game_event(self, name: str, snap, text: str) -> None:
         """Proaktivna hlaska: len ked Mirana mlci a nie hned po Erikovej otazke; max raz za cooldown.
-        Kriticke HP a smrt maju vynimku z cooldownu."""
+        Kriticke HP a smrt maju vynimku z cooldownu. Pocas sceny (rozhovor, cutscena) do hry nevstupuje."""
         if name not in self.speak_on or self._muted or self.budget.exceeded():
             return
         urgent = name in ("hp_critical", "death")
+        if not urgent and snap.in_scene:
+            logger.info("herna udalost %s bez hlasky (scena)", name)
+            return
         now = time.time()
         if not urgent and (now - self._last_proactive < self.proactive_cooldown or now - self._last_erik < self.quiet_after_erik):
             logger.info("herna udalost %s bez hlasky (cooldown)", name)
@@ -224,7 +227,7 @@ class Mirana:
         with self._lock:
             if self.state is not State.IDLE:
                 if urgent:
-                    self._pending_urgent = (name, snap, now)  # povie ju hned, ako dohovori
+                    self._pending_urgent = (name, snap, text, now)  # povie ju hned, ako dohovori
                 return
             self._set_state(State.PROCESSING)
             job = Job(gen=self._gen, released_at=time.perf_counter())
@@ -233,7 +236,7 @@ class Mirana:
         if not urgent:  # urgentna hlaska (kriticke HP) nema blokovat bezne hlasky na 5 minut
             self._last_proactive = now
         self.voice.arm()
-        threading.Thread(target=self._work_game_event, args=(job, name, snap), daemon=True).start()
+        threading.Thread(target=self._work_game_event, args=(job, text), daemon=True).start()
 
     def _on_sentence(self, job: Job, sentence: str) -> None:
         if job.cancelled:
@@ -307,8 +310,8 @@ class Mirana:
                 if job.gen == self._gen and self.state in (State.PROCESSING, State.SPEAKING):
                     self._set_state(State.IDLE)
             pending, self._pending_urgent = self._pending_urgent, None
-            if pending and time.time() - pending[2] < 10:
-                self._handle_game_event(pending[0], pending[1])
+            if pending and time.time() - pending[3] < 10:
+                self._handle_game_event(*pending[:3])
             return
         if event == "answer":
             answer, stt_sec = payload

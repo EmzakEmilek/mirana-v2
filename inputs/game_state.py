@@ -2,10 +2,11 @@
 
 Mod kazde 2 s zapise state.json do svojho priecinka. Tento modul subor sleduje (podla casu zmeny),
 drzi posledny stav a porovnanim s predchadzajucim vyraba udalosti: hp_low, hp_critical, death,
-district_change, quest_changed, level_up, combat_start, combat_end.
+district_change, quest_changed, quest_completed, level_up, wanted_up, wanted_clear,
+combat_start, combat_end.
 
 Do promptu ide vzdy slovensky riadok, nikdy surovy JSON — anglicke kluce a vety by stahovali
-Miraninu slovencinu k prekladu. Anglicke su len vlastne mena z hry (questy, stvrte, zbrane).
+Miraninu slovencinu k prekladu. Z hry su len vlastne mena (questy, stvrte, veci) v jazyku hry.
 Ked mod neposiela (hra nebezi, menu, pad), riadok sa nevklada vobec.
 """
 
@@ -82,6 +83,51 @@ def resolve_json_path(cfg: dict) -> Path | None:
 
 # --- stav a udalosti --------------------------------------------------------------------------
 
+# Sledovany "quest", ktory nie je quest: neobjavene miesto na mape
+PSEUDO_QUESTS = {"Neobjevené", "Neobjavené", "Undiscovered"}
+
+# Od tejto urovne je hrac v scene (rozhovor s volbami, cutscena) — gamePSMHighLevel.SceneTier3+
+SCENE_TIER = 3
+
+WEATHER = [  # (kus nazvu stavu pocasia z hry, slovensky) — prvy zhodny vyhrava
+    ("toxic", "toxický dážď"), ("sandstorm", "piesočná búrka"), ("rain", "dážď"), ("pollution", "smog"),
+    ("fog", "hmla"), ("heavy_clouds", "zamračené"), ("cloudy", "zamračené"), ("light_clouds", "polooblačno"),
+    ("sunny", "jasno"), ("clear", "jasno"),
+]
+
+ATTRIBUTES = [("body", "Telo"), ("reflexes", "Reflexy"), ("tech", "Technika"), ("intelligence", "Inteligencia"),
+              ("cool", "Chladnokrvnosť")]
+
+
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    return one if n == 1 else few if 2 <= n <= 4 else many
+
+
+def _text(value) -> str | None:
+    """Text z hry, bez neprelozenych klucov (LocKey#123) a prazdnych hodnot."""
+    if not isinstance(value, str) or not value.strip() or value.startswith("LocKey#"):
+        return None
+    return value.strip()
+
+
+def weather_text(raw) -> str | None:
+    raw = (raw or "").lower() if isinstance(raw, str) else ""
+    return next((sk for key, sk in WEATHER if key in raw), None)
+
+
+def _main_done(s) -> list[dict]:
+    story = s.get("story") if isinstance(s.get("story"), dict) else {}
+    done = story.get("main_done")
+    return [q for q in done if isinstance(q, dict)] if isinstance(done, list) else []
+
+
+def _quest_order(quest_id) -> int:
+    """Poradie hlavneho questu podla id (q000 prolog ... q1xx 2. dejstvo); Phantom Liberty (q3xx) mimo."""
+    m = re.match(r"q(\d{3})", str(quest_id or ""))
+    n = int(m.group(1)) if m else -1
+    return n if 0 <= n < 300 else -1
+
+
 @dataclass
 class Snapshot:
     data: dict
@@ -94,29 +140,160 @@ class Snapshot:
     def location(self) -> str:
         return ", ".join(x for x in (self.get("district"), self.get("subdistrict")) if x)
 
+    @property
+    def quest(self) -> str | None:
+        """Sledovany quest, okrem neobjavenych miest na mape."""
+        quest = _text(self.get("quest"))
+        return None if quest in PSEUDO_QUESTS else quest
+
+    @property
+    def in_scene(self) -> bool:
+        tier = self.get("scene_tier")
+        return isinstance(tier, int) and tier >= SCENE_TIER
+
+
+def _health(s: Snapshot) -> str | None:
+    if s.get("hp") is None:
+        return None
+    text = f"zdravie {s.get('hp')} %"
+    extra = []
+    if s.get("heal_charges") is not None:
+        extra.append(f"liečenie {s.get('heal_charges')}×")
+    if s.get("grenade_charges") is not None:
+        extra.append(f"granáty {s.get('grenade_charges')}×")
+    return text + (f" ({', '.join(extra)})" if extra else "")
+
+
+def _world(s: Snapshot) -> str | None:
+    items = [x for x in (s.location, s.get("time") if _text(s.get("time")) else None, weather_text(s.get("weather"))) if x]
+    return ", ".join(items) or None
+
+
+def _character(s: Snapshot) -> str | None:
+    if s.get("level") is None:
+        return None
+    text = f"úroveň {s.get('level')}"
+    if s.get("street_cred") is not None:
+        text += f", street cred {s.get('street_cred')}"
+    attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
+    if attrs:
+        text += ", atribúty " + " ".join(f"{sk} {attrs[key]}" for key, sk in ATTRIBUTES if attrs.get(key) is not None)
+    free = []
+    if s.get("attribute_points"):
+        n = s.get("attribute_points")
+        free.append(f"{n} {_plural(n, 'atribútový bod', 'atribútové body', 'atribútových bodov')}")
+    if s.get("perk_points"):
+        n = s.get("perk_points")
+        free.append(f"{n} {_plural(n, 'perkový bod', 'perkové body', 'perkových bodov')}")
+    if free:
+        text += ", nerozdelené " + " a ".join(free)
+    return text
+
+
+def _gear(s: Snapshot) -> str | None:
+    items = []
+    if _text(s.get("os")):
+        items.append(f"OS {s.get('os')}")
+    if s.get("cyberware_capacity"):
+        items.append(f"kybervýzbroj voľná kapacita {s.get('cyberware_free')} z {s.get('cyberware_capacity')}")
+    if s.get("ram_max"):
+        items.append(f"RAM {s.get('ram')}/{s.get('ram_max')}")
+    weapons = [w for w in (s.get("weapons") or []) if _text(w)] if isinstance(s.get("weapons"), list) else []
+    if weapons:
+        items.append("zbrane " + ", ".join(weapons))
+    if s.get("armor") is not None:
+        items.append(f"brnenie {s.get('armor')}")
+    return ", ".join(items) or None
+
+
+def _weapon(s: Snapshot) -> str | None:
+    if not _text(s.get("weapon")):
+        return None
+    text = f"v ruke {s.get('weapon')}"
+    if s.get("ammo") is not None:
+        text += f", v zásobníku {s.get('ammo')}"
+        if s.get("ammo_reserve") is False:
+            text += ", náhradné náboje došli"
+    return text
+
+
+def _story(s: Snapshot) -> str | None:
+    main = _main_done(s)
+    story = s.get("story") if isinstance(s.get("story"), dict) else None
+    if story is None:
+        return None
+    text = f"príbeh: dokončené hlavné questy {len(main)}"
+    ordered = [q for q in main if _quest_order(q.get("id")) >= 0 and _text(q.get("title"))]
+    if ordered:
+        text += f", najďalej {max(ordered, key=lambda q: _quest_order(q.get('id')))['title']}"
+    if story.get("side_done") is not None:
+        text += f", ostatné questy a zákazky {story.get('side_done')}"
+    return text
+
+
+def _quest(s: Snapshot) -> str | None:
+    if not s.quest:
+        return None
+    text = f"quest {s.quest}"
+    if _text(s.get("objective")):
+        text += f", cieľ „{s.get('objective')}“"
+    return text
+
+
+def _situation(s: Snapshot) -> str:
+    text = "v boji" if s.get("combat") else "mimo boja"
+    if s.in_scene:
+        text += ", práve v scéne (rozhovor alebo cutscéna)"
+    wanted = s.get("wanted")
+    if isinstance(wanted, int) and wanted > 0:
+        text += f", polícia ho hľadá ({wanted} {_plural(wanted, 'hviezda', 'hviezdy', 'hviezd')})"
+    return text
+
+
+def _target(s: Snapshot) -> str | None:
+    t = s.get("target") if isinstance(s.get("target"), dict) else None
+    if not t or not _text(t.get("name")):
+        return None
+    if t.get("kind") == "vehicle":
+        return f"zameriava vozidlo {t['name']}"
+    if t.get("kind") == "device":
+        return f"zameriava zariadenie {t['name']}"
+    info = []
+    if t.get("dead"):
+        info.append("mŕtvy")
+    elif t.get("boss"):
+        info.append("boss")
+    elif t.get("hostile"):
+        info.append("nepriateľ")
+    elif t.get("civilian"):
+        info.append("civil")
+    if t.get("level") and not t.get("dead"):
+        info.append(f"úroveň {t['level']}")
+    if t.get("hp") is not None and not t.get("dead") and t.get("hp") < 100:
+        info.append(f"zdravie {t['hp']} %")
+    return f"zameriava {t['name']}" + (f" ({', '.join(info)})" if info else "")
+
+
+def _vehicle(s: Snapshot) -> str | None:
+    radio = _text(s.get("radio"))
+    song = _text(s.get("song"))
+    music = (f"rádio {radio}" + (f", hrá {song}" if song else "")) if radio else None
+    if not _text(s.get("vehicle")):
+        return music  # vreckove radio aj peso
+    text = f"{'šoféruje' if s.get('driver', True) else 'vezie sa v'} {s.get('vehicle')}"
+    if s.get("speed_kmh") is not None:
+        text += f", {s.get('speed_kmh')} km/h"
+    return text + (f", {music}" if music else "")
+
 
 def telemetry_line(s: Snapshot) -> str:
-    """Kratky slovensky riadok pre model. Surove hodnoty z hry su len vlastne mena."""
-    parts = []
-    if s.get("hp") is not None:
-        parts.append(f"zdravie {s.get('hp')} %")
-    if s.location:
-        parts.append(s.location)
-    if s.get("level") is not None:
-        parts.append(f"úroveň {s.get('level')}" + (f", street cred {s.get('street_cred')}" if s.get("street_cred") is not None else ""))
-    if s.get("quest"):
-        quest = f"quest {s.get('quest')}"
-        if s.get("objective"):
-            quest += f", cieľ „{s.get('objective')}“"
-        parts.append(quest)
-    parts.append("v boji" if s.get("combat") else "mimo boja")
-    if s.get("vehicle"):
-        parts.append(f"šoféruje {s.get('vehicle')}")
-    if s.get("weapon"):
-        parts.append(f"v ruke {s.get('weapon')}")
-    if s.get("money") is not None:
-        parts.append(f"{s.get('money')} eddies")
-    return "[HRA] " + " | ".join(parts)
+    """Slovensky riadok pre model. Z hry su len vlastne mena; prazdne a nulove casti sa vynechaju."""
+    parts = [
+        _health(s), _world(s), _situation(s), _quest(s), _target(s), _vehicle(s), _weapon(s),
+        _character(s), _gear(s), _story(s),
+        f"{s.get('money')} eddies" if s.get("money") is not None else None,
+    ]
+    return "[HRA] " + " | ".join(p for p in parts if p)
 
 
 # Slovensky opis udalosti pre [GAME_EVENT] — model z neho spravi jednu vetu v charaktere
@@ -126,13 +303,18 @@ EVENT_TEXT = {
     "death": "Erik práve zomrel",
     "district_change": "Erik prišiel do štvrte {location}",
     "quest_changed": "Erik sleduje nový quest {quest}",
+    "quest_completed": "Erik dokončil hlavný quest {completed}",
     "level_up": "Erik postúpil na úroveň {level}",
+    "wanted_up": "polícia ho hľadá, už {wanted}",
+    "wanted_clear": "polícia ho prestala hľadať",
     "combat_start": "začal sa boj",
     "combat_end": "boj skončil",
 }
 
 
-def detect_events(prev: Snapshot | None, cur: Snapshot, hp_low: int, hp_critical: int) -> list[str]:
+def detect_events(prev: Snapshot | None, cur: Snapshot, hp_low: int, hp_critical: int,
+                  last_quest: str | None = None) -> list[str]:
+    """last_quest = posledny skutocny quest; odbocka na neobjavene miesto a spat nie je novy quest."""
     if prev is None or not cur.get("in_game") or not prev.get("in_game"):
         return []
     events = []
@@ -146,8 +328,16 @@ def detect_events(prev: Snapshot | None, cur: Snapshot, hp_low: int, hp_critical
             events.append("hp_low")
     if cur.get("district") and prev.get("district") and cur.get("district") != prev.get("district"):
         events.append("district_change")
-    if cur.get("quest") and cur.get("quest") != prev.get("quest"):
+    if cur.quest and cur.quest != (last_quest or prev.quest):
         events.append("quest_changed")
+    if completed_quests(prev, cur):
+        events.append("quest_completed")
+    wanted, old_wanted = cur.get("wanted"), prev.get("wanted")
+    if isinstance(wanted, int) and isinstance(old_wanted, int):
+        if wanted > old_wanted:
+            events.append("wanted_up")
+        elif wanted == 0 < old_wanted:
+            events.append("wanted_clear")
     if (cur.get("level") or 0) > (prev.get("level") or 0) > 0:
         events.append("level_up")
     if cur.get("combat") and not prev.get("combat"):
@@ -157,13 +347,26 @@ def detect_events(prev: Snapshot | None, cur: Snapshot, hp_low: int, hp_critical
     return events
 
 
-def event_text(name: str, s: Snapshot) -> str:
-    values = {"hp": s.get("hp"), "location": s.location or "?", "quest": s.get("quest") or "?", "level": s.get("level")}
+def completed_quests(prev: Snapshot | None, cur: Snapshot) -> list[str]:
+    """Hlavne questy, ktore pribudli medzi dokoncenymi. Na zaciatku (prvy zoznam) nic."""
+    if prev is None or not isinstance(prev.get("story"), dict) or not isinstance(cur.get("story"), dict):
+        return []
+    before = {q.get("id") for q in _main_done(prev)}
+    return [q.get("title") or q.get("id") for q in _main_done(cur) if q.get("id") not in before]
+
+
+def event_text(name: str, s: Snapshot, prev: Snapshot | None = None) -> str:
+    wanted = s.get("wanted") or 0
+    values = {
+        "hp": s.get("hp"), "location": s.location or "?", "quest": s.quest or "?", "level": s.get("level"),
+        "wanted": f"{wanted} {_plural(wanted, 'hviezda', 'hviezdy', 'hviezd')}",
+        "completed": ", ".join(completed_quests(prev, s)) or "?",
+    }
     return EVENT_TEXT.get(name, name).format(**values)
 
 
 class GameState:
-    """Sleduje state.json vo vlakne. on_event(nazov, snapshot) a on_snapshot(snapshot|None) volá z vlakna."""
+    """Sleduje state.json vo vlakne. on_event(nazov, snapshot, text) a on_snapshot(snapshot|None) volá z vlakna."""
 
     def __init__(self, config: dict, on_event=None, on_snapshot=None):
         cfg = config.get("game_state", {})
@@ -179,6 +382,7 @@ class GameState:
         self._mtime = 0.0
         self._lock = threading.Lock()
         self._was_live = False
+        self._last_quest: str | None = None
 
     def start(self) -> None:
         if not self.enabled:
@@ -226,10 +430,16 @@ class GameState:
                 prev, self._current = self._current, snap
             if data.get("errors"):
                 logger.debug("CET mod hlasi chyby: %s", data["errors"])
-            for event in detect_events(prev, snap, self.hp_low, self.hp_critical):
-                logger.info("herna udalost: %s (%s)", event, event_text(event, snap))
+            if prev is None or prev.get("quest_id") != data.get("quest_id"):
+                logger.info("sledovany quest: %s (id %s, typ %s)", data.get("quest"), data.get("quest_id"), data.get("quest_type"))
+            events = detect_events(prev, snap, self.hp_low, self.hp_critical, self._last_quest)
+            if snap.quest:
+                self._last_quest = snap.quest
+            for event in events:
+                text = event_text(event, snap, prev)
+                logger.info("herna udalost: %s (%s)", event, text)
                 if self.on_event:
-                    self.on_event(event, snap)
+                    self.on_event(event, snap, text)
         live = self.current is not None
         if live != self._was_live:
             self._was_live = live

@@ -252,13 +252,14 @@ class SettingsWindow(ctk.CTkToplevel):
         self._entry(tab, "game_state.hp_low_threshold", "Nízke HP (%)", gs["hp_low_threshold"], width=60)
         self._entry(tab, "game_state.hp_critical_threshold", "Kritické HP (%)", gs["hp_critical_threshold"], width=60)
         self._entry(tab, "limits.proactive_cooldown_sec", "Pauza medzi hláškami (s)", limits["proactive_cooldown_sec"],
-                    width=60, hint="Sama od seba sa ozve najviac raz za tento čas. Kritické HP a smrť majú výnimku.")
+                    width=60, hint="Sama od seba sa ozve najviac raz za tento čas. Kritické HP a smrť majú výnimku. Počas rozhovorov a cutscén mlčí.")
         ctk.CTkLabel(tab, text="Kedy sa ozve sama:", text_color=TEXT, anchor="w").pack(fill="x", padx=10, pady=(8, 2))
         grid = ctk.CTkFrame(tab, fg_color="transparent")
         grid.pack(fill="x", padx=30)
         self.speak_vars = {}
         events = [("hp_critical", "kritické HP"), ("hp_low", "nízke HP"), ("death", "smrť"), ("level_up", "nový level"),
-                  ("district_change", "nová štvrť"), ("quest_changed", "nový quest"), ("combat_start", "začiatok boja"),
+                  ("district_change", "nová štvrť"), ("quest_changed", "nový quest"), ("quest_completed", "dokončený quest"),
+                  ("wanted_up", "polícia ho hľadá"), ("wanted_clear", "polícia prestala"), ("combat_start", "začiatok boja"),
                   ("combat_end", "koniec boja")]
         current = set(gs.get("speak_on", []))
         for i, (key, label) in enumerate(events):

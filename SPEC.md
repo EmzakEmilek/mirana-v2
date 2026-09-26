@@ -128,15 +128,18 @@ OBS na notebooku: Browser Source na `http://IP-herného-PC:8080`.
 ## 5. Fáza 4 — Oči (CET mod + proaktívna Mirana)
 
 1. `mod/mirana_state/init.lua` — každé 2 s zapíš `state.json` do priečinka modu (CET inam zapisovať nedovolí):
-   HP %, level, street cred, eddies, quest, distrikt, in_combat, in_vehicle.
-   Začni s HP + lokácia + quest.
+   HP %, level, street cred, eddies, quest (+ typ, id), distrikt, boj, vozidlo, zbraň; od v2 aj
+   zásoby (liečenie, granáty, náboje, RAM), postava (atribúty, nerozdelené body, kapacita kybervýzbroje),
+   výbava (OS, zbrane v slotoch, brnenie), cieľ pod zameriavačom, polícia (heat 0–5), čas, počasie,
+   scéna (PSM HighLevel ≥ 3 = rozhovor/cutscéna), rýchlosť a rádio, dokončené hlavné questy (raz za 30 s).
 2. `inputs/game_state.py` — čítaj JSON (mtime check), generuj eventy:
-   `hp_low` (<25 %), `hp_critical` (<10 %), `district_change`, `level_up`,
-   `quest_completed`, `combat_start/end`.
+   `hp_low` (<25 %), `hp_critical` (<10 %), `death`, `district_change`, `level_up`, `quest_changed`,
+   `quest_completed`, `wanted_up`, `wanted_clear`, `combat_start/end`. „Neobjevené" (neobjavené miesto
+   na mape) nie je quest.
 3. Do každej správy (nie do system promptu — rušilo by to cache) pridaj slovenský riadok, nikdy surový JSON:
    `[HRA] zdravie 87 % | Watson, Kabuki | úroveň 23, street cred 18 | quest Ghost Town, cieľ „…“ | mimo boja`
-4. Proaktívne hlášky: max 1 / 5 min, nikdy počas SPEAKING. `hp_critical` má
-   výnimku z cooldownu.
+4. Proaktívne hlášky: max 1 / 5 min, nikdy počas SPEAKING ani počas scény v hre. `hp_critical` a
+   `death` majú výnimku z cooldownu.
 5. Keď mod nebeží, Mirana funguje ďalej bez kontextu.
 6. `core/longterm.py` — dlhodobá pamäť o Erikovi v `data/memory.json` (necommitovať):
    - **Herný postup** z telemetrie, bez LLM: level, lifepath, štvrť, aktívny quest,
