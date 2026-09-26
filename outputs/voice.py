@@ -57,6 +57,21 @@ def _level(chunk: np.ndarray) -> float:
     return min(1.0, (rms * 4.0) ** 0.6)
 
 
+SILENCE_LEVEL = 330   # ~ -40 dBFS; tichsie je pre ucely pauzy ticho
+LEAD_KEEP_MS = 30
+
+
+def trim_silence(audio: np.ndarray, rate: int, tail_ms: int) -> np.ndarray:
+    """Azure dava za kazdu vetu ~0.8 s ticha (a pred nu ~80 ms). Mirana hovori po vetach, takze by medzi
+    vetami bola takmer sekunda pauzy. Ponecha LEAD_KEEP_MS na zaciatku a tail_ms za poslednym zvukom."""
+    loud = np.nonzero(np.abs(audio).max(axis=1) > SILENCE_LEVEL)[0]
+    if not loud.size:
+        return audio
+    start = max(0, int(loud[0]) - rate * LEAD_KEEP_MS // 1000)
+    end = min(len(audio), int(loud[-1]) + 1 + rate * tail_ms // 1000)
+    return audio[start:end]
+
+
 def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
     """Linearna interpolacia — pre rec staci, pouzije sa len ak Azure nevie nativnu frekvenciu vystupu."""
     src_len = audio.shape[0]
@@ -128,6 +143,7 @@ class Voice:
         self._voice = tts_cfg["voice"]
         self._rate = tts_cfg["rate"]
         self._pitch = tts_cfg["pitch"]
+        self.sentence_pause_ms = int(tts_cfg.get("sentence_pause_ms", 250))  # ticho za vetou (Azure dava ~840 ms)
         # Fonetika anglicizmov ide len do TTS; log a titulky dostavaju povodny text.
         phonetics_file = tts_cfg.get("phonetics_file")
         self._phonetics = load_phonetics(BASE_DIR / phonetics_file) if phonetics_file else []
@@ -171,7 +187,7 @@ class Voice:
         return result.audio_data
 
     def to_device_audio(self, wav_bytes: bytes) -> np.ndarray:
-        """WAV bytes -> int16 pole vo frekvencii vystupneho zariadenia, s efektmi hlasu (pripravene na prehratie)."""
+        """WAV bytes -> int16 pole vo frekvencii vystupneho zariadenia, bez dlheho ticha, s efektmi (na prehratie)."""
         with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             channels = wav_file.getnchannels()
@@ -180,6 +196,7 @@ class Voice:
         audio = np.frombuffer(frames, dtype=np.int16).reshape(-1, channels)
         if sample_rate != self.device_rate:
             audio = _resample(audio, sample_rate, self.device_rate)
+        audio = trim_silence(audio, self.device_rate, self.sentence_pause_ms)
         return self.fx.process(audio, self.device_rate)
 
     def play_audio(self, audio: np.ndarray, block: bool = True) -> None:

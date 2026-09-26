@@ -25,7 +25,7 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
 
 - LLM: claude-opus-5-5, effort low, server-side fallbacks, cache persony aj pamate; pamat 12 -> 6 vymen
 - STT: faster-whisper medium, cuda/float16, slovensky prefix + slovnik (211/224 tokenov), filter halucinacie promptu
-- TTS: Azure sk-SK-ViktoriaNeural + phonetics.yaml; efekty hlasu preset "robot"
+- TTS: Azure sk-SK-ViktoriaNeural + phonetics.yaml, rychlost 0 %, pauza medzi vetami 250 ms; efekty hlasu preset "robot"
 - PTT: zadne bocne tlacidlo mysi (mouse_x1), panic mute: predne bocne (mouse_x2)
 - Audio: Logitech G733 (mikrofon aj vystup, WASAPI) — pred streamom vystup na Voicemeeter Input
 - Fillery: 5 hlasok, az po 1.3 s
@@ -135,6 +135,9 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
 - Kontrola projektu (2026-09-26): anthropic SDK 1.7.0 -> 1.8.0 (overene ostrou otazkou), dokumentacia
   (README, SPEC, POSTUP, PROGRESS) prepisana na aktualny stav, zmienky F12/F11 v kode -> PTT/panic, audio-devices.txt obnoveny,
   z requirements.txt vyhodene nepouzivane pillow a soundfile.
+- Rychlost reci (2026-09-26): Azure dava za kazdu vetu ~840 ms ticha a Mirana hovori po vetach -> medzi vetami
+  takmer 1 s pauzy. Ticho sa teraz oreze na tts.sentence_pause_ms (250 ms): 3 vety 11.6 s -> 9.8 s. Nastavenia -> Hlas:
+  posuvnik "Pauza medzi vetami", rychlost reci rozsirena na -30..+50 %, ukazka hra po vetach ako skutocna odpoved.
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

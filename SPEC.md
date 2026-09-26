@@ -85,8 +85,8 @@ mirana-v2/
    Server-side fallback (`llm.fallbacks: "default"`), ošetrené `stop_reason` (refusal, max_tokens, prázdne).
    Každá správa od Erika nesie tag `[ERIK]`, pred ním riadok `[HRA]`, ak hra beží.
 4. `core/memory.py` — 12 výmen, pri prekročení orez naraz na 6; do pamäte ide len vypočutá časť odpovede.
-5. `outputs/voice.py` — Azure TTS `sk-SK-ViktoriaNeural` + `phonetics.yaml` (celé slová) →
-   `outputs/voice_fx.py` → prehratie po 50 ms kusoch (stop z ktoréhokoľvek vlákna).
+5. `outputs/voice.py` — Azure TTS `sk-SK-ViktoriaNeural` + `phonetics.yaml` (celé slová) → orezanie ticha
+   (za vetou `tts.sentence_pause_ms`, Azure dáva ~840 ms) → `outputs/voice_fx.py` → prehratie po 50 ms kusoch (stop z ktoréhokoľvek vlákna).
 6. `main.py` — stavový automat IDLE → LISTENING → PROCESSING → SPEAKING.
 7. Každé API volanie: timeout 20 s, 1 retry (SDK), pri zlyhaní fallback hláška z config.yaml a návrat do IDLE.
    O fallbackoch rozhoduje main.py, moduly vracajú `None`. Proces nesmie skončiť na výnimke.

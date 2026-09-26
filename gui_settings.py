@@ -6,6 +6,7 @@ fillers/*.wav, aby sa pri starte vygenerovali novym hlasom.
 """
 
 import copy
+import re
 import threading
 import tkinter.messagebox as messagebox
 
@@ -31,7 +32,7 @@ MODELS = {
 KEYS = [f"f{i}" for i in range(1, 13)] + ["insert", "home", "end", "page_up", "page_down", "pause", "scroll_lock",
                                           "mouse_x1", "mouse_x2", "mouse_middle"]
 STT_MODELS = ["small", "medium", "large-v3", "large-v3-turbo"]
-SAMPLE = "Ahoj Emzo, takto znie môj hlas. Johnny Silverhand ťa čaká v Night City."
+SAMPLE = "Ahoj Emzo, takto znie môj hlas. Johnny Silverhand ťa čaká v Night City. Tak poďme na to."
 
 
 def _put(section, key: str, value) -> None:
@@ -243,7 +244,10 @@ class SettingsWindow(ctk.CTkToplevel):
         tts = self.cfg["tts"]
         self._combo(tab, "tts.voice", "Hlas (Azure)", VOICES, tts["voice"],
                     hint="Viktoria = slovenský hlas. Emma/Ava = viacjazyčné, anglické mená vyslovia samy (fonetiku vypni).")
-        self._slider(tab, "tts.rate", "Rýchlosť reči", _pct(tts["rate"]), -30, 30, lambda v: f"{v:+d} %")
+        self._slider(tab, "tts.rate", "Rýchlosť reči", _pct(tts["rate"]), -30, 50, lambda v: f"{v:+d} %",
+                     hint="0 % = prirodzené tempo Azure. +10 až +20 % znie svižnejšie a stále zrozumiteľne.")
+        self._slider(tab, "tts.sentence_pause_ms", "Pauza medzi vetami", tts.get("sentence_pause_ms", 250), 100, 800,
+                     lambda v: f"{v} ms", hint="Ticho medzi vetami odpovede. Bez orezania by bolo ~900 ms.")
         self._slider(tab, "tts.pitch", "Výška hlasu", _pct(tts["pitch"]), -20, 20, lambda v: f"{v:+d} %")
         self._switch(tab, "tts.phonetics", "Fonetika anglických názvov", bool(tts.get("phonetics_file")),
                      hint="Prepíše „Night City“ na „Najt Siti“ pre slovenský hlas (phonetics.yaml).")
@@ -423,6 +427,7 @@ class SettingsWindow(ctk.CTkToplevel):
         cfg["tts"]["voice"] = self.v["tts.voice"].get()
         cfg["tts"]["rate"] = f"{self.v['tts.rate'].get():+d}%"
         cfg["tts"]["pitch"] = f"{self.v['tts.pitch'].get():+d}%"
+        cfg["tts"]["sentence_pause_ms"] = self.v["tts.sentence_pause_ms"].get()
         cfg["tts"]["phonetics_file"] = "phonetics.yaml" if self.v["tts.phonetics"].get() else None
         cfg["tts"]["effects"] = {"enabled": True, "preset": self._effects_preset(),
                                  "params": dict((cfg["tts"].get("effects") or {}).get("params") or {})}
@@ -433,7 +438,12 @@ class SettingsWindow(ctk.CTkToplevel):
             try:
                 from outputs.voice import Voice
                 voice = Voice(cfg)
-                voice.play(voice.synthesize(text, timeout=15))
+                # po vetach ako pri skutocnej odpovedi, aby bolo pocut aj pauzu medzi vetami
+                sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
+                clips = [voice.to_device_audio(voice.synthesize(s, timeout=15)) for s in sentences]
+                voice.arm()
+                for clip in clips:
+                    voice.play_audio(clip)
                 self.after(0, lambda: self.hint.configure(text="Zmeny sa prejavia po reštarte Mirany.", text_color=DIM))
             except Exception as e:
                 self.after(0, lambda: self.hint.configure(text=f"Ukážka zlyhala: {e}", text_color=RED))
@@ -475,6 +485,7 @@ class SettingsWindow(ctk.CTkToplevel):
         _put(c["tts"], "voice", v["tts.voice"].get())
         _put(c["tts"], "rate", f"{v['tts.rate'].get():+d}%".replace("+0%", "0%"))
         _put(c["tts"], "pitch", f"{v['tts.pitch'].get():+d}%".replace("+0%", "0%"))
+        _put(c["tts"], "sentence_pause_ms", v["tts.sentence_pause_ms"].get())
         _put(c["tts"], "phonetics_file", "phonetics.yaml" if v["tts.phonetics"].get() else None)
         preset = self._effects_preset()
         if preset not in PRESET_LABELS:

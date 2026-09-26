@@ -56,7 +56,7 @@ Mikrofón a výstup vyber v Nastaveniach → Zvuk (s testom). Presné názvy vyp
 | záložka | čo sa tam nastavuje |
 |---|---|
 | Zvuk | mikrofón a výstup s testom, tlačidlo na hovor a panic mute |
-| Hlas | Azure hlas, rýchlosť, výška, fonetika, **efekty hlasu**, ukážka |
+| Hlas | Azure hlas, **rýchlosť reči**, **pauza medzi vetami**, výška, fonetika, **efekty hlasu**, ukážka |
 | Model | model a effort, denný strop, pamäť, záložný model |
 | Hra | nájdenie hry, stav CET, inštalácia modu, prahy HP, odstup hlášok, kedy sa ozve sama |
 | Prepis | lokálny Whisper alebo API, model, jazyk (slovník názvov je v config.yaml) |
@@ -114,6 +114,8 @@ Všetko sa dá nastaviť v okne (Nastavenia) alebo priamo v `config.yaml`:
 - `stt.local_model`: Whisper `medium` (large-v3 je presnejší, ale v hre pomalší); `stt.local_vocabulary`: názvy z hry
   (max 224 tokenov, Mirana pri prekročení varuje v logu)
 - `tts.voice`: Azure hlas; `phonetics.yaml`: ako vysloviť anglické názvy z hry
+- `tts.rate`: rýchlosť reči (−30 % až +50 %); `tts.sentence_pause_ms`: pauza medzi vetami (Azure dáva za
+  každú vetu ~840 ms ticha, Mirana ho oreže na 250 ms — odpoveď z 3 viet je tak o ~15 % kratšia)
 - `tts.effects.preset`: efekty hlasu `vypnute` | `jemny` | `night_city` | `robot` (filtre, bitcrusher, ring mod,
   chorus, echo, kompresor; hlasitosť ostáva rovnaká). Doladenie v `tts.effects.params`.
 - `fillers.lines`: hlášky, ktoré zakryjú pauzu pred odpoveďou (z okna sa pri zmene pregenerujú samy)
