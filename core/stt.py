@@ -4,9 +4,11 @@ Oba providery maju rovnake rozhranie: transcribe(wav_bytes) -> str | None.
 Lokalny model sa nacita raz pri starte (medium ~ 3-5 s), potom je prepis rychlejsi nez API.
 """
 
+import difflib
 import io
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -67,6 +69,7 @@ class LocalStt:
         vocabulary = stt_cfg.get("local_vocabulary") or []
         prefix = stt_cfg.get("local_prompt_prefix") or ""
         self.initial_prompt = f"{prefix} {', '.join(vocabulary)}.".strip() if vocabulary else None
+        self.prompt_prefix = prefix
         started = time.perf_counter()
         args = dict(device=stt_cfg["local_device"], compute_type=stt_cfg["local_compute_type"])
         try:
@@ -98,10 +101,25 @@ class LocalStt:
                 beam_size=5,
                 vad_filter=True,
             )
-            return " ".join(segment.text.strip() for segment in segments)
+            text = " ".join(segment.text.strip() for segment in segments)
         except Exception as e:
             logger.warning("faster-whisper zlyhalo: %s", e)
             return None
+        if self._echoes_prompt(text):
+            logger.info("prepis zahodeny, Whisper zopakoval slovnik z promptu: %s", text)
+            return ""
+        return text
+
+    def _echoes_prompt(self, text: str) -> bool:
+        """Z nezrozumitelneho zvuku Whisper obcas "prepise" vlastny initial_prompt (prefix alebo kus slovnika)."""
+        if not self.initial_prompt or not text.strip():
+            return False
+        words = re.findall(r"\w+", text.lower())
+        prompt_words = set(re.findall(r"\w+", self.initial_prompt.lower()))
+        if len(words) >= 3 and all(w in prompt_words for w in words):
+            return True
+        prefix = self.prompt_prefix.lower()
+        return bool(prefix) and difflib.SequenceMatcher(None, text.lower().strip(" .:"), prefix.strip(" .:")).ratio() > 0.7
 
 
 def create_stt(config: dict):

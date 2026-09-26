@@ -85,6 +85,7 @@ def resolve_json_path(cfg: dict) -> Path | None:
 
 # Sledovany "quest", ktory nie je quest: neobjavene miesto na mape
 PSEUDO_QUESTS = {"Neobjevené", "Neobjavené", "Undiscovered"}
+PSEUDO_QUEST_IDS = {"generic_sts_quest"}
 
 # Od tejto urovne je hrac v scene (rozhovor s volbami, cutscena) — gamePSMHighLevel.SceneTier3+
 SCENE_TIER = 3
@@ -144,7 +145,7 @@ class Snapshot:
     def quest(self) -> str | None:
         """Sledovany quest, okrem neobjavenych miest na mape."""
         quest = _text(self.get("quest"))
-        return None if quest in PSEUDO_QUESTS else quest
+        return None if quest in PSEUDO_QUESTS or self.get("quest_id") in PSEUDO_QUEST_IDS else quest
 
     @property
     def in_scene(self) -> bool:
@@ -157,10 +158,11 @@ def _health(s: Snapshot) -> str | None:
         return None
     text = f"zdravie {s.get('hp')} %"
     extra = []
-    if s.get("heal_charges") is not None:
-        extra.append(f"liečenie {s.get('heal_charges')}×")
-    if s.get("grenade_charges") is not None:
-        extra.append(f"granáty {s.get('grenade_charges')}×")
+    # od modu v3 su to nabitia z maxima; v2 posielal percenta, tie sa nezobrazuju
+    if s.get("heal_charges") is not None and s.get("heal_max"):
+        extra.append(f"liečenie {s.get('heal_charges')} z {s.get('heal_max')}")
+    if s.get("grenade_charges") is not None and s.get("grenade_max"):
+        extra.append(f"granáty {s.get('grenade_charges')} z {s.get('grenade_max')}")
     return text + (f" ({', '.join(extra)})" if extra else "")
 
 
@@ -211,7 +213,7 @@ def _weapon(s: Snapshot) -> str | None:
         return None
     text = f"v ruke {s.get('weapon')}"
     if s.get("ammo") is not None:
-        text += f", v zásobníku {s.get('ammo')}"
+        text += f", v zásobníku {s.get('ammo')}" + (f" z {s.get('ammo_max')}" if s.get("ammo_max") else "")
         if s.get("ammo_reserve") is False:
             text += ", náhradné náboje došli"
     return text
@@ -383,6 +385,7 @@ class GameState:
         self._lock = threading.Lock()
         self._was_live = False
         self._last_quest: str | None = None
+        self._errors: set[str] = set()
 
     def start(self) -> None:
         if not self.enabled:
@@ -428,8 +431,11 @@ class GameState:
             snap = Snapshot(data)
             with self._lock:
                 prev, self._current = self._current, snap
-            if data.get("errors"):
-                logger.debug("CET mod hlasi chyby: %s", data["errors"])
+            errors = data.get("errors") or {}
+            if set(errors) != self._errors:
+                self._errors = set(errors)
+                if errors:
+                    logger.warning("CET mod: tieto udaje nejdu: %s", errors)
             if prev is None or prev.get("quest_id") != data.get("quest_id"):
                 logger.info("sledovany quest: %s (id %s, typ %s)", data.get("quest"), data.get("quest_id"), data.get("quest_type"))
             events = detect_events(prev, snap, self.hp_low, self.hp_critical, self._last_quest)

@@ -13,7 +13,7 @@ ostatne idu dalej a v "errors" je, ktory.
 Texty z hry (questy, stvrte, veci) su v jazyku hry — Mirana ich berie ako vlastne mena.
 ]]
 
-local VERSION = 2
+local VERSION = 3
 local INTERVAL = 2.0          -- sekundy medzi zapismi
 local STORY_INTERVAL = 30.0   -- zoznam dokoncenych questov je drahsi, staci raz za 30 s
 local elapsed = 0
@@ -157,10 +157,16 @@ local function collect()
     end)
 
     -- zasoby: nabitia liecenia a granatov, naboje v zasobniku, RAM
+    -- Pool nabiti je v percentach z maxima (hra ho tak zobrazuje v dpadHintItem): nabitia = floor(% * max)
     safe("supplies", function()
-        local pools = Game.GetStatPoolsSystem()
-        state.heal_charges = round(pools:GetStatPoolValue(id, gamedataStatPoolType.HealingItemsCharges, false))
-        state.grenade_charges = round(pools:GetStatPoolValue(id, gamedataStatPoolType.GrenadesCharges, false))
+        local pools, stats = Game.GetStatPoolsSystem(), Game.GetStatsSystem()
+        local function charges(pool, maxStat)
+            local max = round(stats:GetStatValue(id, maxStat))
+            local perc = pools:GetStatPoolValue(id, pool, true)
+            return math.floor(perc / 100 * max + 0.001), max
+        end
+        state.heal_charges, state.heal_max = charges(gamedataStatPoolType.HealingItemsCharges, gamedataStatType.HealingItemMaxCharges)
+        state.grenade_charges, state.grenade_max = charges(gamedataStatPoolType.GrenadesCharges, gamedataStatType.GrenadesMaxCharges)
     end)
     safe("ram", function()
         state.ram = round(Game.GetStatPoolsSystem():GetStatPoolValue(id, gamedataStatPoolType.Memory, false))
@@ -168,8 +174,9 @@ local function collect()
     end)
     safe("ammo", function()
         local weapon = player:GetActiveWeapon()
-        if not weapon then return end
-        state.ammo = Game.GetMagazineAmmoCount(weapon)
+        if not weapon or not weapon:IsRanged() then return end  -- kudlanky, katany: ziadne naboje
+        state.ammo = WeaponObject.GetMagazineAmmoCount(weapon)
+        state.ammo_max = WeaponObject.GetMagazineCapacity(weapon)
         state.ammo_reserve = WeaponObject.HasAvailableAmmoInInventory(weapon)
     end)
 
@@ -243,7 +250,7 @@ local function collect()
     end)
     safe("weather", function()
         local weather = Game.GetWeatherSystem():GetWeatherState()
-        state.weather = NameToString(weather.name or weather)
+        state.weather = weather and weather.name and weather.name.value or nil  -- napr. "24h_weather_rain"
     end)
     safe("scene", function()
         local defs = GetAllBlackboardDefs().PlayerStateMachine

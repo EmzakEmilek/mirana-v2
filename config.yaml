@@ -8,7 +8,7 @@ audio:
   output_device: "Speakers (Logitech G733 Gaming Headset), Windows WASAPI"     # docasne; pre stream: "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
   sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
   ptt_key: "mouse_x1"          # klaves ("f4") alebo tlacidlo mysi: mouse_x1 = zadne bocne, mouse_x2 = predne bocne
-  panic_mute_key: "f11"
+  panic_mute_key: "mouse_x2"
 
 stt:
   provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)
@@ -97,7 +97,7 @@ tts:
   phonetics_file: "phonetics.yaml"   # anglicizmy -> slovenská fonetika, len pre TTS (titulky ostávajú v origináli)
   effects:                    # efekty na hlas (outputs/voice_fx.py), platia aj pre fillery
     enabled: true
-    preset: "night_city"      # vypnute | jemny | night_city | robot
+    preset: "robot"           # vypnute | jemny | night_city | robot
     params: {}                # jemné doladenie presetu, napr. {ring_mix: 0.08, echo_ms: 60}
 
 memory:
