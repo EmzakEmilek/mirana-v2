@@ -19,7 +19,8 @@ from core.brain import Answer, Brain
 from core.budget import Budget
 from core.config import load_config
 from core.memory import Memory
-from core.session import ConversationLog, ensure_single_instance, setup_logging
+from core.safety import Safety
+from core.session import HEARTBEAT_PATH, ConversationLog, ensure_single_instance, setup_logging
 from inputs.ptt import PushToTalk
 from outputs.fillers import Fillers
 from outputs.overlay import Overlay
@@ -62,6 +63,7 @@ class Mirana:
         self._lock = threading.Lock()  # chrani state, _gen a _job (menia ich ptt, worker, speaker aj slucka)
         self._gen = 0
         self._job: Job | None = None
+        self._muted = False            # panic mute (F11): Mirana mlci a ignoruje F12, kym sa F11 nestlaci znova
         self._events: queue.Queue = queue.Queue()
 
         self.conversation = ConversationLog(session_id)
@@ -73,13 +75,14 @@ class Mirana:
         self.overlay = Overlay(config)
         self.voice.on_level = self.overlay.level
         self.speaker = Speaker(config, self.voice, self.overlay, on_start=self._on_speech_start,
-                               on_done=lambda job: self._events.put(("spoken", job)))
+                               on_done=lambda job: self._events.put(("spoken", job)), safety=Safety(config))
         self.ptt = PushToTalk(
             config,
             on_start=self._on_ptt_press,
             on_recording=lambda wav: self._events.put(("recording", wav)),
         )
         self.ptt.on_level = self.overlay.level
+        self.ptt.on_panic = self._on_panic
 
     def _set_state(self, state: State) -> None:
         self.state = state
@@ -88,21 +91,40 @@ class Mirana:
 
     # --- PTT vlakno ---------------------------------------------------------------------------
 
+    def _cancel_current(self) -> None:
+        """Zrusi bezucu otazku (volat pod self._lock): hlas stichne, stream sa zastavi, Speaker ju zahodi."""
+        self._gen += 1
+        job = self._job
+        if job is not None and not job.cancelled:
+            job.cancelled = True
+            self._cancel_filler(job)
+            self._events.put(("interrupted", job))
+        self.voice.stop()
+
+    def _on_panic(self) -> None:
+        """F11: okamzite umlcat a pozastavit. Druhe stlacenie Miranu vrati."""
+        with self._lock:
+            self._muted = not self._muted
+            if self._muted:
+                self._cancel_current()
+                self.state = State.IDLE
+                self.overlay.state("muted")
+                logger.warning("PANIC MUTE (F11) — Mirana mlci, F12 sa ignoruje. Znova F11 = spat.")
+            else:
+                self._set_state(State.IDLE)
+                logger.info("panic mute vypnuty")
+
     def _on_ptt_press(self) -> None:
         """Bezi v pynput vlakne. Barge-in musi zastavit zvuk okamzite, nie az ked sa slucka uvolni."""
         with self._lock:
+            if self._muted:
+                return
             if self.state is State.IDLE:
                 self._set_state(State.LISTENING)
                 return
             if self.state in (State.PROCESSING, State.SPEAKING):
-                self._gen += 1
-                job = self._job
-                if job is not None:
-                    job.cancelled = True
-                    self._cancel_filler(job)
-                    self._events.put(("interrupted", job))
                 logger.info("barge-in pocas %s", self.state.name)
-                self.voice.stop()
+                self._cancel_current()
                 self._set_state(State.LISTENING)
 
     # --- worker vlakno ------------------------------------------------------------------------
@@ -243,8 +265,13 @@ class Mirana:
                     self.config["llm"]["model"], self.config["llm"]["effort"], self.config["audio"]["ptt_key"],
                     self.budget.spent, self.budget.cap)
 
+        HEARTBEAT_PATH.parent.mkdir(exist_ok=True)
         while True:
-            event, *rest = self._events.get()
+            HEARTBEAT_PATH.write_text(str(time.time()))  # run.py podla neho pozna zamrznutie
+            try:
+                event, *rest = self._events.get(timeout=5)
+            except queue.Empty:
+                continue
             try:
                 if event == "recording":
                     self._handle_recording(rest[0])
@@ -258,4 +285,7 @@ class Mirana:
 if __name__ == "__main__":
     ensure_single_instance()
     cfg = load_config()
-    Mirana(cfg, setup_logging(cfg)).run()
+    try:
+        Mirana(cfg, setup_logging(cfg)).run()
+    except KeyboardInterrupt:
+        logger.info("Mirana vypnuta (Ctrl+C)")

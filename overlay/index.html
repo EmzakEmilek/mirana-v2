@@ -51,6 +51,7 @@
     opacity: var(--breath, .5); transition: background .4s;
   }
   .panel.offline { --accent: var(--dim); }
+  .panel.muted   { --accent: var(--red); }
   .panel.idle       { --accent: rgba(252,238,10,.55); }
   .panel.listening  { --accent: var(--cyan); }
   .panel.processing { --accent: var(--yellow); }
@@ -150,10 +151,11 @@ const panel = el('panel'), statusLabel = el('status-label');
 const LABELS = {
   idle: 'MIRANA · STANDBY', listening: 'MIRANA · POČÚVAM',
   processing: 'MIRANA · SPRACOVÁVAM', speaking: 'MIRANA · HOVORÍ', offline: 'MIRANA · OFFLINE',
+  muted: 'MIRANA · STLMENÁ',
 };
 const COLORS = {
   idle: [252,238,10], listening: [0,240,255], processing: [252,238,10],
-  speaking: [252,238,10], offline: [160,160,160], combat: [255,0,60],
+  speaking: [252,238,10], offline: [160,160,160], muted: [255,0,60], combat: [255,0,60],
 };
 
 let state = 'offline', combat = false;

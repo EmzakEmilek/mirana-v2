@@ -15,8 +15,9 @@ _END = object()
 
 
 class Speaker:
-    def __init__(self, config: dict, voice, overlay, on_start, on_done):
+    def __init__(self, config: dict, voice, overlay, on_start, on_done, safety=None):
         self.voice = voice
+        self.safety = safety
         self.overlay = overlay
         self.on_start = on_start  # on_start(job) — prva veta prave zaznieva
         self.on_done = on_done    # on_done(job) — dohovorila (alebo nebolo co povedat)
@@ -31,6 +32,10 @@ class Speaker:
     # --- verejne API (z ktorehokolvek vlakna) -----------------------------------------------
 
     def say(self, job, sentence: str) -> None:
+        reason = self.safety.check(sentence) if self.safety is not None else None
+        if reason:
+            logger.warning("safety: veta zahodena (%s): %r", reason, sentence[:80])
+            return
         self._synth_q.put((job, sentence))
 
     def end(self, job) -> None:

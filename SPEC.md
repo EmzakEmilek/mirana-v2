@@ -194,11 +194,11 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok.
 
 1. `core/budget.py` — počítaj tokeny a odhadovanú cenu za deň.
    HOTOVÉ 2026-09-23 (`limits.daily_usd_cap`, stav v data/budget.json, hláška budget_reached).
-2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS
+2. `core/safety.py` — výstupný filter pred TTS: blokuj obsah ohrozujúci Kick TOS HOTOVÉ 2026-09-26.
    a osobné údaje divákov. Pri zachytení preskoč vetu.
-3. `run.py` — supervisor: sleduj heartbeat, pri páde alebo zamrznutí (>60 s)
+3. `run.py` — supervisor: sleduj heartbeat, pri páde alebo zamrznutí (>60 s) HOTOVÉ 2026-09-26 (start.bat).
    reštartuj. Max 5 reštartov za hodinu.
-4. Panic mute na F11 — okamžite umlčí Miranu a pozastaví spracovanie.
+4. Panic mute na F11 — okamžite umlčí Miranu a pozastaví spracovanie. HOTOVÉ 2026-09-26.
 5. Log per session. HOTOVÉ 2026-09-23 (logs/, core/session.py).
 6. Pred prvým ostrým streamom 8-hodinový suchý beh. Sleduj RAM a počet API chýb.
 

@@ -13,6 +13,8 @@ LOGS_DIR = BASE_DIR / "logs"
 # Lubovolny volny port na localhoste. Bind drzi OS, takze zamok zmizne aj pri pade procesu (lock subor by ostal visiet).
 _LOCK_PORT = 47651
 _lock_socket: socket.socket | None = None
+EXIT_ALREADY_RUNNING = 3  # run.py pri tomto kode nerestartuje
+HEARTBEAT_PATH = BASE_DIR / "data" / "heartbeat"
 
 
 def ensure_single_instance() -> None:
@@ -22,7 +24,8 @@ def ensure_single_instance() -> None:
     try:
         sock.bind(("127.0.0.1", _LOCK_PORT))
     except OSError:
-        sys.exit("Mirana uz bezi (iny proces drzi zamok). Zavri ju a spusti znova.")
+        print("Mirana uz bezi (iny proces drzi zamok). Zavri ju a spusti znova.")
+        sys.exit(EXIT_ALREADY_RUNNING)
     _lock_socket = sock
 
 

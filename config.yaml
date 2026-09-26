@@ -136,6 +136,12 @@ kick_chat:
   mute_in_combat: true
   mute_after_erik_sec: 60
 
+safety:
+  enabled: true
+  # Veta s týmto slovom (začiatok slova, bez diakritiky) sa nevysloví ani nevypíše — poistka pre Kick TOS.
+  # E-maily, telefónne čísla, IP adresy a odkazy sa blokujú vždy (core/safety.py).
+  blocked_words: ["negr", "nigger", "nigga", "cigos", "buzerant", "buzna", "faggot", "sieg heil"]
+
 limits:
   daily_usd_cap: 5.00         # tvrdý denný strop na LLM (core/budget.py, stav v data/budget.json); po ňom Mirana povie budget_reached
   proactive_cooldown_sec: 300

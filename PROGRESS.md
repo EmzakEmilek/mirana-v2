@@ -79,6 +79,8 @@ Navrh routingu (na potvrdenie):
     TTS timeout (veta sa aspon vypise na HUD), barge-in bez race, do pamate len vypocuta cast
   * persona v4: menej pravidiel, ziadne "senzory", neistotu priznava nahlas; telemetriu doplni Erik
     (persona ocakava riadok zacinajuci "[HRA]")
+- Hardening (2026-09-26): panic mute F11 (HUD 'STLMENA'), supervisor run.py (restart pri pade alebo zamrznuti,
+  heartbeat data/heartbeat, max 5/h), core/safety.py (osobne udaje + safety.blocked_words), start.bat, README. Otestovane.
 - Faza 4-7: nezacate
 
 ## Podklady (HOTOVE, 2026-09-20)

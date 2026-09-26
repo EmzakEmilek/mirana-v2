@@ -31,6 +31,7 @@ class PushToTalk:
     def __init__(self, config: dict, on_recording=None, on_start=None):
         self.on_recording = on_recording
         self.on_start = on_start
+        self.on_panic = None  # callback() pri stlaceni panic_mute_key (F11)
         self.on_level = None  # callback(0..1) pocas nahravania, ~20x/s — HUD reaguje na Erikov hlas
         self._level_frames = 0
 
@@ -39,6 +40,8 @@ class PushToTalk:
         # WASAPI neprevzorkuje: null = nativna frekvencia zariadenia (G733 = 48 kHz). Whisper si to prevzorkuje sam.
         self.sample_rate = audio_cfg["sample_rate"] or int(sd.query_devices(self.input_device, "input")["default_samplerate"])
         self.ptt_key = getattr(keyboard.Key, audio_cfg["ptt_key"])
+        self.panic_key = getattr(keyboard.Key, audio_cfg["panic_mute_key"]) if audio_cfg.get("panic_mute_key") else None
+        self._panic_down = False
 
         self._recording = False
         self._frames: list[np.ndarray] = []
@@ -56,6 +59,11 @@ class PushToTalk:
                     self.on_level(min(1.0, (rms * 6.0) ** 0.6))
 
     def _on_press(self, key):
+        if key == self.panic_key and self.panic_key is not None:
+            if not self._panic_down and self.on_panic is not None:  # drzanie posiela opakovane press eventy
+                self.on_panic()
+            self._panic_down = True
+            return
         # pynput posiela opakovane press eventy pocas drzania — flag to zachyti
         if key == self.ptt_key and not self._recording:
             self._frames = []
@@ -64,6 +72,9 @@ class PushToTalk:
                 self.on_start()
 
     def _on_release(self, key):
+        if key == self.panic_key:
+            self._panic_down = False
+            return
         if key == self.ptt_key and self._recording:
             self._recording = False
             if self.on_level is not None:
