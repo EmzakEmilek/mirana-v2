@@ -33,6 +33,7 @@ class Overlay:
         self._clients: set = set()
         self._last: dict[str, dict] = {}  # typ -> posledny event, pre novych klientov
         self._loop: asyncio.AbstractEventLoop | None = None
+        self.on_command = None  # on_command(cmd) — prikazy z ovladacieho okna (gui.py), len z localhostu
 
     # --- verejne API (thread-safe) --------------------------------------------------------
 
@@ -72,6 +73,17 @@ class Overlay:
         """Hlasitost 0..1 (hlas Mirany alebo Erikov mikrofon), ~20x/s. Nepamata sa."""
         self._send({"type": "level", "v": round(value, 3)}, remember=False)
 
+    def erik(self, text: str) -> None:
+        """Prepis Erikovej otazky — pre ovladacie okno. HUD ho ignoruje (otazky sa na streame neukazuju)."""
+        self._send({"type": "erik", "text": text}, remember=False)
+
+    def budget(self, spent: float, cap: float) -> None:
+        self._send({"type": "budget", "spent": round(spent, 4), "cap": cap})
+
+    def info(self, **data) -> None:
+        """Staticke info o behu (model, effort) pre ovladacie okno."""
+        self._send({"type": "info", **data})
+
     def queue(self, n: int) -> None:
         self._send({"type": "queue", "n": n})
 
@@ -100,13 +112,30 @@ class Overlay:
         try:
             for event in self._last.values():
                 await websocket.send(json.dumps(event))
-            async for _ in websocket:
-                pass  # HUD nic neposiela, len drzime spojenie
+            async for message in websocket:
+                self._on_message(websocket, message)
         except Exception:
             pass
         finally:
             self._clients.discard(websocket)
             logger.info("HUD odpojeny (%d klientov)", len(self._clients))
+
+    def _on_message(self, websocket, message) -> None:
+        """HUD nic neposiela; ovladacie okno posiela {"type": "command", "cmd": "mute"|"quit"}.
+
+        Server pocuva na 0.0.0.0 (kvoli OBS na notebooku) — prikazy sa preto berú len z tohto PC.
+        """
+        try:
+            data = json.loads(message)
+        except ValueError:
+            return
+        if data.get("type") != "command" or self.on_command is None:
+            return
+        host = (websocket.remote_address or ("",))[0]
+        if host not in ("127.0.0.1", "::1"):
+            logger.warning("prikaz %r z %s odmietnuty (len localhost)", data.get("cmd"), host)
+            return
+        self.on_command(str(data.get("cmd")))
 
     @staticmethod
     def _process_request(connection, request):

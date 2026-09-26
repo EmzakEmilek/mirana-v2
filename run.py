@@ -9,8 +9,17 @@
 Spustenie: start.bat, alebo  venv\\Scripts\\python run.py
 """
 
+import os
 import subprocess
 import sys
+
+# Spustenie z ikony (pythonw.exe) nema konzolu: sys.stdout/stderr su None a niektore kniznice
+# (tqdm pri stahovani modelu, print) by padli. Vystup ide do prazdna, vsetko podstatne je v logs/.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 import time
 from collections import deque
 from datetime import datetime

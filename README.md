@@ -37,8 +37,16 @@ vypíše `venv\Scripts\python -m sounddevice`; odporúčaný tvar je `"názov, W
 
 ## Spustenie
 
-Dvojklik na **`start.bat`**. Spustí `run.py` (supervisor), ktorý Miranu pri páde alebo zamrznutí
-reštartuje (najviac 5× za hodinu). Druhá inštancia sa nespustí.
+**Ikona MIRANA na ploche alebo v Štart menu.** Otvorí ovládacie okno, ktoré Miranu samo spustí:
+
+- stav (STANDBY / POČÚVAM / SPRACOVÁVAM / HOVORÍ / STLMENÁ), dnešná útrata so stropom,
+- priebeh rozhovoru (tvoja otázka, Miranina odpoveď),
+- tlačidlá **Vypnúť/Spustiť**, **Stlmiť (F11)**, **HUD**, **Logy**, **Nastavenia** (otvorí config.yaml).
+
+Zatvorenie okna Miranu vypne. Ikonu vytvoríš raz príkazom `venv\Scripts\python install_shortcut.py`.
+
+Bez okna: **`start.bat`** (konzola s logom). Oboje spúšťa `run.py` (supervisor), ktorý Miranu pri páde
+alebo zamrznutí reštartuje (najviac 5× za hodinu). Druhá inštancia sa nespustí.
 
 Prvý štart stiahne Whisper model (~1,5 GB) a vygeneruje filler hlášky do `fillers/`.
 
@@ -70,6 +78,7 @@ je vo free tieri (500 000 znakov/mesiac, ~15 streamov). Podrobnosti v [SPEC.md](
 
 | súbor | úloha |
 |---|---|
+| `gui.py` | ovládacie okno (ikona na ploche) |
 | `main.py` | stavový automat, poradie udalostí, pamäť |
 | `run.py` | supervisor (reštart, heartbeat) |
 | `core/brain.py` | Whisper → Claude, streaming po vetách |

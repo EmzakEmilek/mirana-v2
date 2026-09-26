@@ -8,6 +8,16 @@ job zrusi — Speaker ho zahodi, stream sa preruší a do pamate ide len to, co 
 Filler hlaska sa spusti z casovaca, ak prva veta nepride do fillers.skip_if_faster_than_ms.
 """
 
+import os
+import sys
+
+# Spustenie z ikony (pythonw.exe) nema konzolu: sys.stdout/stderr su None a niektore kniznice
+# (tqdm pri stahovani modelu, print) by padli. Vystup ide do prazdna, vsetko podstatne je v logs/.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 import logging
 import queue
 import threading
@@ -83,6 +93,7 @@ class Mirana:
         )
         self.ptt.on_level = self.overlay.level
         self.ptt.on_panic = self._on_panic
+        self.overlay.on_command = self._on_command
 
     def _set_state(self, state: State) -> None:
         self.state = state
@@ -114,6 +125,13 @@ class Mirana:
                 self._set_state(State.IDLE)
                 logger.info("panic mute vypnuty")
 
+    def _on_command(self, cmd: str) -> None:
+        """Prikazy z ovladacieho okna (gui.py)."""
+        if cmd == "mute":
+            self._on_panic()
+        elif cmd == "quit":
+            self._events.put(("quit",))
+
     def _on_ptt_press(self) -> None:
         """Bezi v pynput vlakne. Barge-in musi zastavit zvuk okamzite, nie az ked sa slucka uvolni."""
         with self._lock:
@@ -143,6 +161,7 @@ class Mirana:
                 self._events.put(("silent", job, None))
                 return
             logger.info("Erik: %s  (STT %.1f s)", transcript, stt_sec)
+            self.overlay.erik(transcript)
             if self.budget.exceeded():
                 self._events.put(("fallback", job, "budget_reached"))
                 return
@@ -231,6 +250,7 @@ class Mirana:
         if event == "answer":
             answer, stt_sec = payload
             job.answer = answer
+            self.overlay.budget(self.budget.spent, self.budget.cap)
             self.conversation.write(
                 erik=job.user_text, mirana=answer.text, model=answer.model, stop=answer.stop_reason,
                 stt_s=round(stt_sec, 2), prva_veta_s=answer.first_sentence_sec and round(answer.first_sentence_sec, 2),
@@ -265,6 +285,9 @@ class Mirana:
                     self.config["llm"]["model"], self.config["llm"]["effort"], self.config["audio"]["ptt_key"],
                     self.budget.spent, self.budget.cap)
 
+        self.overlay.state("idle")  # pociatocny stav pre HUD aj okno (inak by prisiel az pri prvej zmene)
+        self.overlay.budget(self.budget.spent, self.budget.cap)
+        self.overlay.info(model=self.config["llm"]["model"], effort=self.config["llm"]["effort"])
         HEARTBEAT_PATH.parent.mkdir(exist_ok=True)
         while True:
             HEARTBEAT_PATH.write_text(str(time.time()))  # run.py podla neho pozna zamrznutie
@@ -272,6 +295,10 @@ class Mirana:
                 event, *rest = self._events.get(timeout=5)
             except queue.Empty:
                 continue
+            if event == "quit":
+                logger.info("vypnutie z ovladacieho okna")
+                self.voice.stop()
+                return
             try:
                 if event == "recording":
                     self._handle_recording(rest[0])

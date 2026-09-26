@@ -38,7 +38,10 @@ def setup_logging(config: dict) -> str:
 
     root = logging.getLogger()
     root.setLevel(level)
-    for handler in (logging.StreamHandler(), logging.FileHandler(LOGS_DIR / f"mirana-{session_id}.log", encoding="utf-8")):
+    handlers = [logging.FileHandler(LOGS_DIR / f"mirana-{session_id}.log", encoding="utf-8")]
+    if sys.stderr is not None:  # pod pythonw.exe (spustenie z ikony) konzola nie je
+        handlers.append(logging.StreamHandler())
+    for handler in handlers:
         handler.setFormatter(fmt)
         root.addHandler(handler)
     # HTTP kniznice by zahltili log kazdym requestom

@@ -13,3 +13,6 @@ faster-whisper
 nvidia-cublas-cu12
 nvidia-cudnn-cu12
 websockets
+# ovladacie okno (gui.py)
+customtkinter
+pillow
