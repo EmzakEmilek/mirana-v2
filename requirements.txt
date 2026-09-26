@@ -16,3 +16,4 @@ websockets
 # ovladacie okno (gui.py)
 customtkinter
 pillow
+ruamel.yaml   # nastavenia z okna zapisuju config.yaml so zachovanim komentarov

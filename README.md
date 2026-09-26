@@ -41,7 +41,11 @@ vypíše `venv\Scripts\python -m sounddevice`; odporúčaný tvar je `"názov, W
 
 - stav (STANDBY / POČÚVAM / SPRACOVÁVAM / HOVORÍ / STLMENÁ), dnešná útrata so stropom,
 - priebeh rozhovoru (tvoja otázka, Miranina odpoveď),
-- tlačidlá **Vypnúť/Spustiť**, **Stlmiť (F11)**, **HUD**, **Logy**, **Nastavenia** (otvorí config.yaml).
+- tlačidlá **Vypnúť/Spustiť**, **Stlmiť (F11)**, **HUD**, **Logy**, **Nastavenia**.
+
+**Nastavenia** (bez editovania súborov): mikrofón a výstup s testom, klávesy, hlas s ukážkou (rýchlosť, výška,
+fonetika), model a effort, denný strop, pamäť, prepis reči, filler hlášky, HUD, bezpečnostný filter a persona.
+„Uložiť a reštartovať“ ich hneď použije. Pred každým uložením sa zálohuje `data/config.yaml.bak` a `data/persona.md.bak`.
 
 Zatvorenie okna Miranu vypne. Ikonu vytvoríš raz príkazom `venv\Scripts\python install_shortcut.py`.
 
@@ -52,7 +56,7 @@ Prvý štart stiahne Whisper model (~1,5 GB) a vygeneruje filler hlášky do `fi
 
 ## Konfigurácia
 
-Všetko je v `config.yaml`, kód netreba meniť:
+Všetko sa dá nastaviť v okne (Nastavenia) alebo priamo v `config.yaml`:
 
 - `llm.model`: `claude-opus-5-5` (presnejší) alebo `claude-opus-5` (o ~1 s rýchlejší, podobná cena)
 - `limits.daily_usd_cap`: tvrdý denný strop na LLM (predvolene $5)
@@ -78,7 +82,8 @@ je vo free tieri (500 000 znakov/mesiac, ~15 streamov). Podrobnosti v [SPEC.md](
 
 | súbor | úloha |
 |---|---|
-| `gui.py` | ovládacie okno (ikona na ploche) |
+| `gui.py`, `gui_settings.py` | ovládacie okno a nastavenia (ikona na ploche) |
+| `core/settings.py` | zápis config.yaml a persona.md so zachovaním komentárov |
 | `main.py` | stavový automat, poradie udalostí, pamäť |
 | `run.py` | supervisor (reštart, heartbeat) |
 | `core/brain.py` | Whisper → Claude, streaming po vetách |

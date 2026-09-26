@@ -18,7 +18,7 @@ import webbrowser
 import customtkinter as ctk
 from websockets.sync.client import connect
 
-from core.config import BASE_DIR, CONFIG_PATH, load_config
+from core.config import BASE_DIR, load_config
 from core.session import LOGS_DIR
 
 YELLOW, CYAN, RED, DIM = "#FCEE0A", "#00F0FF", "#FF003C", "#7d7d85"
@@ -46,6 +46,8 @@ class App(ctk.CTk):
         self.starting_since: float | None = None
         self.events: queue.Queue = queue.Queue()
         self.mirana_line_open = False
+        self.restart_pending = False
+        self.settings_window = None
 
         self.title("MIRANA")
         self.geometry("560x620")
@@ -85,7 +87,7 @@ class App(ctk.CTk):
                                       fg_color=PANEL, hover_color="#26262c", border_width=1, border_color=RED, **style)
         self.btn_mute.pack(side="left", padx=4)
         for label, cmd in (("HUD", self._open_hud), ("Logy", lambda: os.startfile(LOGS_DIR)),
-                           ("Nastavenia", lambda: subprocess.Popen(["notepad.exe", str(CONFIG_PATH)]))):
+                           ("Nastavenia", self._open_settings)):
             ctk.CTkButton(buttons, text=label, command=cmd, width=80, fg_color=PANEL, hover_color="#26262c",
                           border_width=1, border_color="#33333a", **style).pack(side="left", padx=4)
 
@@ -145,21 +147,46 @@ class App(ctk.CTk):
     def _stop(self, wait: bool = False) -> None:
         self._set_status("stopping")
         self._send("quit")
+        proc = self.proc
         if wait:
             deadline = time.time() + 8
-            while self.proc is not None and self.proc.poll() is None and time.time() < deadline:
+            while proc is not None and proc.poll() is None and time.time() < deadline:
                 time.sleep(0.2)
-            self._kill_tree()
+            self._kill_tree(proc)
         else:
-            self.after(8000, self._kill_tree)  # ak by nereagovala, zabi supervisor aj Miranu
+            # ak by nereagovala, zabi supervisor aj Miranu — prave tento proces, nie novy po restarte
+            self.after(8000, lambda: self._kill_tree(proc))
 
-    def _kill_tree(self) -> None:
-        if self.proc is not None and self.proc.poll() is None:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(self.proc.pid)],
+    def _kill_tree(self, proc: subprocess.Popen | None = None) -> None:
+        proc = proc if proc is not None else self.proc
+        if proc is not None and proc.poll() is None:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
                            creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
-        self.proc = None
-        if not self.connected:
+        if proc is self.proc:
+            self.proc = None
+        if not self.connected and self.proc is None:
             self._set_status("offline")
+
+    def _open_settings(self) -> None:
+        from gui_settings import SettingsWindow
+
+        if self.settings_window is not None and self.settings_window.winfo_exists():
+            self.settings_window.focus_force()
+            return
+        self.settings_window = SettingsWindow(self)
+
+    def on_settings_saved(self, restart: bool) -> None:
+        self.port = load_config()["overlay"]["port"]
+        running = self.connected or (self.proc is not None and self.proc.poll() is None)
+        if restart and running:
+            self._write("Nastavenia uložené, reštartujem Miranu…", "sys")
+            self.restart_pending = True
+            self._stop()
+        elif restart:
+            self._write("Nastavenia uložené.", "sys")
+            self._start()
+        else:
+            self._write("Nastavenia uložené. Prejavia sa po reštarte Mirany.", "sys")
 
     def _send(self, cmd: str) -> None:
         ws = self.ws
@@ -219,6 +246,10 @@ class App(ctk.CTk):
         if self.proc is not None and self.proc.poll() is not None and not self.connected:
             self.proc = None
             self._set_status("offline")
+        if self.restart_pending and not self.connected and (self.proc is None or self.proc.poll() is not None):
+            self.restart_pending = False
+            self.proc = None
+            self._start()
         self.after(100, self._pump)
 
     def _on_event(self, ev: dict) -> None:
