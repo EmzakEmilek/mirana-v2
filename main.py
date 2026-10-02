@@ -128,6 +128,8 @@ class Mirana:
             on_recording=lambda wav: self._events.put(("recording", wav)),
         )
         self.ptt.on_level = self.overlay.level
+        if hasattr(self.brain.stt, "begin"):  # Azure: prepis bezi uz pocas drzania PTT
+            self.ptt.stream_stt = self.brain.stt
         gs = config.get("game_state", {})
         self.speak_on = set(gs.get("speak_on", []))
         self.proactive_cooldown = config["limits"].get("proactive_cooldown_sec", 300)

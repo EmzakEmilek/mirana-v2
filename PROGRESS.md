@@ -178,6 +178,18 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   co je" z lore vzdy hladaj (Sonnet low si inak vymyslal, napr. Mox). Test Sonnet 5.5 low: Tanishi, Padre, Dum Dum, Scalpel,
   Mox, Royce, Dex spravne; spoilery (Jackie, Evelyn, Takemura) drzane; cena aj prva veta bez zmeny (~4.8 s median).
   Model prepnuty na Sonnet 5.5 low.
+- KONTROLA A VYLEPSENIA (2026-10-02, body z kontroly podla Erikovho vyberu):
+  * opravy: HUD fit glitch (animacia prepisovala transform), prikazy z prehliadaca (Origin) odmietnute, makky limiter
+    nad 100 % hlasitosti, prerusena odpoved v rozpocte, aktualny riadok Hra v okne, requests v requirements, komentare
+  * persona: rozpory (internet vs wiki, humor, neistota vs hladanie), [CHAT_SUB] prec, [STREAM], [WIKI], poradie smrti
+  * pamat bez [HRA]/[CHAT] (85 % pamate) -> 30/15 vymen za rovnaku cenu
+  * wiki predhladanie: index 17k nazvov, "kto je X" -> clanok v sprave; Padre 4.7->1.9 s, Tanishi 9.2->2.2 s, Royce 9.9->2.4 s
+  * mod v5 kazdu 1 s, citanie 0.5 s; znacky na strih (mouse_x2, decapi.me uptime), automaticke momenty, [STREAM];
+    panic mute presunuty na F11; HUD: databaza, bannery, hviezdy, pocitadlo smrti, kriticke HP, flatline
+  * ZAMIETNUTE po merani: Azure STT (0.25 s, ale mena z hry zle: "mel strom", "rok" = Rogue; phrase list usekol vetu)
+    -> ostava Whisper, Azure ako volba; TTS streaming (syntéza vety 0.25 s, zisk ~0.12 s); bez premyslania
+    (Sonnet between_tools pomalsi 2.66 vs 2.15 s a cital nahlas vlastne uvahy)
+  * namerane pre dalsiu fazu: obrazovka (vision) +0.24 c (Sonnet, 1280 px) a +0.17 s k prvej vete
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

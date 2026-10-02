@@ -17,7 +17,8 @@ Cyberpunk 2077 ─► CET mod ─► state.json ─► riadok [HRA] + herné uda
 |---|---|
 | **zadné bočné tlačidlo myši** (drž) | nahrávanie otázky; pustenie = odoslanie |
 | to isté počas odpovede | preruší ju a počúva novú otázku |
-| **predné bočné tlačidlo myši** | panic mute: okamžite stíchne a ignoruje otázky; znova = späť |
+| **predné bočné tlačidlo myši** (ťuk) | značka na strih: čas vo VOD-ke do `logs/strih-<dátum>.md` |
+| **F11** | panic mute: okamžite stíchne a ignoruje otázky; znova = späť |
 
 Obe sa menia v Nastaveniach → Zvuk (tlačidlo **Stlačiť…** a stlač, čo chceš: kláves alebo tlačidlo myši).
 Hra tlačidlo dostane tiež, preto nech v nej nemá priradenú akciu.
@@ -120,7 +121,24 @@ nízke HP, level, quest, neobjavené miesto) do `data/sim_state.json`; Miranu vt
 Pri otázkach „kto je / čo je“ z lore si Mirana pozrie **Cyberpunk Fandom wiki** (verejné MediaWiki API, bez kľúča,
 `core/wiki.py`) a pritom nahlas povie hlášku („hľadám v databáze“, `fillers.search_lines`). Posiela sa jej
 vybraná časť infoboxu (bez stavu a smrti postavy) a začiatok článku; persona z neho nesmie prezradiť spoilery.
-Hľadanie trvá ~1 s + jedno kolo modelu; s wiki stačí aj Sonnet 5.5 low. Vypína sa v Nastaveniach → Fillery.
+Pri otázkach typu „kto je Padre?“ sa článok nájde **vopred** podľa zoznamu názvov článkov (17 000, `data/wiki_titles.json`,
+obnova raz týždenne) a priloží sa k otázke ako `[WIKI …]` — bez ďalšieho kola modelu: lore otázka 4,7–9,9 s → 1,9–2,4 s.
+Keď predhľadanie nič nenájde, Mirana si hľadá sama nástrojom (s hláškou). Na HUD beží „PRÍSTUP DO DATABÁZY“
+a potom názov článku. S wiki stačí aj Sonnet 5.5 low. Vypína sa v Nastaveniach → Fillery.
+
+## Momenty na strih
+
+Ťuknutie na predné bočné tlačidlo myši zapíše do `logs/strih-<dátum>.md` čas vo VOD-ke (koľko stream bežal,
+z verejného decapi.me — netreba prihlásenie), hodiny a kontext (kde si bol, posledná otázka a odpoveď).
+Automaticky sa zapíšu aj smrti, levely, dokončené hlavné questy a policajné naháňačky od 3 hviezd.
+Na „Mirana, zhrň stream“ dostane Mirana štatistiky (`[STREAM]`: dĺžka, smrti, levely, questy, značky).
+
+## HUD efekty
+
+- prístup do databázy pri hľadaní vo wiki (skenovanie a názov článku)
+- banner pri leveli, dokončenom queste, smrti („FLATLINE #3“) a policajných hviezdach
+- v hlavičke hviezdy polície (blikajú) a počítadlo smrtí za dnešok
+- pri kritickom HP červený tep okraja aj jadra, pri smrti záblesk
 
 ## Twitch chat
 
@@ -168,7 +186,9 @@ Pauzu zakryje filler hláška.
 - `logs/mirana-<čas>.log`: celý beh session (vrátane herných udalostí a chýb CET modu)
 - `logs/rozhovor-<čas>.jsonl`: každá otázka s riadkom [HRA], odpoveďou, časmi a cenou
 - `logs/supervisor.log`: reštarty
-- `data/budget.json`: dnešná útrata
+- `logs/strih-<dátum>.md`: momenty na strih (značky, smrti, levely…)
+- `logs/poznamky.md`: „Mirana, zapíš si do logu…“
+- `data/budget.json`: dnešná útrata, `data/stream_stats.json`: štatistiky dňa
 
 ## Štruktúra
 
@@ -180,6 +200,7 @@ Pauzu zakryje filler hláška.
 | `core/brain.py` | Claude, streaming po vetách, prompt cache |
 | `core/stt.py` | lokálny faster-whisper alebo Whisper API, filter halucinácií |
 | `core/wiki.py` | Cyberpunk Fandom wiki ako nástroj pre model |
+| `core/highlights.py` | momenty na strih, čas vo VOD-ke, štatistiky streamu |
 | `core/memory.py` | pamäť rozhovoru (12 výmen, orez na 6) |
 | `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |
 | `core/config.py`, `core/settings.py` | načítanie configu a .env; zápis so zachovaním komentárov |

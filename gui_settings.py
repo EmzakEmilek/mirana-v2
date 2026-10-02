@@ -356,8 +356,9 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _tab_stt(self, tab):
         stt = self.cfg["stt"]
-        self._combo(tab, "stt.provider", "Prepis reči", ["local", "api"], stt["provider"], width=160,
-                    hint="local = Whisper na tvojej grafike (zadarmo). api = OpenAI Whisper (treba OPENAI_API_KEY).")
+        self._combo(tab, "stt.provider", "Prepis reči", ["azure", "local", "api"], stt["provider"], width=160,
+                    hint="local = Whisper na grafike (najlepšie mená z hry). azure = Azure Speech: o ~2 s rýchlejší v hre, "
+                         "ale mená z hry prepisuje zle. api = OpenAI Whisper.")
         self._combo(tab, "stt.local_model", "Whisper model", STT_MODELS, stt["local_model"], width=200,
                     hint="medium = overený kompromis. large-v3 = presnejší, ~2× pomalší, viac VRAM. "
                          "large-v3-turbo v teste prekladal do angličtiny.")

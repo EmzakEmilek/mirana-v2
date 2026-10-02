@@ -63,6 +63,7 @@ class PushToTalk:
         self.on_start = on_start
         self.on_panic = None  # callback() pri stlaceni panic_mute_key (F11)
         self.on_level = None  # callback(0..1) pocas nahravania, ~20x/s — HUD reaguje na Erikov hlas
+        self.stream_stt = None  # STT so streamovanim (Azure): begin() pri stlaceni, feed() pocas nahravania
         self._level_frames = 0
 
         audio_cfg = config["audio"]
@@ -91,6 +92,11 @@ class PushToTalk:
     def _audio_callback(self, indata, frames, time_info, status):
         if self._recording:
             self._frames.append(indata.copy())
+            if self.stream_stt is not None:
+                try:
+                    self.stream_stt.feed(indata)
+                except Exception:
+                    pass  # prepis zlyha neskor sam; audio callback nesmie spadnut
             if self.on_level is not None:
                 self._level_frames += frames
                 if self._level_frames >= self.sample_rate // 20:
@@ -118,6 +124,8 @@ class PushToTalk:
         # pynput posiela opakovane press eventy pocas drzania — flag to zachyti
         if key == self.ptt_key and not self._recording:
             self._frames = []
+            if self.stream_stt is not None:
+                self.stream_stt.begin(self.sample_rate)
             self._recording = True
             if self.on_start is not None:
                 self.on_start()

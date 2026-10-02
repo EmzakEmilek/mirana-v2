@@ -10,7 +10,9 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
+import wave
 from pathlib import Path
 
 import numpy as np
@@ -122,13 +124,134 @@ class LocalStt:
         return bool(prefix) and difflib.SequenceMatcher(None, text.lower().strip(" .:"), prefix.strip(" .:")).ratio() > 0.7
 
 
+class AzureStt:
+    """Azure Speech (sk-SK) so streamovanim: zvuk ide do Azure uz pocas drzania PTT, po pusteni ostava
+    len dokoncenie (~0.25 s). Nezatazuje grafiku a nepotrebuje VRAM. ALE: test 2026-10-02 — mena z hry
+    prepisuje zle ("mel strom", "sande vista", "rok" = Rogue), preto je predvoleny Whisper (stt.provider: local).
+
+    begin() pri stlaceni PTT, feed(ramce) z audio callbacku, transcribe() po pusteni. Bez begin()
+    (napr. test) transcribe(wav) posle celu nahravku naraz.
+    """
+
+    RATE = 16000
+
+    def __init__(self, stt_cfg: dict):
+        import azure.cognitiveservices.speech as speechsdk
+
+        self.sdk = speechsdk
+        self.config = speechsdk.SpeechConfig(subscription=os.environ.get("AZURE_SPEECH_KEY"),
+                                             region=os.environ.get("AZURE_SPEECH_REGION"))
+        self.config.speech_recognition_language = stt_cfg.get("azure_language", "sk-SK")
+        # krátka pauza v reci nesmie ukoncit prepis — PTT urcuje koniec samo
+        self.config.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "2000")
+        self.config.set_profanity(speechsdk.ProfanityOption.Raw)  # inak by nadavky prisli ako "*****"
+        # Phrase list (slovnik nazvov) Azure v teste 2026-10-02 usekol vetu za "Mirana," — preto vypnuty.
+        self.phrases = list(stt_cfg.get("azure_phrases") or [])
+        self._lock = threading.Lock()
+        self._session = None
+        logger.info("Azure STT (%s), %d frazi v slovniku", self.config.speech_recognition_language, len(self.phrases))
+
+    # --- streamovanie pocas PTT -----------------------------------------------------------------
+
+    def begin(self, input_rate: int) -> None:
+        """Nova nahravka: otvori push stream hned (rychle), spojenie s Azure sa nadviaze na pozadi."""
+        sdk = self.sdk
+        fmt = sdk.audio.AudioStreamFormat(samples_per_second=self.RATE, bits_per_sample=16, channels=1)
+        push = sdk.audio.PushAudioInputStream(stream_format=fmt)
+        session = {"push": push, "rate": input_rate, "texts": [], "done": threading.Event(),
+                   "recognizer": None, "ready": threading.Event(), "error": None}
+        with self._lock:
+            old, self._session = self._session, session
+        if old is not None:
+            self._close(old)
+        threading.Thread(target=self._start, args=(session,), name="azure-stt", daemon=True).start()
+
+    def _start(self, session: dict) -> None:
+        sdk = self.sdk
+        try:
+            audio = sdk.audio.AudioConfig(stream=session["push"])
+            recognizer = sdk.SpeechRecognizer(speech_config=self.config, audio_config=audio)
+            phrases = sdk.PhraseListGrammar.from_recognizer(recognizer)
+            for phrase in self.phrases:
+                phrases.addPhrase(phrase)
+            recognizer.recognized.connect(
+                lambda evt: session["texts"].append(evt.result.text)
+                if evt.result.reason == sdk.ResultReason.RecognizedSpeech and evt.result.text else None)
+            recognizer.session_stopped.connect(lambda evt: session["done"].set())
+            recognizer.canceled.connect(lambda evt: self._canceled(session, evt))
+            session["recognizer"] = recognizer
+            recognizer.start_continuous_recognition_async().get()
+        except Exception as e:
+            session["error"] = str(e)
+            session["done"].set()
+        finally:
+            session["ready"].set()
+
+    def _canceled(self, session: dict, evt) -> None:
+        details = getattr(evt, "cancellation_details", None) or getattr(evt.result, "cancellation_details", None)
+        reason = getattr(details, "reason", None)
+        if reason is not None and reason != self.sdk.CancellationReason.EndOfStream:
+            session["error"] = f"{reason}: {getattr(details, 'error_details', '')}"
+        session["done"].set()
+
+    def feed(self, frames: np.ndarray) -> None:
+        """int16 ramce z mikrofonu (z audio callbacku — musi byt rychle)."""
+        session = self._session
+        if session is None:
+            return
+        mono = frames[:, 0] if frames.ndim > 1 else frames
+        rate = session["rate"]
+        if rate != self.RATE:
+            if rate % self.RATE == 0:  # 48 kHz -> 16 kHz: priemer trojic (staci na rec)
+                k = rate // self.RATE
+                mono = mono[: len(mono) // k * k].reshape(-1, k).mean(axis=1)
+            else:
+                n = int(len(mono) * self.RATE / rate)
+                mono = np.interp(np.linspace(0, len(mono) - 1, n), np.arange(len(mono)), mono)
+            mono = mono.astype(np.int16)
+        session["push"].write(mono.tobytes())
+
+    def _close(self, session: dict, timeout: float = 6.0) -> str | None:
+        try:
+            session["push"].close()  # koniec zvuku -> Azure doda posledny vysledok a ukonci session
+        except Exception:
+            pass
+        session["ready"].wait(timeout=timeout)
+        session["done"].wait(timeout=timeout)
+        recognizer = session["recognizer"]
+        if recognizer is not None:
+            try:
+                recognizer.stop_continuous_recognition_async().get()
+            except Exception:
+                pass
+        if session["error"]:
+            logger.warning("Azure STT zlyhalo: %s", session["error"])
+            return None
+        return " ".join(t.strip() for t in session["texts"] if t.strip())
+
+    def transcribe(self, wav_bytes: bytes) -> str | None:
+        with self._lock:
+            session, self._session = self._session, None
+        if session is None:  # bez streamovania: cela nahravka naraz
+            with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+                rate = wav_file.getframerate()
+                frames = np.frombuffer(wav_file.readframes(wav_file.getnframes()), dtype=np.int16)
+            self.begin(rate)
+            self.feed(frames)
+            with self._lock:
+                session, self._session = self._session, None
+        return self._close(session)
+
+
 def create_stt(config: dict):
     provider = config["stt"]["provider"]
+    if provider == "azure":
+        return AzureStt(config["stt"])
     if provider == "local":
         return LocalStt(config["stt"])
     if provider == "api":
         return ApiStt(config["stt"], config["limits"])
-    raise ValueError(f"neznamy stt.provider: {provider!r} (local | api)")
+    raise ValueError(f"neznamy stt.provider: {provider!r} (azure | local | api)")
 
 
 if __name__ == "__main__":

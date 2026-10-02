@@ -15,7 +15,8 @@ audio:
   marker_key: "mouse_x2"      # ťuknutie = značka na strih (čas vo VOD-ke) do logs/strih-<dátum>.md
 
 stt:
-  provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)
+  provider: "local"           # "local" (faster-whisper na GPU), "azure" (Azure Speech: rýchlejší, ale mená z hry prepisuje zle — test 2026-10-02), "api" (OpenAI Whisper)
+  azure_language: "sk-SK"
   api_model: "whisper-1"
   local_model: "medium"       # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
   local_device: "cuda"
