@@ -23,7 +23,8 @@ from outputs.voice_fx import PRESET_LABELS
 YELLOW, CYAN, RED, DIM = "#FCEE0A", "#00F0FF", "#FF003C", "#7d7d85"
 BG, PANEL, TEXT = "#0a0a0c", "#141418", "#e6e6e6"
 
-VOICES = ["sk-SK-ViktoriaNeural", "sk-SK-LukasNeural", "en-US-EmmaMultilingualNeural", "en-US-AvaMultilingualNeural"]
+VOICES = ["sk-SK-ViktoriaNeural", "sk-SK-LukasNeural", "en-US-EmmaMultilingualNeural", "en-US-AvaMultilingualNeural",
+          "pl-PL-AgnieszkaNeural", "pl-PL-ZofiaNeural"]  # poľské = slovenský text s poľským prízvukom, pre srandu
 MODELS = {
     "claude-opus-5-5": "najlepšie lore; low ~$1,50 / 4 h (občas kalky), medium ~$1,95 / 4 h, pomalší",
     "claude-sonnet-5-5": "najrýchlejší (low ~2 s), ~$0,95 / 4 h, čistá slovenčina, slabšie lore",
@@ -260,7 +261,7 @@ class SettingsWindow(ctk.CTkToplevel):
     def _tab_voice(self, tab):
         tts = self.cfg["tts"]
         self._combo(tab, "tts.voice", "Hlas (Azure)", VOICES, tts["voice"],
-                    hint="Viktoria = slovenský hlas. Emma/Ava = viacjazyčné, anglické mená vyslovia samy (fonetiku vypni).")
+                    hint="Viktoria = slovenský hlas. Emma/Ava = viacjazyčné (fonetiku vypni). Agnieszka/Zofia = poľský prízvuk, pre srandu.")
         self._slider(tab, "tts.rate", "Rýchlosť reči", _pct(tts["rate"]), -30, 50, lambda v: f"{v:+d} %",
                      hint="0 % = prirodzené tempo Azure. +10 až +20 % znie svižnejšie a stále zrozumiteľne.")
         self._slider(tab, "tts.sentence_pause_ms", "Pauza medzi vetami", tts.get("sentence_pause_ms", 250), 100, 800,
