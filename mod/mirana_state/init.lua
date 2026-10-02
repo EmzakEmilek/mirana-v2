@@ -1,6 +1,6 @@
 --[[
 MIRANA state — CET mod. Kazdu 1 s zapise stav hraca do state.json vo svojom priecinku
-(CET dovoli modu zapisovat len do vlastneho priecinka). Mirana (inputs/game_state.py) subor cita.
+(CET dovoli modu zapisovat len do vlastneho priecinka). Mirana (mirana/inputs/game_state.py) subor cita.
 
 Instalacia: priecinok mirana_state skopiruj do
   <Cyberpunk 2077>\bin\x64\plugins\cyber_engine_tweaks\mods\

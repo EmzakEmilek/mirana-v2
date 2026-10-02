@@ -31,7 +31,7 @@ GUI = {"state", "erik", "answer_start", "answer_append", "question", "budget", "
        "chat_status"}
 
 # prikazy z ovladacieho okna: {"type": "command", "cmd": ..., "text": ...}
-COMMANDS = {"mute", "quit", "ask", "memory_reload", "hud_test", "volume"}
+COMMANDS = {"mute", "quit", "ask", "memory_edit", "hud_test", "volume"}
 
 # spravy, ktore nove pripojenie dostane hned (aktualny stav); ostatne su jednorazove
 REMEMBERED = {"state", "telemetry", "budget", "game", "info", "chat_status"}

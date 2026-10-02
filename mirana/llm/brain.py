@@ -140,11 +140,6 @@ class Brain:
             "wiki po" if message.stop_reason == "tool_use" else "spolu", time.perf_counter() - started,
         )
 
-    def _route(self, user_text: str) -> tuple[str, str]:
-        if user_text.startswith("[CHAT_") and self.llm_cfg.get("chat_model"):
-            return self.llm_cfg["chat_model"], self.llm_cfg.get("chat_effort", self.llm_cfg["effort"])
-        return self.llm_cfg["model"], self.llm_cfg["effort"]
-
     def ask_stream(self, user_text: str, game_state_line: str | None, memory_messages: list[dict],
                    on_sentence=None, should_stop=None, on_lookup=None, image_b64: str | None = None) -> Answer:
         """Streamuje odpoved; kazdu hotovu vetu posle cez on_sentence(veta).
@@ -153,7 +148,7 @@ class Brain:
         Ked model siahne po wiki, on_lookup() sa zavola hned na zaciatku volania nastroja (hlaska
         "hladam v databaze"), vysledok ide spat modelu a odpoved pokracuje v dalsom kole.
         """
-        model, effort = self._route(user_text)
+        model, effort = self.llm_cfg["model"], self.llm_cfg["effort"]
         started = time.perf_counter()
         answer = Answer(ok=False, model=model)
         kwargs = dict(

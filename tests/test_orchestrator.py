@@ -212,3 +212,12 @@ def test_hud_test_command(mirana):
     mirana._on_command("hud_test", "level")
     pump(mirana, lambda: mirana.overlay.of("game_fx"), timeout=2)
     assert mirana.overlay.of("game_fx")[-1]["kind"] == "level_up"
+
+
+def test_memory_edit_command(mirana):
+    from mirana.features.longterm import LongTermFeature
+    memory = feature(mirana, LongTermFeature).memory
+    memory.data["erik"]["facts"] = ["hrá za Corpo", "má psa"]
+    mirana._on_command("memory_edit", json.dumps({"facts": ["hrá za Nomáda"], "notes": {}}))
+    assert memory.data["erik"]["facts"] == ["hrá za Nomáda"]
+    assert "hrá za Nomáda" in memory.block

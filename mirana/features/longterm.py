@@ -135,6 +135,15 @@ class LongTermMemory:
         data.setdefault("processed", {})
         return data
 
+    def apply_edit(self, edit: dict) -> None:
+        """Uprava z okna Nastavenia -> Pamat (cez prikaz memory_edit, ked Mirana bezi)."""
+        with self._lock:
+            self.data = apply_edit(self.data, edit)
+            self._dirty = True
+            self.block = self._build_block()
+        self.save(force=True)
+        logger.info("pamat upravena z okna")
+
     def reload(self) -> None:
         """Po uprave v Nastaveniach: nacitaj subor znova a obnov blok pre prompt."""
         with self._lock:
@@ -210,6 +219,8 @@ class LongTermMemory:
             streams = self.data["streams"]
             entry = next((s for s in streams if s.get("date") == today), None)
             if entry is None:
+                if minutes < 5 and not any(stats.get(k) for k in ("death", "level_up", "quest_completed", "marker")):
+                    return  # kratke spustenie (restart, skuska) nie je stream
                 entry = {"date": today, "minutes": 0, "highlights": []}
                 streams.append(entry)
                 del streams[:-MAX_STREAMS]
@@ -248,7 +259,8 @@ class LongTermMemory:
         if streams:
             lines = []
             for s in streams[-3:]:
-                text = (f"{s['date']}: {s['minutes'] // 60} h {s['minutes'] % 60} min, smrti {s.get('death', 0)}, "
+                length = f"{s['minutes'] // 60} h {s['minutes'] % 60} min, " if s.get("minutes") else ""  # 0 = dlzka neznama
+                text = (f"{s['date']}: {length}smrti {s.get('death', 0)}, "
                         f"levely {s.get('level_up', 0)}, questy {s.get('quest_completed', 0)}")
                 if s.get("highlights"):
                     text += " — " + "; ".join(s["highlights"][:3])
@@ -457,6 +469,23 @@ class LongTermMemory:
         threading.Thread(target=loop, name="longterm", daemon=True).start()
 
 
+def apply_edit(data: dict, edit: dict) -> dict:
+    """Uprava pamate z okna: {"facts": [...], "notes": {login: [...]}} alebo {"forget_all": true}.
+
+    Meni len fakty a poznamky (statistiky divakov, streamy a postup v hre ostavaju). Pri "zabudni
+    vsetko" ostanu oznacene spracovane sessions, aby sa stare logy nespracovali znova."""
+    if edit.get("forget_all"):
+        return {"version": 1, "game": {}, "streams": [], "erik": {"facts": []}, "viewers": {},
+                "processed": data.get("processed", {})}
+    if "facts" in edit:
+        data.setdefault("erik", {})["facts"] = [str(f).strip() for f in edit["facts"] if str(f).strip()]
+    notes = edit.get("notes")
+    if isinstance(notes, dict):
+        for login, v in (data.get("viewers") or {}).items():
+            v["notes"] = [str(n).strip() for n in notes.get(login, []) if str(n).strip()]
+    return data
+
+
 def _read_lines(path) -> list[str]:
     try:
         return path.read_text(encoding="utf-8").splitlines()
@@ -518,8 +547,8 @@ class LongTermFeature(Feature):
         turn.add("DIVÁCI", self.memory.viewers_line(self.app.chat.recent_logins(), question))
 
     def on_command(self, cmd: str, text: str | None) -> bool:
-        if cmd == "memory_reload":
-            self.memory.reload()
+        if cmd == "memory_edit" and text:
+            self.memory.apply_edit(json.loads(text))
             return True
         return False
 

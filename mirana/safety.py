@@ -1,7 +1,7 @@
 """Safety: posledna kontrola vety pred hlasom a HUD-om.
 
 Zachytena veta sa nevysloví ani nevypise, len zaloguje. Claude sam takmer nikdy nic zle nepovie —
-tento filter je poistka pre Kick TOS (nadavky na skupiny ludi, osobne udaje) a hlavne pre chat
+tento filter je poistka pre Twitch TOS (nadavky na skupiny ludi, osobne udaje) a hlavne pre chat
 divakov, kde sa niekto moze pokusit Miranu prinutit nieco zopakovat.
 
 Zoznam slov je v config.yaml (safety.blocked_words) — porovnava sa zaciatok slova bez ohladu na

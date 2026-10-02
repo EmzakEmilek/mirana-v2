@@ -1,41 +1,28 @@
 # MIRANA
 
-Hlasová AI parťáčka pre stream Cyberpunku 2077 (Twitch, neskôr Kick). Držíš bočné tlačidlo myši, povieš otázku po slovensky,
-pustíš, a Mirana odpovie hlasom do slúchadiel aj na HUD v OBS. Štýl Friday z Iron Mana: pokojná, bystrá,
-s ľahkým suchým humorom, občas zanadávaná, bez spoilerov. Vidí do hry cez CET mod (quest, zdravie, polícia,
-auto, cieľ pod zameriavačom…) a pri dôležitých udalostiach sa ozve sama.
+Hlasová AI parťáčka pre stream Cyberpunku 2077 na Twitchi. Držíš bočné tlačidlo myši, povieš otázku po slovensky,
+pustíš, a Mirana odpovie hlasom aj na HUD v OBS. Štýl Friday z Iron Mana: pokojná, bystrá, so suchým humorom,
+občas zanadávaná, bez spoilerov. Vidí do hry cez CET mod, pozrie sa na obrazovku, hľadá vo wiki, pamätá si
+streamy aj divákov a pri dôležitých udalostiach sa ozve sama.
 
 ```
-PTT ─► mikrofón ─► Whisper (lokálne, GPU) ─► Claude Opus 5.5 (streaming) ─► po vetách ─► Azure TTS ─► efekty ─► slúchadlá / Voicemeeter
-                                                  ▲                                  └─► HUD (WebSocket, OBS Browser Source)
-Cyberpunk 2077 ─► CET mod ─► state.json ─► riadok [HRA] + herné udalosti
+PTT ─► mikrofón ─► Whisper (lokálne, GPU) ─► Claude Sonnet 5.5 (streaming) ─► po vetách ─► Azure TTS ─► efekty ─► výstup
+                     [HRA] [WIKI] [OBRAZOVKA] [CHAT] [PAMÄŤ] ─┘                          └─► HUD (OBS Browser Source)
 ```
 
 ## Ovládanie
 
 | tlačidlo (predvolené) | čo robí |
 |---|---|
-| **zadné bočné tlačidlo myši** (drž) | nahrávanie otázky; pustenie = odoslanie |
-| to isté počas odpovede | preruší ju a počúva novú otázku |
+| **zadné bočné tlačidlo myši** (drž) | nahrávanie otázky; pustenie = odoslanie; počas odpovede ju preruší |
 | **predné bočné tlačidlo myši** (ťuk) | značka na strih: čas vo VOD-ke do `logs/strih-<dátum>.md` |
 | **F11** | panic mute: okamžite stíchne a ignoruje otázky; znova = späť |
 
-Obe sa menia v Nastaveniach → Zvuk (tlačidlo **Stlačiť…** a stlač, čo chceš: kláves alebo tlačidlo myši).
-Hra tlačidlo dostane tiež, preto nech v nej nemá priradenú akciu.
-
-HUD: `http://localhost:8080`; na streamovacom notebooku v OBS Browser Source `http://192.168.1.110:8080`
-(IP herného PC, alebo `http://ErikPC:8080`). Rozlíšenie zdroja: buď celá obrazovka (1920×1080, HUD dole v strede),
-alebo v tvare panela, napr. **1960×300** — vtedy HUD vyplní celý zdroj a v OBS ho stačí ťahať za rohy ako obrázok
-(väčšie rozlíšenie = ostrejší text pri zväčšení). Vo firewalle herného PC je pravidlo „MIRANA HUD (TCP 8080)" len pre domácu sieť.
-
-**Dual PC setup:** Mirana hrá na predvolený výstup Windows (`audio.output_device: "default"` = HDMI monitora
-→ strihová karta → notebook), rovnako ako hra, takže je v streame bez Voicemeeteru. Ak chceš Miranu aj
-v slúchadlách zvlášť, nastav ich ako druhý výstup (`audio.stream_output_device`, Nastavenia → Zvuk).
-Odpojené zariadenie Miranu nezhodí: hrá na predvolený výstup a nahráva z predvoleného mikrofónu.
+Mení sa v Nastaveniach → Zvuk. Otázka sa dá aj napísať do ovládacieho okna.
 
 ## Inštalácia
 
-Windows 11, Python 3.12, NVIDIA GPU (Whisper beží na CUDA; CUDA toolkit netreba, stačia pip balíky).
+Windows 11, Python 3.12, NVIDIA GPU (Whisper na CUDA; toolkit netreba, stačia pip balíky).
 
 ```bat
 python -m venv venv
@@ -44,200 +31,44 @@ copy .env.example .env
 venv\Scripts\python install_shortcut.py
 ```
 
-Do `.env` doplň kľúče: `ANTHROPIC_API_KEY` (+ `ANTHROPIC_WORKSPACE_ID`, ak kľúč nie je vytvorený vo workspace),
-`AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`. `OPENAI_API_KEY` treba len pri `stt.provider: api`,
-`KICK_*` až pre Kick chat.
-
-Mikrofón a výstup vyber v Nastaveniach → Zvuk (s testom). Presné názvy vypíše aj
-`venv\Scripts\python -m sounddevice` (snímka je v `audio-devices.txt`); odporúčaný tvar je `"názov, Windows WASAPI"`.
+Do `.env` doplň `ANTHROPIC_API_KEY` (+ `ANTHROPIC_WORKSPACE_ID`, ak kľúč nie je vytvorený vo workspace),
+`AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`; `OPENAI_API_KEY` len pri `stt.provider: api`.
+Pre telemetriu nainštaluj [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks/releases) a v okne
+Nastavenia → Hra **Nainštalovať mod**.
 
 ## Spustenie
 
-**Ikona MIRANA na ploche alebo v Štart menu.** Otvorí ovládacie okno, ktoré Miranu samo spustí:
+**Ikona MIRANA** otvorí ovládacie okno, ktoré skontroluje nastavenia, kľúče, zvuk, grafiku a hru (problémy vypíše
+s „⚠“) a Miranu spustí. Zatvorenie okna ju vypne. Bez okna: `start.bat`. Oboje ide cez `run.py`, ktorý Miranu pri
+páde alebo zamrznutí reštartuje. Prvý štart stiahne Whisper model (~1,5 GB) a vygeneruje filler hlášky.
 
-- stav (STANDBY / POČÚVAM / SPRACOVÁVAM / HOVORÍ / STLMENÁ), dnešná útrata so stropom,
-- riadok „Hra: …" s tým, čo Mirana práve vidí z hry,
-- priebeh rozhovoru (tvoja otázka, Miranina odpoveď, správy z chatu),
-- **Hlasitosť Mirany** (0–150 %): zaberie hneď, aj uprostred vety, a uloží sa,
-- **textové pole**: napíšeš otázku, Enter, a Mirana odpovie hlasom aj na HUD ako pri hovorenej otázke
-  (bez prepisu reči, preruší prípadnú rozbehnutú odpoveď; pri stlmení sa neodošle),
-- tlačidlá **Vypnúť/Spustiť**, **Stlmiť**, **HUD**, **Logy**, **Nastavenia**.
+**Dual PC stream:** Mirana hrá na predvolený výstup Windows (HDMI → strihová karta → notebook s OBS), takže je
+v streame bez Voicemeeteru. HUD v OBS na notebooku: Browser Source `http://<IP herného PC>:8080`.
 
-**Nastavenia** (bez editovania súborov), záložky:
+## Čo vie
 
-| záložka | čo sa tam nastavuje |
-|---|---|
-| Zvuk | mikrofón a výstup s testom, tlačidlo na hovor a panic mute |
-| Hlas | Azure hlas, **rýchlosť reči**, **pauza medzi vetami**, výška, fonetika, **efekty hlasu**, ukážka |
-| Model | model a effort, denný strop, pamäť, záložný model |
-| Hra | nájdenie hry, stav CET, inštalácia modu, prahy HP, odstup hlášok, kedy sa ozve sama |
-| Prepis | lokálny Whisper alebo API, model, jazyk (slovník názvov je v config.yaml) |
-| Fillery | hlášky na zakrytie pauzy (nahlas alebo len na HUD), oneskorenie; pripomienka po tichu |
-| HUD | zapnutie, port, tempo písania |
-| Chat | čítanie Twitch chatu, kanál, koľko správ vidí, ignorovaní boti |
-| Bezpečnosť | filter a zakázané slová |
-| Persona | celý text persona.md |
+- **hra** (CET mod): zdravie, quest, príbeh, postava, výbava, cieľ pod zameriavačom, polícia, auto; sama sa ozve pri smrti, kritickom HP, leveli…
+- **wiki**: pri „kto je X?“ článok z Cyberpunk Fandom wiki ešte pred odpoveďou
+- **obrazovka**: pri „čo je toto?“ snímka len okna hry
+- **pamäť**: postup v hre, streamy, fakty o tebe, diváci z chatu („zabudni Kuba“)
+- **chat**: číta Twitch chat, komentuje ho len na otázku
+- **momenty na strih**, štatistiky streamu, pripomienka po 10 min ticha, poznámky „zapíš si do logu…“
+- **HUD** s efektmi (databáza, sken, level, smrť, polícia), test efektov v Nastaveniach
 
-„Uložiť a reštartovať" ich hneď použije. Pred každým uložením sa zálohuje `data/config.yaml.bak` a `data/persona.md.bak`.
-Zatvorenie okna Miranu vypne.
-
-Bez okna: **`start.bat`** (konzola s logom). Oboje spúšťa `run.py` (supervisor), ktorý Miranu pri páde
-alebo zamrznutí reštartuje (najviac 5× za hodinu). Druhá inštancia sa nespustí.
-
-Prvý štart stiahne Whisper model (medium, ~1,5 GB) a vygeneruje filler hlášky do `fillers/`.
-
-## Telemetria z hry (CET)
-
-Mirana vie z hry:
-
-- **stav**: HP, nabitia liečenia a granátov, náboje v zásobníku (z kapacity), RAM, peniaze, či bojuješ, či si v scéne
-- **svet**: štvrť, čas v hre, počasie, polícia (hviezdy)
-- **quest**: sledovaný quest a cieľ; **príbeh**: dokončené hlavné questy (kam až si došiel, pre spoilery)
-- **postava**: level, street cred, atribúty, nerozdelené body, voľná kapacita kybervýzbroje
-- **výbava**: OS (cyberdeck/Sandevistan/Berserk), zbrane v slotoch, zbraň v ruke, brnenie
-- **cieľ pod zameriavačom**: meno, nepriateľ/civil/boss/mŕtvy, úroveň, zdravie; vozidlá a zariadenia
-- **auto**: vozidlo, rýchlosť, rádio a skladba
-
-Sama sa ozve pri kritickom HP, smrti, level-upe, novej štvrti, novom a dokončenom queste a keď ťa začne
-hľadať polícia (najviac raz za 5 min, nie skôr ako 30 s po tvojej otázke, kritické HP a smrť hneď,
-počas rozhovorov a cutscén mlčí). Názvy z hry prídu v jazyku hry (napr. po česky) a Mirana ich tak aj povie,
-reč okolo nich ostáva slovenská.
-
-1. Nainštaluj [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks/releases) (rozbaliť do priečinka hry).
-2. Okno MIRANA → Nastavenia → **Hra** → **Nainštalovať mod** (skopíruje `mod/mirana_state` do CET).
-   Po každej zmene `mod/mirana_state/init.lua` ho nainštaluj znova (pri vypnutej hre).
-3. Spusti hru. V hlavnom okne sa ukáže riadok „Hra: …". Ak niektorý údaj po patchi hry prestane chodiť,
-   Mirana to zapíše do logu („CET mod: tieto udaje nejdu") a ostatné idú ďalej.
-
-Mod zapisuje každé 2 s `state.json` do svojho priečinka; do promptu ide slovenský riadok `[HRA]`,
-nikdy surový JSON (v teste model zo surového JSON zle prepočítal HP). Prázdne údaje sa vynechajú.
-
-Bez hry: `venv\Scripts\python tools\simulate_game.py` zapisuje falošný stav (jazda, cutscéna, boj, polícia,
-nízke HP, level, quest, neobjavené miesto) do `data/sim_state.json`; Miranu vtedy spusti s
-`set MIRANA_GAME_STATE_PATH=C:\mirana-v2\data\sim_state.json`.
-
-## Wiki (lore)
-
-Pri otázkach „kto je / čo je“ z lore si Mirana pozrie **Cyberpunk Fandom wiki** (verejné MediaWiki API, bez kľúča,
-`core/wiki.py`) a pritom nahlas povie hlášku („hľadám v databáze“, `fillers.search_lines`). Posiela sa jej
-vybraná časť infoboxu (bez stavu a smrti postavy) a začiatok článku; persona z neho nesmie prezradiť spoilery.
-Pri otázkach typu „kto je Padre?“ sa článok nájde **vopred** podľa zoznamu názvov článkov (17 000, `data/wiki_titles.json`,
-obnova raz týždenne) a priloží sa k otázke ako `[WIKI …]` — bez ďalšieho kola modelu: lore otázka 4,7–9,9 s → 1,9–2,4 s.
-Keď predhľadanie nič nenájde, Mirana si hľadá sama nástrojom (s hláškou). Na HUD beží „PRÍSTUP DO DATABÁZY“
-a potom názov článku. S wiki stačí aj Sonnet 5.5 low. Vypína sa v Nastaveniach → Fillery.
-
-## Momenty na strih
-
-Ťuknutie na predné bočné tlačidlo myši zapíše do `logs/strih-<dátum>.md` čas vo VOD-ke (koľko stream bežal,
-z verejného decapi.me — netreba prihlásenie), hodiny a kontext (kde si bol, posledná otázka a odpoveď).
-Automaticky sa zapíšu aj smrti, levely, dokončené hlavné questy a policajné naháňačky od 3 hviezd.
-Na „Mirana, zhrň stream“ dostane Mirana štatistiky (`[STREAM]`: dĺžka, smrti, levely, questy, značky).
-
-## Dlhodobá pamäť
-
-`data/memory.json` (upraviteľné v Nastaveniach → **Pamäť**): postup v hre (automaticky z telemetrie), história
-streamov (dĺžka, smrti, levely, questy, 2–3 momenty), fakty o tebe a dohody (rozhodnutia v hre, štýl hrania,
-„nadávaj menej“…) a diváci z chatu (návštevy, sub/mod + 1–3 poznámky: čo radia, ako vtipkujú — nikdy osobné údaje).
-
-- Postup v hre a štatistiky divákov sa zapisujú priebežne. Fakty, poznámky o divákoch a momenty zhrnie model
-  (`longterm.model`, ~2–5 c za stream) každých 30 min a pri vypnutí; čo nestihne (pád), doplní ďalší štart.
-  Chat sa na to ukladá do `logs/chat-<čas>.jsonl`.
-- Do promptu ide blok `[PAMÄŤ]` (hra, streamy, fakty; v cache, nič nespomalí) a pri otázke `[DIVÁCI]` len o
-  divákoch, ktorí sú práve v chate alebo ich spomenieš. Divákov sama neoslovuje — len keď sa pýtaš alebo máš pozdraviť chat.
-- Hlasom: „čo o mne vieš?“, „čo vieš o Kubovi?“, „zabudni Kuba“ (zmaže poznámky o divákovi), „zabudni, že…“.
-- Vypnutie Mirany trvá o pár sekúnd dlhšie (ukladá pamäť, najviac ~25 s).
-
-## Mirana vidí hru
-
-Pri otázkach „čo je toto?“, „kto je to?“, „vidíš?“, „pozri…“ pošle Mirana modelu snímku **len okna hry**
-(`vision.window_title`, nikdy celý monitor) a odpovie podľa toho, čo vidí — na HUD prebehne „vizuálny sken“.
-Cena ~0,24 c za takú otázku (1280 px, Sonnet 5.5), +0,2 s k prvej vete. Snímka sa neukladá ani nejde do pamäte.
-Hra musí bežať v okne alebo okne bez okrajov (pri exkluzívnej celej obrazovke je snímka čierna a nepošle sa).
-
-## HUD efekty
-
-- prístup do databázy pri hľadaní vo wiki (skenovanie, pri dlhšom hľadaní sa hlášky striedajú každé 2 s — nahlas len prvá)
-- vizuálny sken, keď sa Mirana pozerá na snímku hry
-- banner pri leveli, dokončenom queste, smrti („FLATLINE #3“) a policajných hviezdach
-- v hlavičke hviezdy polície (blikajú) a počítadlo smrtí za dnešok
-- pri kritickom HP červený tep okraja aj jadra, pri smrti záblesk
-
-Všetky efekty sa dajú vyskúšať v Nastaveniach → HUD → **Test efektov** (Mirana musí bežať; len vizuál, nič nepovie).
-
-## Twitch chat
-
-Mirana chat **len číta** (anonymne, bez bota a tokenu, do chatu nič nepíše). Posledných 15 správ
-z posledných 5 minút dostane ako riadok `[CHAT]` ku každej tvojej otázke. Sama ich nekomentuje;
-použije ich, len keď sa spýtaš („čo píše chat?", „čo na to Kubo?"). Správy berie ako údaje, nie pokyny:
-pokusy divákov ju ovládať a spoilery z chatu ignoruje (otestované). Príkazy (`!…`) a boti sa preskočia.
-Nastavenie: okno → Nastavenia → **Chat** (kanál). Správy vidno aj v ovládacom okne (fialovou).
-
-## Konfigurácia
-
-Všetko sa dá nastaviť v okne (Nastavenia) alebo priamo v `config.yaml`:
-
-- `llm.model`: `claude-opus-5-5` (presnejší) alebo `claude-opus-5` (o ~1 s rýchlejší, podobná cena); effort `low`
-- `limits.daily_usd_cap`: tvrdý denný strop na LLM (predvolene $5)
-- `audio.ptt_key`, `audio.panic_mute_key`: kláves (`f4`) alebo tlačidlo myši (`mouse_x1` zadné bočné,
-  `mouse_x2` predné bočné, `mouse_middle`)
-- `stt.local_model`: Whisper `medium` (large-v3 je presnejší, ale v hre pomalší); `stt.local_vocabulary`: názvy z hry
-  (max 224 tokenov, Mirana pri prekročení varuje v logu)
-- `tts.voice`: Azure hlas; `phonetics.yaml`: ako vysloviť anglické názvy z hry
-- `tts.rate`: rýchlosť reči (−30 % až +50 %); `tts.sentence_pause_ms`: pauza medzi vetami (Azure dáva za
-  každú vetu ~840 ms ticha, Mirana ho oreže na 250 ms — odpoveď z 3 viet je tak o ~15 % kratšia)
-- `tts.effects.preset`: efekty hlasu `vypnute` | `jemny` | `night_city` | `robot` (filtre, bitcrusher, ring mod,
-  chorus, echo, kompresor; hlasitosť ostáva rovnaká). Doladenie v `tts.effects.params`.
-- `fillers.lines`: hlášky, ktoré zakryjú pauzu pred odpoveďou (z okna sa pri zmene pregenerujú samy);
-  `fillers.speak: false` = len na HUD, bez hlasu
-- `idle_nudge`: keď sa 10 min neozveš, Mirana sa vtipne pripomenie (môže siahnuť po stave hry); nie v boji
-  ani v cutscéne, najviac 3× za sebou, potom čaká, kým sa ozveš
-- `game_state.speak_on`: pri ktorých udalostiach z hry sa ozve sama
-- `safety.blocked_words`: vety s týmito slovami sa nevyslovia ani nevypíšu
-
-Osobnosť Mirany je v `persona.md` (Friday, stručné odpovede, spoiler pravidlá, občasné nadávky, práca s riadkom [HRA]).
+Podrobnosti: [docs/FUNKCIE.md](docs/FUNKCIE.md).
 
 ## Náklady
 
-Merané 2026-09-26 v hre s telemetriou: 53 otázok za **$0,38** (~0,7 c na otázku). 4-hodinový stream
-so 160 otázkami vyjde na **~$1,15–1,30** (Claude). Whisper beží lokálne a Azure TTS je vo free tieri
-(500 000 znakov/mesiac, ~15 streamov). Podrobnosti v [SPEC.md](SPEC.md) § Náklady.
+4-hodinový stream so Sonnet 5.5 low ~**$1** (Claude), zhrnutie do pamäte ~2–5 c. Whisper beží lokálne, Azure TTS
+je vo free tieri. Denný strop `limits.daily_usd_cap` (predvolene $5). Odozva: mimo hry ~3–4 s, v hre ~5–6 s
+(hra vyťažuje GPU); pauzu zakryje filler na HUD.
 
-Odozva (od pustenia tlačidla po prvý zvuk): mimo hry ~4 s, v hre ~6 s (hra vyťažuje GPU, prepis trvá dlhšie).
-Pauzu zakryje filler hláška.
+## Pre vývoj
 
-## Logy
+```bat
+venv\Scripts\pip install -r requirements-dev.txt
+venv\Scripts\python -m pytest
+```
 
-- `logs/mirana-<čas>.log`: celý beh session (vrátane herných udalostí a chýb CET modu)
-- `logs/rozhovor-<čas>.jsonl`: každá otázka s riadkom [HRA], odpoveďou, časmi a cenou
-- `logs/supervisor.log`: reštarty
-- `logs/strih-<dátum>.md`: momenty na strih (značky, smrti, levely…)
-- `logs/poznamky.md`: „Mirana, zapíš si do logu…“
-- `data/budget.json`: dnešná útrata, `data/stream_stats.json`: štatistiky dňa
-
-## Štruktúra
-
-| súbor | úloha |
-|---|---|
-| `gui.py`, `gui_settings.py` | ovládacie okno a nastavenia (ikona na ploche, `install_shortcut.py`) |
-| `main.py` | stavový automat, poradie udalostí, pamäť, proaktívne hlášky |
-| `run.py`, `start.bat` | supervisor (reštart, heartbeat), spustenie bez okna |
-| `core/brain.py` | Claude, streaming po vetách, prompt cache |
-| `core/stt.py` | lokálny faster-whisper alebo Whisper API, filter halucinácií |
-| `core/wiki.py` | Cyberpunk Fandom wiki ako nástroj pre model |
-| `core/longterm.py` | dlhodobá pamäť (hra, streamy, fakty o Erikovi, diváci) |
-| `core/vision.py` | snímka okna hry pre otázky „čo je toto?“ |
-| `core/highlights.py` | momenty na strih, čas vo VOD-ke, štatistiky streamu |
-| `core/memory.py` | pamäť rozhovoru (12 výmen, orez na 6) |
-| `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |
-| `core/config.py`, `core/settings.py` | načítanie configu a .env; zápis so zachovaním komentárov |
-| `inputs/ptt.py` | PTT (klávesnica aj myš), panic mute, nahrávanie |
-| `inputs/twitch_chat.py` | čítanie Twitch chatu (anonymné IRC), riadok [CHAT] |
-| `inputs/game_state.py` | stav hry → riadok [HRA], herné udalosti, nájdenie hry, inštalácia modu |
-| `mod/mirana_state/init.lua` | CET mod v hre |
-| `outputs/speaker.py`, `outputs/voice.py` | TTS po vetách, prehrávanie, fonetika |
-| `outputs/voice_fx.py` | efekty hlasu (pedalboard) |
-| `outputs/fillers.py`, `outputs/overlay.py` | filler hlášky, HUD server |
-| `overlay/index.html` | HUD |
-| `tools/simulate_game.py` | simulátor hry na testovanie bez Cyberpunku |
-
-Plán a stav: [SPEC.md](SPEC.md), [PROGRESS.md](PROGRESS.md), [POSTUP.md](POSTUP.md).
+Testy nehrajú zvuk ani nevolajú API. Stavba programu: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+zmeny: [CHANGELOG.md](CHANGELOG.md), plán a stav: [docs/SPEC.md](docs/SPEC.md), [docs/PROGRESS.md](docs/PROGRESS.md).

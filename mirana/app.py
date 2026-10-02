@@ -17,8 +17,10 @@ import time
 from enum import Enum, auto
 
 from mirana.budget import Budget
+from mirana import config as config_module
 from mirana.config import load_config
 from mirana.events import Answered, Fallback, GameEvent, Interrupted, Quit, Recording, Silent, Spoken, Typed
+from mirana.features.archive import LogArchive
 from mirana.features.highlights import HighlightsFeature
 from mirana.features.hud import Hud
 from mirana.features.idle import IdleNudge
@@ -44,7 +46,7 @@ logger = logging.getLogger(__name__)
 MAX_TYPED_CHARS = 500  # pisana otazka z ovladacieho okna
 
 # Poradie je dolezite: momenty na strih zapocitaju smrt skor, nez HUD ukaze jej cislo.
-FEATURES = (HighlightsFeature, Hud, LongTermFeature, WikiFeature, VisionFeature, IdleNudge, Notes)
+FEATURES = (HighlightsFeature, Hud, LongTermFeature, WikiFeature, VisionFeature, IdleNudge, Notes, LogArchive)
 
 
 class State(Enum):
@@ -87,8 +89,6 @@ class Mirana:
                               on_recording=lambda wav: self._events.put(Recording(wav)))
         self.ptt.on_level = self.overlay.level
         self.ptt.on_panic = self._on_panic
-        if hasattr(self.brain.stt, "begin"):  # Azure: prepis bezi uz pocas drzania PTT
-            self.ptt.stream_stt = self.brain.stt
         gs = config.get("game_state", {})
         self.speak_on = set(gs.get("speak_on", []))
         self.proactive_cooldown = config["limits"].get("proactive_cooldown_sec", 300)
@@ -463,7 +463,10 @@ class Mirana:
 def main() -> None:
     ensure_single_instance()
     cfg = load_config()
+    session_id = setup_logging(cfg)
+    for problem in config_module.problems:
+        logger.warning("config: %s", problem)
     try:
-        Mirana(cfg, setup_logging(cfg)).run()
+        Mirana(cfg, session_id).run()
     except KeyboardInterrupt:
         logger.info("Mirana vypnuta (Ctrl+C)")

@@ -61,7 +61,7 @@ Herný PC na kábli, nie Wi-Fi.
 21. ✅ **[ERIK]** Hra 2026-09-26: Mirana pozná quest, auto, políciu, cieľ; sama sa ozvala pri 3 hviezdach.
 22. ⏳ **[ERIK]** Ďalšie hranie po oprave modu v3: skontrolovať liečenie („5 z 6"), počasie a log bez
     „CET mod: tieto udaje nejdu".
-23. ⏳ **[CODE]** SPEC sekcia 5 bod 6 — `core/longterm.py` (po reštarte vie, kde Erik skončil).
+23. ⏳ **[CODE]** SPEC sekcia 5 bod 6 — `mirana/features/longterm.py` (po reštarte vie, kde Erik skončil).
 
 ## Fáza 5 — Kick chat ⏳
 
@@ -72,7 +72,7 @@ Herný PC na kábli, nie Wi-Fi.
 
 ## Fáza 6 — Zvuk a napojenie notebooku (čiastočne)
 
-28. ✅ **[CODE]** Efekty hlasu priamo v Mirane (`outputs/voice_fx.py`) — VST pluginy netreba.
+28. ✅ **[CODE]** Efekty hlasu priamo v Mirane (`mirana/outputs/voice_fx.py`) — VST pluginy netreba.
     Preset sa vyberá v Nastaveniach → Hlas (teraz `robot`).
 29. ✅ **[CODE]** Zvuk do streamu bez Voicemeeteru: Mirana hrá naraz do slúchadiel aj na predvolený výstup Windows
     (HDMI 24G1WG4 → strihová karta → notebook), `audio.stream_output_device: "default"`.
@@ -103,7 +103,7 @@ Herný PC na kábli, nie Wi-Fi.
 
 ## Práca s Claude Code
 
-1. Jeden prompt = jeden krok: „Postav len `inputs/kick_chat.py` podľa SPEC.md sekcia 6
+1. Jeden prompt = jeden krok: „Postav len jeden modul podľa SPEC.md
    krok 1. Nič iné."
 2. Po každom kroku to spustíš a overíš — Claude Code nepočuje reproduktory a nevidí hru.
 3. Commit po každom funkčnom kroku.

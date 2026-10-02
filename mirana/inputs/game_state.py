@@ -15,6 +15,8 @@ import logging
 import os
 import re
 import shutil
+import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -67,6 +69,40 @@ def install_mod(game_dir: Path) -> Path:
     target.mkdir(parents=True, exist_ok=True)
     shutil.copy2(MOD_SOURCE / "init.lua", target / "init.lua")
     return target / "state.json"
+
+
+def mod_version(path: Path) -> int | None:
+    """VERSION z init.lua (v repe alebo v hre), None ked subor chyba."""
+    try:
+        m = re.search(r"^local VERSION = (\d+)", path.read_text(encoding="utf-8"), re.M)
+    except OSError:
+        return None
+    return int(m.group(1)) if m else None
+
+
+def game_running() -> bool:
+    """Bezi Cyberpunk? (mod sa pocas hry neprepisuje — CET ho ma nacitany)."""
+    if sys.platform != "win32":
+        return False
+    try:
+        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Cyberpunk2077.exe", "/NH"], capture_output=True,
+                             text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW).stdout
+    except Exception:
+        return True  # radsej nic neprepisovat
+    return "Cyberpunk2077.exe" in out
+
+
+def update_mod(game_dir: Path | None) -> str | None:
+    """Novsi mod v repe -> skopiruje ho do hry (len ked hra nebezi). Vrati spravu pre okno, alebo None."""
+    if game_dir is None or not cet_installed(game_dir):
+        return None
+    repo, installed = mod_version(MOD_SOURCE / "init.lua"), mod_version(game_dir / MOD_SUBDIR / "init.lua")
+    if repo is None or (installed is not None and installed >= repo):
+        return None
+    if game_running():
+        return f"Mod mirana_state v{repo} sa nainštaluje po vypnutí hry (v hre je {installed or 'žiadny'})."
+    install_mod(game_dir)
+    return f"Mod mirana_state aktualizovaný: v{installed or '—'} → v{repo}."
 
 
 def resolve_json_path(cfg: dict) -> Path | None:

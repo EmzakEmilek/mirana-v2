@@ -65,6 +65,7 @@ class App(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._pump)
         self.after(1500, self._autostart)  # ak uz bezi (napr. zo start.bat), len sa pripoji
+        self._diagnose()
 
     # --- UI -----------------------------------------------------------------------------------
 
@@ -213,6 +214,7 @@ class App(ctk.CTk):
     def on_settings_saved(self, restart: bool) -> None:
         self.port = load_config()["overlay"]["port"]
         self._show_keys()
+        self._diagnose(quiet=True)  # novy problem v nastaveniach hned do okna
         running = self.connected or (self.proc is not None and self.proc.poll() is None)
         if restart and running:
             self._write("Nastavenia uložené, reštartujem Miranu…", "sys")
@@ -285,6 +287,29 @@ class App(ctk.CTk):
                 self.events.put(("disconnected", None))
             time.sleep(1)
 
+    def _diagnose(self, quiet: bool = False) -> None:
+        """Kontrola pri starte (nastavenia, kluce, zvuk, grafika, hra a mod) na pozadi; vysledok do okna."""
+        def run():
+            from mirana import config, diagnostics
+            try:
+                cfg = config.load_config()
+                checks = diagnostics.run_checks(cfg, config.problems)
+            except Exception as e:
+                checks = [diagnostics.Check(False, "Kontrola", f"zlyhala: {e}")]
+            self.events.put(("diagnostics", (checks, quiet)))
+        threading.Thread(target=run, name="diagnostics", daemon=True).start()
+
+    def _show_checks(self, checks, quiet: bool = False) -> None:
+        bad = [c for c in checks if not c.ok]
+        for c in bad:
+            self._write(f"⚠ {c.name}: {c.detail}", "sys")
+        for c in checks:
+            if c.ok and "aktualizovaný" in c.detail:
+                self._write(f"✓ {c.detail}", "sys")
+        if not bad and not quiet:
+            self._write(f"Kontrola pri štarte: všetko v poriadku ({len(checks)}).", "sys")
+        self.mirana_line_open = False
+
     def _pump(self) -> None:
         """Udalosti z WebSocket vlakna do UI (Tk sa smie volat len z hlavneho vlakna)."""
         try:
@@ -294,6 +319,8 @@ class App(ctk.CTk):
                     self.connected, self.starting_since = True, None
                     self._write("Mirana beží.", "sys")
                     self._set_status("idle")  # skutocny stav hned prepise udalost "state" zo servera
+                elif kind == "diagnostics":
+                    self._show_checks(*data)
                 elif kind == "disconnected":
                     self.connected = False
                     self._write("Mirana vypnutá.", "sys")

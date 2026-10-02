@@ -18,7 +18,7 @@ MIRANA_SRC = "".join(p.read_text(encoding="utf-8") for p in (BASE_DIR / "mirana"
 
 def test_every_event_has_a_receiver():
     hud = set(re.findall(r"case '(\w+)':", HUD_SRC))
-    gui = set(re.findall(r'kind == "(\w+)"', GUI_SRC)) - {"connected", "disconnected"}  # stav spojenia okna
+    gui = set(re.findall(r'kind == "(\w+)"', GUI_SRC)) - {"connected", "disconnected", "diagnostics"}  # vnutorne udalosti okna
     assert protocol.HUD <= hud, protocol.HUD - hud
     assert protocol.GUI <= gui, protocol.GUI - gui
     assert set(protocol.EVENTS) == protocol.HUD | protocol.GUI

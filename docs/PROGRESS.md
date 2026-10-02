@@ -1,66 +1,55 @@
 # Mirana v2 - PROGRESS
 
-Datum setupu: 2026-09-20 · Posledna aktualizacia: 2026-09-26
+Datum setupu: 2026-09-20 · Posledna aktualizacia: 2026-10-03
 Projekt: C:\mirana-v2
 Repo: https://github.com/EmzakEmilek/mirana-v2 (verejne)
 
-## Aktualny stav (2026-09-26)
+## Aktualny stav (2026-10-03)
 
 | faza | stav |
 |---|---|
 | 0 priprava | HOTOVA (okrem druheho mikrofonu) |
 | 1 jadro + 1b lokalny Whisper | HOTOVA |
 | 2 fillery + barge-in | HOTOVA |
-| 3 HUD | HOTOVA (v4, zive jadro) |
-| 4 telemetria z hry | HOTOVA (mod v3, 30+ udajov, proaktivne hlasky); ZOSTAVA dlhodoba pamat core/longterm.py |
-| 5 chat | Twitch chat len na citanie HOTOVY (2026-10-02); Kick s odpovedami NEZACATY |
-| 6 zvuk | efekty HOTOVE; dual vystup (sluchadla + HDMI do strihovej karty) HOTOVY; firewall 8080 HOTOVY; ZOSTAVA overit OBS na notebooku |
-| 7 hardening | HOTOVA; ZOSTAVA 8 h suchy beh |
-| navyse | ovladacie okno + Nastavenia (vsetko bez editovania suborov), ikona na ploche, simulator hry |
+| 3 HUD | HOTOVA (v4 + efekty, fit rezim pre OBS) |
+| 4 telemetria z hry | HOTOVA (mod v5, proaktivne hlasky, dlhodoba pamat) |
+| 5 chat | Twitch chat len na citanie HOTOVY; Kick zruseny (2026-10-03) |
+| 6 zvuk | HOTOVA (efekty, HDMI do strihovej karty, firewall 8080); prvy stream 2026-10-02 |
+| 7 hardening | HOTOVA; testy (89), diagnostika pri starte, bezpecne ukladanie |
+| navyse | wiki, snimka hry, momenty na strih, pamat divakov, ovladacie okno + Nastavenia zo schemy |
 
-Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk median 5.9 s
-(max 10.1 s), prepis v hre 1.6 s. 0 padov.
+Stavba programu: docs/ARCHITECTURE.md. Zmeny pre Erika: CHANGELOG.md.
 
 ## Aktualne nastavenie
 
-- LLM: claude-opus-5-5, effort low, server-side fallbacks, cache persony aj pamate; pamat 12 -> 6 vymen
-- STT: faster-whisper medium, cuda/float16, slovensky prefix + slovnik (211/224 tokenov), filter halucinacie promptu
-- TTS: Azure sk-SK-ViktoriaNeural + phonetics.yaml, rychlost 0 %, pauza medzi vetami 250 ms; efekty hlasu preset "robot"
-- PTT: zadne bocne tlacidlo mysi (mouse_x1), panic mute: predne bocne (mouse_x2)
-- Audio (2026-10-02): mikrofon Trust GXT 232, vystup = predvoleny vystup Windows (24G1WG4 HDMI -> strihova karta),
-  druhy vystup vypnuty, hlasitost 100 % (posuvnik v hlavnom okne); sluchadla G733 odpojene
-- Fillery: 5 hlasok, az po 1.3 s, len na HUD (bez hlasu)
-- Pripomienka po tichu: po 10 min, max 3 za sebou
-- Hra: Cyberpunk 2077 2.31 (GOG, cesky preklad), CET 1.37.1, mod mirana_state v3 nainstalovany
-- Proaktivne hlasky: hp_critical, hp_low, death, level_up, district_change, quest_changed, quest_completed, wanted_up
-- Persona: Friday, 1-2 vety, spoiler pravidla, ceske nazvy z hry, rozkazovaci sposob, obcasne nadavky
-- Denny strop $5
+- LLM: claude-sonnet-5-5, effort low, server-side fallbacks, cache persony, pamate a [PAMÄŤ]; pamat 30 -> 15 vymen
+- STT: faster-whisper medium, cuda/float16, slovensky prefix + slovnik, filter halucinacie promptu (Azure STT vyradeny)
+- TTS: Azure sk-SK-ViktoriaNeural + phonetics.yaml, rychlost +25 %, vyska +15 %, pauza 250 ms, efekt "robot"
+- PTT: zadne bocne tlacidlo mysi (mouse_x1), znacka na strih: predne bocne (mouse_x2), panic mute: F11
+- Audio: mikrofon Trust GXT 232, vystup = predvoleny vystup Windows (24G1WG4 HDMI -> strihova karta), hlasitost 150 %
+- Fillery: len na HUD; wiki hlasky nahlas (7); pripomienka po 10 min ticha, max 3 za sebou
+- Hra: Cyberpunk 2077 2.31 (GOG, cesky preklad), CET 1.37.1, mod mirana_state v5 (aktualizuje okno samo)
+- Twitch chat: emzakemil, len citanie; dlhodoba pamat: Sonnet 5.5, zhrnutie kazdych 30 min
+- Denny strop $5; logy starsie ako 14 dni do logs/archive/
 
-## Verzie (2026-09-26)
-- python 3.12.10, git 2.55.0, gh 2.101.0
-- anthropic 1.8.0 (oficialna podpora claude-opus-5-5), faster-whisper 1.2.1, ctranslate2 4.8.2,
-  pedalboard 0.9.25, customtkinter 6.0.0, websockets 17.1, numpy 2.5.3
-- pip check: bez konfliktov; zastarane len openai 3.16 (pouziva sa len pri stt.provider: api)
-- CET 1.37.1 = najnovsi release
+## Verzie (2026-10-03)
+- python 3.12.10; pevne verzie kniznic v requirements.txt (anthropic 1.8.0, faster-whisper 1.2.1, pedalboard 0.9.25,
+  customtkinter 6.0.0, websockets 17.1, numpy 2.5.3, ...); testy: requirements-dev.txt (pytest 9.1.1)
+- CET 1.37.1
 
 ## Caka na Erika
-- [ ] zahrat si po oprave modu v3: liecenie ma byt "5 z 6", pocasie v riadku, v logu ziadne "CET mod: tieto udaje nejdu"
-- [ ] vyskusat efekt hlasu v hre (robot vs night_city) a nadavky
-- [ ] pred streamom: vystup na Voicemeeter, VBAN na notebook, OBS Browser Source, firewall (POSTUP faza 6)
-- [ ] Kick kluce do .env, az pojde faza 5
+- [ ] dalsi stream po prestavbe (vlny 1-3): skontrolovat log a rozhovor (novy format zaznamu so zdrojom a kontextom)
 - [ ] druhy mikrofon do herneho PC (odlozene)
 
-## Dalsie kroky (navrh poradia)
-1. test modu v3 v hre
-2. core/longterm.py — po restarte vie, kde Erik skoncil (SPEC 5.6)
-3. audio routing na notebook (SPEC 7.2-7.3) a 8 h suchy beh
-4. Kick chat (SPEC 6)
+## Dalsie kroky (navrh)
+1. bod 10 z navrhu architektury (nastroje modelu ako register) — odlozeny
+2. bod 22 z kontroly (dalsia faza) podla Erika
+3. 8 h suchy beh
 
 ## Zname slabiny
-- odozva v hre ~6 s (GPU vytazuje hra); filler ju zakryje, ale je citelna
-- Whisper v akcii: skomoleniny ("gig" -> "gęk", "utekáme" -> "učekámo"); Mirana si vacsinou domysli alebo prizna, ze nerozumela
+- odozva v hre ~5-6 s (GPU vytazuje hra; Whisper v hre ~2.3 s); filler na HUD ju zakryje
+- Whisper v akcii: skomoleniny; Mirana si vacsinou domysli alebo prizna, ze nerozumela
 - ciel pod zameriavacom: civil, na ktoreho Erik zautocil, sa hlasi ako nepriatel (hra ho tak vedie)
-- scena (rozhovor/cutscena): v hre este neoverene, ci PSM HighLevel naozaj prichadza
 
 ## Historia
 
@@ -202,9 +191,22 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   [CHAT]) za 28 s. [PAMÄŤ] system blok s vlastnym cache breakpointom, [DIVÁCI] len pre divakov v chate/spomenutych,
   "zabudni X" (divak) / "zabudni, ze..." (model vyberie fakty). Nastavenia -> Pamat (fakty, poznamky "login: a | b",
   vymazat divakov, zabudnut vsetko -> memory_reload bez restartu). E2E test: pamat aj divaci spravne, zabudni funguje.
+- PRESTAVBA (2026-10-03, navrh architektury, vlny 1-3 okrem bodov 10 a 18; 18 nahradeny archivom logov):
+  * vlna 1: pytest (tests/), MIRANA_NO_AUDIO, pevne verzie, typove udalosti (events.py) + jeden _start_turn namiesto
+    4 kopii, protokol HUD/okno (protocol.py, telemetria s menami poli, neznamy prikaz odmietnuty), atomicke ukladanie
+    (store.py). Testy nasli: chybu v Nastaveniach (lambda s vynimkou), divak sa nenasiel vysklonovany ("Kuba") ani
+    podla casti nicku (Kubo_SK), kolizia pola "kind" v protokole — opravene.
+  * vlna 2: balik mirana/ (app = jadro; features: highlights, hud, longterm, wiki, vision, idle, notes, archive),
+    ui/ (okno), docs/; Turn s kontextom v pevnom poradi; zaznam rozhovoru so zdrojom, otazkou a kontextom (pamat cita
+    stary aj novy format); intents.py so vsetkymi klucovymi slovami — snimka hry 28 -> 14 zo 218 otazok (vsetky
+    zostavajuce su naozaj o obrazovke).
+  * vlna 3: schema.py (kazde nastavenie raz: default, typ, rozsah, popis) + kontrola pri nacitani (zla hodnota ->
+    predvolena + problem do diagnostiky); okno Nastavenia skladane zo schemy (ulozenie bez zmien = identicky
+    config.yaml, overene); diagnostika pri starte okna; automaticka aktualizacia modu (len ked hra nebezi);
+    uprava pamate z okna cez prikaz memory_edit; Azure STT a Kick odstranene; archiv logov do ZIP (overeny pred
+    zmazanim, poslednych 4 sessions ostava); ARCHITECTURE.md, FUNKCIE.md, CHANGELOG.md, kratsi README.
 
-## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
-Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.
-Vystup teraz: Speakers (Logitech G733 Gaming Headset), WASAPI.
-Pre stream: Voicemeeter Input (VB-Audio Voicemeeter VAIO), WASAPI -> VBAN -> notebook -> OBS (samostatna stopa).
-Indexy zariadeni sa menia; config pouziva presny tvar "nazov, Windows WASAPI".
+## Audio zariadenia (2026-10-02)
+Vstup: Microphone (Trust GXT 232 Microphone), WASAPI.
+Vystup: predvoleny vystup Windows = 24G1WG4 (NVIDIA High Definition Audio, HDMI) -> strihova karta -> notebook s OBS.
+Druhy vystup vypnuty; sluchadla G733 odpojene. Indexy zariadeni sa menia; config pouziva tvar "nazov, Windows WASAPI".

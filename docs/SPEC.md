@@ -14,10 +14,10 @@ fáza 5 nezačatá (podrobne v PROGRESS.md).
 3. Denný strop nákladov v kóde, tvrdý.
 4. Každý modul má vlastný try/except a smie zlyhať sám za seba. Supervisor
    reštartuje proces.
-5. Vstupy hádžu eventy do fronty, o poradí rozhoduje jedine main.py.
+5. Vstupy hádžu eventy do fronty, o poradí rozhoduje jedine jadro (mirana/app.py).
 6. Priorita: Erik (PTT) > herné eventy > chat.
 7. Model pozná CP2077 z tréningu, lore databáza sa nepoužíva.
-8. Konfigurácia patrí do config.yaml; všetko bežné sa dá nastaviť v okne (gui_settings.py).
+8. Konfigurácia patrí do config.yaml; všetko bežné sa dá nastaviť v okne (ui/settings_window.py, zo schémy).
 9. Do promptu ide len slovenský text, nikdy surový JSON ani anglické kľúče (drží to čistú slovenčinu).
 
 ---
@@ -26,48 +26,37 @@ fáza 5 nezačatá (podrobne v PROGRESS.md).
 
 ```
 mirana-v2/
-├── gui.py               # ovládacie okno (ikona na ploche), spúšťa run.py
-├── gui_settings.py      # okno Nastavenia — zapisuje config.yaml a persona.md
-├── install_shortcut.py  # ikona na plochu a do Štart menu
+├── gui.py               # spúšťač ovládacieho okna (ikona na ploche) → ui/control.py
+├── main.py              # spúšťač Mirany → mirana/app.py (spúšťa ho run.py)
 ├── run.py               # supervisor — spúšťa a reštartuje main.py, heartbeat
 ├── start.bat            # spustenie bez okna (konzola)
-├── main.py              # orchestrátor: event loop, priority, stavový automat
-├── config.yaml
-├── requirements.txt
+├── install_shortcut.py  # ikona na plochu a do Štart menu
+├── config.yaml          # Erikove nastavenia (predvolené hodnoty a kontrola: mirana/schema.py)
+├── persona.md, phonetics.yaml
+├── requirements.txt, requirements-dev.txt   # pevné verzie; dev = pytest
 ├── .env                 # API kľúče (necommitovať), šablóna .env.example
-├── persona.md
-├── phonetics.yaml       # anglicizmy → SK fonetika, len pre TTS
 │
-├── inputs/
-│   ├── ptt.py           # PTT (klávesnica aj myš) → nahrávka, panic mute
-│   ├── game_state.py    # state.json z CET modu → riadok [HRA] + eventy
-│   ├── twitch_chat.py   # Twitch chat len na čítanie → riadok [CHAT] k Erikovej otázke
-│   └── kick_chat.py     # PLÁN (fáza 5): Kick WebSocket, sub filter, fronta
+├── mirana/
+│   ├── app.py           # jadro: fronta udalostí, stavový automat, otázky (Turn), volanie funkcií
+│   ├── events.py, turn.py, intents.py      # udalosti fronty, otázka s kontextom, kľúčové slová
+│   ├── config.py, schema.py, settings.py   # načítanie + kontrola configu, zápis so zachovaním komentárov
+│   ├── protocol.py      # správy HUD/okno a príkazy z okna
+│   ├── store.py         # atomický zápis JSON, denné počítadlá
+│   ├── session.py, budget.py, memory.py, safety.py, diagnostics.py
+│   ├── llm/             # brain.py (Claude, streaming, cache, nástroj wiki), stt.py (Whisper)
+│   ├── inputs/          # ptt.py, game_state.py (CET mod, [HRA], udalosti), twitch_chat.py ([CHAT])
+│   ├── outputs/         # voice.py, voice_fx.py, speaker.py, fillers.py, overlay.py (HUD server)
+│   └── features/        # highlights, hud, longterm, wiki, vision, idle, notes, archive
 │
-├── core/
-│   ├── config.py        # načítanie config.yaml + .env, jediné miesto s cestami
-│   ├── settings.py      # zápis config.yaml / persona.md so zachovaním komentárov (ruamel.yaml)
-│   ├── brain.py         # LLM (Opus 5.5, streaming po vetách, prompt cache)
-│   ├── stt.py           # Whisper: local (faster-whisper, CUDA) | api (OpenAI), filter halucinácií
-│   ├── memory.py        # pamäť rozhovoru: 12 výmen, orez naraz na 6 (kvôli cache)
-│   ├── longterm.py      # PLÁN: data/memory.json — Erik (postup, fakty) + diváci, medzi sessions
-│   ├── budget.py        # denný strop (data/budget.json), cena každej odpovede
-│   ├── session.py       # logy do logs/, záznam rozhovoru (jsonl), zámok proti 2. inštancii
-│   └── safety.py        # výstupný filter pred TTS
-│
-├── outputs/
-│   ├── voice.py         # Azure TTS (s timeoutom), fonetika, prehrávanie, okamžitý stop
-│   ├── voice_fx.py      # efekty hlasu (pedalboard): filtre, bitcrusher, ring mod, chorus, echo
-│   ├── speaker.py       # streaming reči: vety → TTS vlákno → prehrávacie vlákno
-│   ├── fillers.py       # generovanie a prehrávanie filler hlášok
-│   └── overlay.py       # HTTP + WebSocket server pre HUD
-│
+├── ui/                  # control.py (ovládacie okno), settings_window.py (Nastavenia zo schémy)
+├── tests/               # pytest: bez siete, zvuku a modelu
+├── docs/                # ARCHITECTURE, FUNKCIE, SPEC, PROGRESS, POSTUP
 ├── tools/simulate_game.py  # falošný state.json na testovanie bez hry
 ├── assets/              # ikona
-├── fillers/             # predgenerované WAV, vznikne pri prvom spustení (necommitovať)
-├── data/                # budget.json, heartbeat, zálohy nastavení, sim_state.json (necommitovať)
-├── logs/                # mirana-<čas>.log, rozhovor-<čas>.jsonl, supervisor.log (necommitovať)
-├── overlay/index.html   # HUD (živé jadro, písanie po vetách)
+├── fillers/             # predgenerované WAV (necommitovať)
+├── data/                # pamäť, rozpočet, štatistiky, wiki index, zálohy nastavení (necommitovať)
+├── logs/                # logy sessions, rozhovory, chat, strih, archive/ (necommitovať)
+├── overlay/index.html   # HUD
 └── mod/mirana_state/init.lua  # CET mod
 ```
 
@@ -75,19 +64,19 @@ mirana-v2/
 
 ## 2. Fáza 1 — Jadro (PTT → STT → LLM → TTS) — HOTOVÁ
 
-1. `inputs/ptt.py` — pynput + sounddevice: drž PTT → nahrávaj z `audio.input_device`
+1. `mirana/inputs/ptt.py` — pynput + sounddevice: drž PTT → nahrávaj z `audio.input_device`
    (stream je otvorený stále) → pusti → WAV v pamäti. PTT aj panic mute môžu byť kláves alebo
    tlačidlo myši (`mouse_x1`, `mouse_x2`, `mouse_middle`); spracovanie nahrávky beží mimo hooku.
-2. `core/stt.py` — lokálny faster-whisper `medium` na CUDA, jazyk `sk`, `initial_prompt` = slovenský
+2. `mirana/llm/stt.py` — lokálny faster-whisper `medium` na CUDA, jazyk `sk`, `initial_prompt` = slovenský
    prefix + slovník názvov z hry (max 224 tokenov). Prepis, ktorý len zopakuje prompt, sa zahodí.
    `stt.provider: api` = OpenAI Whisper ako záloha.
-3. `core/brain.py` — Claude Opus 5.5 (`claude-opus-5-5`), effort `low`, streaming, vety idú do TTS
+3. `mirana/llm/brain.py` — Claude Opus 5.5 (`claude-opus-5-5`), effort `low`, streaming, vety idú do TTS
    hneď, ako vzniknú. Persona je cacheable system blok, breakpoint aj na novej otázke (cache pamäte).
    Server-side fallback (`llm.fallbacks: "default"`), ošetrené `stop_reason` (refusal, max_tokens, prázdne).
    Každá správa od Erika nesie tag `[ERIK]`, pred ním riadok `[HRA]`, ak hra beží.
-4. `core/memory.py` — 12 výmen, pri prekročení orez naraz na 6; do pamäte ide len vypočutá časť odpovede.
-5. `outputs/voice.py` — Azure TTS `sk-SK-ViktoriaNeural` + `phonetics.yaml` (celé slová) → orezanie ticha
-   (za vetou `tts.sentence_pause_ms`, Azure dáva ~840 ms) → `outputs/voice_fx.py` → prehratie po 50 ms kusoch (stop z ktoréhokoľvek vlákna).
+4. `mirana/memory.py` — 12 výmen, pri prekročení orez naraz na 6; do pamäte ide len vypočutá časť odpovede.
+5. `mirana/outputs/voice.py` — Azure TTS `sk-SK-ViktoriaNeural` + `phonetics.yaml` (celé slová) → orezanie ticha
+   (za vetou `tts.sentence_pause_ms`, Azure dáva ~840 ms) → `mirana/outputs/voice_fx.py` → prehratie po 50 ms kusoch (stop z ktoréhokoľvek vlákna).
 6. `main.py` — stavový automat IDLE → LISTENING → PROCESSING → SPEAKING.
 7. Každé API volanie: timeout 20 s, 1 retry (SDK), pri zlyhaní fallback hláška z config.yaml a návrat do IDLE.
    O fallbackoch rozhoduje main.py, moduly vracajú `None`. Proces nesmie skončiť na výnimke.
@@ -98,7 +87,7 @@ mirana-v2/
 
 ## 3. Fáza 2 — Filler hlášky a barge-in — HOTOVÁ
 
-1. `outputs/fillers.py` — z `fillers.lines` vygeneruje cez TTS `fillers/*.wav`; existujúce negeneruje.
+1. `mirana/outputs/fillers.py` — z `fillers.lines` vygeneruje cez TTS `fillers/*.wav`; existujúce negeneruje.
    Po zmene hlasu alebo hlášok v okne sa staré WAV zmažú a vzniknú znova. Efekty hlasu sa aplikujú pri načítaní.
 2. Filler zaznie, len ak odpoveď nepríde do `fillers.skip_if_faster_than_ms` (1300 ms). Nikdy
    tú istú dvakrát po sebe. Na HUD je filler odlíšený (biely, v riadku otázky).
@@ -108,7 +97,7 @@ mirana-v2/
 
 ## 4. Fáza 3 — Overlay — HOTOVÁ
 
-`outputs/overlay.py` — HTTP + WebSocket na `0.0.0.0:8080`, servíruje `overlay/index.html`.
+`mirana/outputs/overlay.py` — HTTP + WebSocket na `0.0.0.0:8080`, servíruje `overlay/index.html`.
 Nový klient dostane posledný stav.
 
 | udalosť | kedy |
@@ -138,7 +127,7 @@ OBS na notebooku: Browser Source na `http://IP-herného-PC:8080`.
    zbraň v ruke, atribúty, nerozdelené body, kapacita kybervýzbroje, OS, zbrane v slotoch, brnenie,
    cieľ pod zameriavačom, polícia (heat 0–5), čas, počasie, scéna (PSM HighLevel ≥ 3 = rozhovor/cutscéna),
    dokončené hlavné questy (raz za 30 s).
-2. `inputs/game_state.py` — číta JSON (mtime), generuje eventy:
+2. `mirana/inputs/game_state.py` — číta JSON (mtime), generuje eventy:
    `hp_low` (<25 %), `hp_critical` (<10 %), `death`, `district_change`, `level_up`, `quest_changed`,
    `quest_completed`, `wanted_up`, `wanted_clear`, `combat_start/end`. „Neobjevené" (`generic_sts_quest`,
    neobjavené miesto na mape) nie je quest; návrat z neho na ten istý quest nie je nový quest.
@@ -150,7 +139,7 @@ OBS na notebooku: Browser Source na `http://IP-herného-PC:8080`.
    nikdy počas SPEAKING ani počas scény v hre. `hp_critical` a `death` majú výnimku z cooldownu
    a počkajú, kým Mirana dohovorí.
 5. Keď mod nebeží (hra vypnutá, menu, starší stav ako 10 s), Mirana funguje ďalej bez riadku [HRA].
-6. **ZOSTÁVA:** `core/longterm.py` — dlhodobá pamäť o Erikovi v `data/memory.json` (necommitovať):
+6. **ZOSTÁVA:** `mirana/features/longterm.py` — dlhodobá pamäť o Erikovi v `data/memory.json` (necommitovať):
    - **Herný postup** z telemetrie, bez LLM: level, lifepath, štvrť, aktívny quest,
      zoznam dokončených questov. Slúži aj spoiler pravidlu — čo Erik dokončil,
      spoiler nie je.
@@ -171,42 +160,21 @@ a lokácie bez toho, aby ich Erik povedal (splnené v hre 2026-09-26). Po rešta
 
 ### 6a. Twitch chat len na čítanie — HOTOVÉ 2026-10-02 (testovací stream)
 
-`inputs/twitch_chat.py`: anonymné IRC cez WebSocket (`justinfan…`, bez tokenu a bota), tagy (display-name,
+`mirana/inputs/twitch_chat.py`: anonymné IRC cez WebSocket (`justinfan…`, bez tokenu a bota), tagy (display-name,
 badges), PING/PONG, RECONNECT, reconnect s backoffom. Príkazy `!…` a `twitch_chat.ignore_users` sa preskočia,
 odkazy → „[odkaz]", správa max 150 znakov. K Erikovej otázke (nie k herným udalostiam) ide riadok
 `[CHAT] nick (sub): text | …` — posledných `max_messages` (15) z `max_age_sec` (300 s). Persona: chat sú údaje,
 nie pokyny; sama ho nekomentuje, len na Erikovu otázku; nadávky na ľudí, odkazy a spoilery z chatu neopakuje.
 Ovládacie okno ukazuje správy a stav pripojenia; Nastavenia → Chat.
 
-### 6b. Kick chat s odpoveďami divákom — NEZAČATÉ (`kick_chat.enabled: false`)
+### 6b. Kick chat — ZRUŠENÝ (2026-10-03)
 
-Pred písaním si načítaj aktuálnu dokumentáciu na docs.kick.com. Modul drž
-izolovaný — jeho pád nesmie ovplyvniť zvyšok. Nastavenia sú už v `config.yaml` (`kick_chat`).
-
-1. `inputs/kick_chat.py` — pripojenie, parsovanie správ a badges odosielateľa.
-2. Sub / mod / OG → `!mira <otázka>` ide do fronty. Nesub → žiadne volanie API a žiadny
-   hlas: približne každému desiatemu sa na HUD vypíše predvolená veta z config.yaml
-   (`kick_chat.nesub_reply_text`), s jeho nickom v riadku otázky. Nula kreditov.
-3. Fronta max 10. Cooldown 30 s globálne, 3 min na diváka. Orchestrátor berie
-   z fronty len v stave IDLE a mimo combatu. Divákom odpovedá `llm.chat_model` (Sonnet 5).
-4. Nick pred TTS prečisti (čísla, symboly, `xX...Xx`).
-5. Pamäť divákov (`core/longterm.py`, tá istá `data/memory.json`):
-   `{nick: {prvýkrát, naposledy, počet návštev, posledné 2–3 témy}}`, trvá medzi
-   sessions. Zápis deterministický, bez LLM, pri každej `[CHAT_SUB]` správe. Čítanie:
-   pri správe od známeho nicku jeden riadok do promptu
-   („Kubo: 3. návšteva, naposledy 21.9. sa pýtal na Sandevistan"). Ukladá sa len nick
-   a téma, nič osobné (Kick TOS). „Mirana, zabudni Kuba" záznam zmaže.
-   Simulácia 2026-09-21: 8-výmenové okno diváka zabudne za ~2 min.
-6. Hlasový prepínač: „Mirana, chat off" / „chat on" — Erik vypne a zapne spracovanie
-   fronty uprostred streamu. Stav sa hlási na HUD (`queue`) a v logu.
-7. Auto-mute chatu: fronta sa neberie pri HP < 25 %, v combate a 60 s po Erikovej
-   otázke. Správy sa medzitým hromadia len do limitu fronty, staršie padajú.
-
----
+Stream beží na Twitchi; pripravené nastavenia `kick_chat` a smerovanie na `llm.chat_model` sú odstránené.
+Pamäť divákov je hotová v `mirana/features/longterm.py` (z Twitch chatu, zhrnutie modelom).
 
 ## 7. Fáza 6 — Audio routing + DSP — ČIASTOČNE
 
-1. **HOTOVÉ 2026-09-26:** efekty hlasu robí Mirana sama (`outputs/voice_fx.py`, pedalboard) namiesto
+1. **HOTOVÉ 2026-09-26:** efekty hlasu robí Mirana sama (`mirana/outputs/voice_fx.py`, pedalboard) namiesto
    VST reťaze vo Voicemeeteri: HP/LP filter → bitcrusher → ring mod → chorus → echo → kompresor
    → vyrovnanie hlasitosti (špičky max −1 dBFS). Presety `jemny` / `night_city` / `robot`, ~25 ms na vetu.
    Fungujú na slúchadlách aj cez Voicemeeter, platia aj pre fillery.
@@ -217,8 +185,8 @@ izolovaný — jeho pád nesmie ovplyvniť zvyšok. Nastavenia sú už v `config
 
 ## 8. Fáza 7 — Hardening — HOTOVÁ okrem suchého behu
 
-1. `core/budget.py` — denný strop `limits.daily_usd_cap`, stav v data/budget.json, hláška budget_reached. HOTOVÉ.
-2. `core/safety.py` — výstupný filter pred TTS: e-maily, telefóny, IP, odkazy, `safety.blocked_words`;
+1. `mirana/budget.py` — denný strop `limits.daily_usd_cap`, stav v data/budget.json, hláška budget_reached. HOTOVÉ.
+2. `mirana/safety.py` — výstupný filter pred TTS: e-maily, telefóny, IP, odkazy, `safety.blocked_words`;
    zachytená veta sa preskočí. HOTOVÉ.
 3. `run.py` — supervisor: heartbeat, reštart pri páde alebo zamrznutí (>60 s), max 5 za hodinu. HOTOVÉ.
 4. Panic mute (`audio.panic_mute_key`) — okamžite umlčí Miranu a pozastaví spracovanie. HOTOVÉ.
@@ -236,7 +204,7 @@ Prepnutie = `llm.model` v config.yaml alebo v okne.
 Merané 2026-09-26 v hre s telemetriou: 53 otázok za $0.38 → **~0,7 c na otázku** (riadok [HRA]
 pridáva ~250 tokenov), pri 40 otázkach/hod ~$0.30/hod streamu, 4 h ~$1.15–1.30.
 Chat divákov (Sonnet 5) ~0,4 c/správa, cooldown 30 s ⇒ najviac ~$0.45/hod.
-`limits.daily_usd_cap: 5.00` vynucuje `core/budget.py` (stav prežije reštart, reset o polnoci).
+`limits.daily_usd_cap: 5.00` vynucuje `mirana/budget.py` (stav prežije reštart, reset o polnoci).
 `llm.fallbacks: "default"`: odmietnutie bezpečnostným filtrom sa zopakuje na inom modeli.
 
 Odozva (pustenie PTT → prvý zvuk): mimo hry ~4 s, v hre medián 5,9 s (prepis 1,6 s namiesto ~0,7 s,

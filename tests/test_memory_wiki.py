@@ -121,3 +121,10 @@ def test_update_stream_today(memory):
     memory.update_stream({"death": 2, "marker": 1}, 95)
     entry = memory.data["streams"][-1]
     assert entry["date"] == date.today().isoformat() and entry["minutes"] == 95
+
+
+def test_short_start_is_not_a_stream(memory):
+    memory.update_stream({}, 1)                     # restart po ulozeni nastaveni
+    assert memory.data["streams"] == []
+    memory.update_stream({"marker": 1}, 1)          # znacka uz je moment streamu
+    assert len(memory.data["streams"]) == 1

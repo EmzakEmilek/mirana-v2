@@ -1,4 +1,4 @@
-# Fonetický prepis anglicizmov pre TTS (outputs/voice.py). Titulky a log ostávajú v pôvodnom pravopise,
+# Fonetický prepis anglicizmov pre TTS (mirana/outputs/voice.py). Titulky a log ostávajú v pôvodnom pravopise,
 # nahradí sa len text, ktorý ide do Azure.
 #
 # Pravidlá:

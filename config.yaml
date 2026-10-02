@@ -15,8 +15,7 @@ audio:
   marker_key: "mouse_x2"      # ťuknutie = značka na strih (čas vo VOD-ke) do logs/strih-<dátum>.md
 
 stt:
-  provider: "local"           # "local" (faster-whisper na GPU), "azure" (Azure Speech: rýchlejší, ale mená z hry prepisuje zle — test 2026-10-02), "api" (OpenAI Whisper)
-  azure_language: "sk-SK"
+  provider: "local"           # "local" (faster-whisper na GPU), "api" (OpenAI Whisper). Azure Speech vyradený — mená z hry prepisoval zle (test 2026-10-02)
   api_model: "whisper-1"
   local_model: "medium"       # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
   local_device: "cuda"
@@ -88,9 +87,6 @@ llm:
   max_tokens: 2000            # strop pre premýšľanie + odpoveď dokopy (modely 5.5 premýšľajú vždy); platí sa len skutočne použité
   effort: "low"               # low = najrýchlejší hlas; Sonnet 5.5 má predvolene high, Opus 5.5 medium (test 2026-10-03: bez premýšľania nebol rýchlejší)
   fallbacks: "default"        # ked bezpecnostny filter odmietne (falosny poplach), server otazku zopakuje na inom modeli; null = vypnute
-  # Chat divakov ([CHAT_SUB], [CHAT_NESUB]) ide na lacnejsi model — kratke odpovede, nizsie stavky.
-  chat_model: "claude-sonnet-5-5"   # pripravené pre Kick (fáza 5), teraz sa nepoužíva
-  chat_effort: "low"
   cache_persona: true         # persona ako cacheable blok — zásadné pre rozpočet
   cache_memory: true          # aj pamäť rozhovoru ide do cache (breakpoint na novej otázke)
 
@@ -100,7 +96,7 @@ tts:
   pitch: "+15%"
   sentence_pause_ms: 250      # pauza medzi vetami; Azure dáva za vetu ~840 ms ticha, zvyšok sa oreže
   phonetics_file: "phonetics.yaml"   # anglicizmy -> slovenská fonetika, len pre TTS (titulky ostávajú v origináli)
-  effects:                    # efekty na hlas (outputs/voice_fx.py), platia aj pre fillery
+  effects:                    # efekty na hlas (mirana/outputs/voice_fx.py), platia aj pre fillery
     enabled: true
     preset: "robot"           # vypnute | jemny | night_city | robot
     params: {}                # jemné doladenie presetu, napr. {ring_mix: 0.08, echo_ms: 60}
@@ -129,7 +125,7 @@ fillers:
     - "hneď to vyhrabem"
 
 wiki:
-  enabled: true               # Mirana si pri neistote pozrie Cyberpunk Fandom wiki (core/wiki.py), zadarmo, ~1 s + kolo modelu
+  enabled: true               # Mirana si pri neistote pozrie Cyberpunk Fandom wiki (mirana/features/wiki.py), zadarmo, ~1 s + kolo modelu
   max_lookups: 2              # najviac toľko hľadaní na jednu otázku
   prefetch: true              # pri „kto je / čo je X“ priloží článok hneď k otázke (bez ďalšieho kola modelu, ~2-3 s rýchlejšie)
   timeout_sec: 5
@@ -167,21 +163,6 @@ game_state:
   hp_low_threshold: 25
   hp_critical_threshold: 10
 
-kick_chat:
-  enabled: false              # zapni vo Fáze 5
-  channel_id: null
-  command: "!mira"
-  allowed_badges: ["subscriber", "moderator", "og", "founder", "broadcaster"]
-  nesub_reply_every_n: 10     # kazdy N-ty nesub dostane predvolenu vetu len na HUD (bez API, bez hlasu)
-  nesub_reply_text: "Prístup k palubnému počítaču majú subovia. Night City nič nedáva zadarmo."
-  queue_max_size: 10
-  cooldown_global_sec: 30
-  cooldown_per_user_sec: 180
-  voice_toggle: true          # "Mirana, chat off" / "chat on"
-  mute_hp_below: 25           # fronta sa neberie pri nizkom HP, v combate a chvilu po Erikovej otazke
-  mute_in_combat: true
-  mute_after_erik_sec: 60
-
 twitch_chat:
   enabled: true               # Mirana chat len číta (anonymne, bez bota, nič nepíše); komentuje ho, len keď sa Erik spýta
   channel: "emzakemil"        # názov kanála alebo odkaz twitch.tv/... (Nastavenia -> Chat)
@@ -192,12 +173,12 @@ twitch_chat:
 
 safety:
   enabled: true
-  # Veta s týmto slovom (začiatok slova, bez diakritiky) sa nevysloví ani nevypíše — poistka pre Kick TOS.
-  # E-maily, telefónne čísla, IP adresy a odkazy sa blokujú vždy (core/safety.py).
+  # Veta s týmto slovom (začiatok slova, bez diakritiky) sa nevysloví ani nevypíše — poistka pre Twitch TOS.
+  # E-maily, telefónne čísla, IP adresy a odkazy sa blokujú vždy (mirana/safety.py).
   blocked_words: ["negr", "nigger", "nigga", "cigos", "buzerant", "buzna", "faggot", "sieg heil"]
 
 limits:
-  daily_usd_cap: 5.00         # tvrdý denný strop na LLM (core/budget.py, stav v data/budget.json); po ňom Mirana povie budget_reached
+  daily_usd_cap: 5.00         # tvrdý denný strop na LLM (mirana/budget.py, stav v data/budget.json); po ňom Mirana povie budget_reached
   proactive_cooldown_sec: 300
   api_timeout_sec: 20
   tts_timeout_sec: 10         # Azure syntéza jednej vety; pri preteceni sa veta len vypise na HUD
@@ -212,3 +193,4 @@ fallback_phrases:
 
 logging:
   level: "INFO"               # log kazdej session ide do logs/mirana-<cas>.log, rozhovor do logs/rozhovor-<cas>.jsonl
+  archive_after_days: 14      # starsie logy sa pri starte presunu do logs/archive/<rok-mesiac>.zip (nic sa nemaze)
