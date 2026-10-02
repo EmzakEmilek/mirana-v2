@@ -116,13 +116,17 @@ class Brain:
             system.append({"type": "text", "text": game_state_line})
         return system
 
-    def _user_message(self, user_text: str) -> dict:
+    def _user_message(self, user_text: str, image_b64: str | None = None) -> dict:
         """Nova otazka s cache breakpointom: persona + cela doterajsia pamat + tato otazka sa ulozi
-        do cache, dalsia otazka ich precita za zlomok ceny (kym sa pamat neoreze, prefix sa nemeni)."""
+        do cache, dalsia otazka ich precita za zlomok ceny (kym sa pamat neoreze, prefix sa nemeni).
+        image_b64 = snimka hry (JPEG) pred textom; do pamate nejde."""
         block = {"type": "text", "text": user_text}
         if self.llm_cfg.get("cache_memory", True):
             block["cache_control"] = {"type": "ephemeral"}
-        return {"role": "user", "content": [block]}
+        content = [block]
+        if image_b64:
+            content.insert(0, {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}})
+        return {"role": "user", "content": content}
 
     def _log_usage(self, message, cost: float, started: float, answer: "Answer") -> None:
         usage = message.usage
@@ -139,7 +143,7 @@ class Brain:
         return self.llm_cfg["model"], self.llm_cfg["effort"]
 
     def ask_stream(self, user_text: str, game_state_line: str | None, memory_messages: list[dict],
-                   on_sentence=None, should_stop=None, on_lookup=None) -> Answer:
+                   on_sentence=None, should_stop=None, on_lookup=None, image_b64: str | None = None) -> Answer:
         """Streamuje odpoved; kazdu hotovu vetu posle cez on_sentence(veta).
 
         should_stop() -> True preruší stream (barge-in) — dalsie tokeny sa uz neplatia.
@@ -154,7 +158,7 @@ class Brain:
             max_tokens=self.llm_cfg["max_tokens"],
             output_config={"effort": effort},
             system=self._build_system(game_state_line),
-            messages=[*memory_messages, self._user_message(user_text)],
+            messages=[*memory_messages, self._user_message(user_text, image_b64)],
         )
         fallbacks = self.llm_cfg.get("fallbacks")
         if fallbacks and (model.startswith("claude-opus") or model == "claude-sonnet-5-5"):

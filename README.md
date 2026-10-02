@@ -133,12 +133,22 @@ z verejného decapi.me — netreba prihlásenie), hodiny a kontext (kde si bol, 
 Automaticky sa zapíšu aj smrti, levely, dokončené hlavné questy a policajné naháňačky od 3 hviezd.
 Na „Mirana, zhrň stream“ dostane Mirana štatistiky (`[STREAM]`: dĺžka, smrti, levely, questy, značky).
 
+## Mirana vidí hru
+
+Pri otázkach „čo je toto?“, „kto je to?“, „vidíš?“, „pozri…“ pošle Mirana modelu snímku **len okna hry**
+(`vision.window_title`, nikdy celý monitor) a odpovie podľa toho, čo vidí — na HUD prebehne „vizuálny sken“.
+Cena ~0,24 c za takú otázku (1280 px, Sonnet 5.5), +0,2 s k prvej vete. Snímka sa neukladá ani nejde do pamäte.
+Hra musí bežať v okne alebo okne bez okrajov (pri exkluzívnej celej obrazovke je snímka čierna a nepošle sa).
+
 ## HUD efekty
 
-- prístup do databázy pri hľadaní vo wiki (skenovanie a názov článku)
+- prístup do databázy pri hľadaní vo wiki (skenovanie, pri dlhšom hľadaní sa hlášky striedajú každé 2 s — nahlas len prvá)
+- vizuálny sken, keď sa Mirana pozerá na snímku hry
 - banner pri leveli, dokončenom queste, smrti („FLATLINE #3“) a policajných hviezdach
 - v hlavičke hviezdy polície (blikajú) a počítadlo smrtí za dnešok
 - pri kritickom HP červený tep okraja aj jadra, pri smrti záblesk
+
+Všetky efekty sa dajú vyskúšať v Nastaveniach → HUD → **Test efektov** (Mirana musí bežať; len vizuál, nič nepovie).
 
 ## Twitch chat
 
@@ -200,6 +210,7 @@ Pauzu zakryje filler hláška.
 | `core/brain.py` | Claude, streaming po vetách, prompt cache |
 | `core/stt.py` | lokálny faster-whisper alebo Whisper API, filter halucinácií |
 | `core/wiki.py` | Cyberpunk Fandom wiki ako nástroj pre model |
+| `core/vision.py` | snímka okna hry pre otázky „čo je toto?“ |
 | `core/highlights.py` | momenty na strih, čas vo VOD-ke, štatistiky streamu |
 | `core/memory.py` | pamäť rozhovoru (12 výmen, orez na 6) |
 | `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |

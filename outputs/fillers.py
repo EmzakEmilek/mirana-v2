@@ -84,6 +84,14 @@ class Fillers:
         self._voice.play_audio(audio, block=False)
         return line
 
+    def search_lines(self, first: str | None = None) -> list[str]:
+        """Vsetky hlasky pri hladani, `first` na zaciatku — HUD ich pri dlhsom hladani strieda (bez hlasu)."""
+        lines = [line for line, _ in self._search]
+        if first in lines:
+            i = lines.index(first)
+            lines = lines[i:] + lines[:i]
+        return lines
+
     def play_random(self) -> str | None:
         """Neblokujuce prehratie nahodnej hlasky (ina nez naposledy; bez hlasu, ked speak=false). Vrati text pre HUD."""
         if not self._clips:

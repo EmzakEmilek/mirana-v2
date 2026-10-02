@@ -161,6 +161,12 @@
     100% { filter: none; transform: var(--base); }
   }
 
+  /* sken obrazovky: ciara prejde cez panel */
+  .sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; z-index: 2; pointer-events: none; opacity: 0;
+    background: var(--cyan); box-shadow: 0 0 18px 4px rgba(0,240,255,.6); }
+  .sweep.run { animation: sweep 1.1s ease-in-out 2; }
+  @keyframes sweep { 0% { left: 0; opacity: .9; } 100% { left: 100%; opacity: .9; } }
+
   .glitch { animation: glitchIn .18s steps(2); }
   @keyframes glitchIn {
     0%   { transform: translateX(-3px); opacity: .2; clip-path: inset(10% 0 50% 0); }
@@ -193,6 +199,7 @@
   <div class="panel offline" id="panel">
     <canvas id="core" width="300" height="300"></canvas>
     <div class="alert" id="alert"></div>
+    <div class="sweep" id="sweep"></div>
     <div class="text">
       <div class="head">
         <div class="status"><span class="dot"></span><span id="status-label">MIRANA · OFFLINE</span></div>
@@ -257,7 +264,7 @@ function setState(s) {
     else cutTyping();                            // barge-in: prerušená veta ostane, zbledne
     scheduleFade();
   }
-  if (s === 'listening' || s === 'idle') { clearInterval(hexTimer); el('sub').textContent = ''; el('sub').className = 'sub'; }
+  if (s === 'listening' || s === 'idle') { stopSearch(); el('sub').textContent = ''; el('sub').className = 'sub'; }
   if (prev !== s) { panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); }
 }
 function showSub(text, system) {
@@ -267,7 +274,7 @@ function showSub(text, system) {
 }
 function answerStart() {
   clearTimeout(fadeTimer);
-  clearInterval(hexTimer);
+  stopSearch();
   full = ''; shown = 0;
   const a = el('answer'); a.className = 'answer'; a.textContent = '';
   el('answer-box').scrollTop = 0;
@@ -335,19 +342,35 @@ function gameFx(kind, text) {
   }
 }
 
+/* ---------- sken obrazovky (Mirana sa pozera na snimku hry) ---------- */
+function screenScan() {
+  dbSearch(null, ['vizuálny sken', 'analyzujem obraz']);
+  const sw = el('sweep'); sw.classList.remove('run'); void sw.offsetWidth; sw.classList.add('run');
+}
+
 /* ---------- pristup do databazy (wiki) ---------- */
-let hexTimer = null;
-function dbSearch(title) {
+let hexTimer = null, lineTimer = null;
+function stopSearch() { clearInterval(hexTimer); clearInterval(lineTimer); }
+function dbSearch(title, lines) {
   const q = el('sub');
-  clearInterval(hexTimer);
+  stopSearch();
   q.className = 'sub';
   q.textContent = '';
   const box = document.createElement('span'); box.className = 'db' + (title ? ' found' : '');
   const label = document.createElement('span');
-  label.textContent = title ? '◇ DATABÁZA: ' + title : '◇ PRÍSTUP DO DATABÁZY';
+  lines = (lines || []).filter(Boolean);
+  const say = (t) => '◇ ' + t.toUpperCase();
+  label.textContent = title ? '◇ DATABÁZA: ' + title : say(lines[0] || 'prístup do databázy');
   const bar = document.createElement('span'); bar.className = 'bar';
   const hex = document.createElement('span'); hex.className = 'hex';
   box.append(label, bar, hex); q.appendChild(box);
+  if (!title && lines.length > 1) {            // dlhsie hladanie: kazde 2 s ina hlaska (bez hlasu)
+    let i = 0;
+    lineTimer = setInterval(() => {
+      i = (i + 1) % lines.length; label.textContent = say(lines[i]);
+      label.classList.remove('glitch'); void label.offsetWidth; label.classList.add('glitch');
+    }, 2000);
+  }
   if (!title) {
     hexTimer = setInterval(() => {
       hex.textContent = Array.from({ length: 4 }, () => Math.floor(Math.random() * 65536).toString(16).toUpperCase().padStart(4, '0')).join(' ');
@@ -467,7 +490,8 @@ function handle(ev) {
     case 'answer_append': answerAppend(ev.text, ev.ms_per_char); break;
     case 'question':  showSub(ev.text, true); break;
     case 'telemetry': setTelemetry(ev); break;
-    case 'search':    dbSearch(ev.title); break;
+    case 'search':    dbSearch(ev.title, ev.lines); break;
+    case 'scan':      screenScan(); break;
     case 'game_fx':   gameFx(ev.kind, ev.text); break;
     case 'queue':     break;
   }

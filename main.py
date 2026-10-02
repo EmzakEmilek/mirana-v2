@@ -32,6 +32,7 @@ from core.budget import Budget
 from core.config import BASE_DIR, load_config
 from core.memory import Memory
 from core.safety import Safety
+from core.vision import Vision
 from core.session import HEARTBEAT_PATH, ConversationLog, ensure_single_instance, setup_logging
 from inputs.game_state import GameState
 from inputs.twitch_chat import TwitchChat
@@ -111,6 +112,7 @@ class Mirana:
 
         self.conversation = ConversationLog(session_id)
         self.highlights = Highlights(config)
+        self.vision = Vision(config)
         self._questions = 0
         self._last_exchange = ("", "")  # posledna otazka a odpoved — kontext k znacke na strih
         self.budget = Budget(config)
@@ -186,6 +188,53 @@ class Mirana:
             self.overlay.notice(f"◆ Značka na strih: {when}")
         threading.Thread(target=work, name="marker", daemon=True).start()
 
+    def _hud_test(self, kind: str) -> None:
+        """Ukazka efektu na HUD z okna Nastavenia -> HUD. Len vizual: ziadny model, hlas ani zapis do statistik."""
+        ov = self.overlay
+        snap = self.game.current
+        base = ((snap.location if snap else "") or "Watson, Kabuki", (snap.quest if snap else "") or "Jízda")
+
+        def restore(after: float) -> None:
+            time.sleep(after)
+            self._telemetry_shown = None  # dalsi snimok z hry posle skutocny stav
+            if snap is None:
+                ov.telemetry("", "", False, 0, False, self.highlights.deaths)
+            ov.state("muted" if self._muted else self.state.name.lower())
+
+        if kind == "level":
+            ov.game_fx("level_up", "LEVEL 7")
+        elif kind == "quest":
+            ov.game_fx("quest_completed", "QUEST DOKONČENÝ")
+        elif kind == "death":
+            ov.telemetry(*base, False, 0, False, self.highlights.deaths + 1)
+            ov.game_fx("death", f"FLATLINE #{self.highlights.deaths + 1}")
+            restore(5)
+        elif kind == "police":
+            ov.telemetry(*base, True, 3, False, self.highlights.deaths)
+            ov.game_fx("wanted", "NCPD ★★★")
+            restore(6)
+        elif kind == "critical":
+            ov.telemetry(*base, True, 0, True, self.highlights.deaths)
+            restore(6)
+        elif kind == "db":
+            ov.state("processing")
+            ov.search(None, self.fillers.search_lines())
+            time.sleep(5)
+            ov.search("Sebastian Ibarra")
+            restore(3)
+        elif kind == "scan":
+            ov.state("processing")
+            ov.scan()
+            restore(3)
+        elif kind == "answer":
+            ov.state("speaking")
+            ov.answer_start()
+            for sentence in ("Padre je fixer z Heywoodu, kedysi bol medzi Valentinos.",
+                             "Ľudia ho berú ako kňaza, aj keď ho nikto nevysvätil."):
+                ov.answer_append(sentence, duration_sec=len(sentence) * 0.055)
+                time.sleep(len(sentence) * 0.06)
+            restore(0.2)
+
     def _on_command(self, cmd: str, text: str | None = None) -> None:
         """Prikazy z ovladacieho okna (gui.py)."""
         if cmd == "mute":
@@ -194,6 +243,8 @@ class Mirana:
             self._events.put(("quit",))
         elif cmd == "ask" and text:
             self._events.put(("typed", text))
+        elif cmd == "hud_test" and text:
+            threading.Thread(target=self._hud_test, args=(text,), name="hud-test", daemon=True).start()
         elif cmd == "volume" and text:
             try:
                 self.voice.volume = max(0.0, min(1.5, float(text) / 100))
@@ -256,11 +307,18 @@ class Mirana:
             if found and not job.cancelled:
                 self.overlay.search(found[0])
                 wiki = f"[WIKI {found[0]}] {found[1]}"
-        lines = [self.game.line(), stream, wiki, self.chat.line() if erik else None]
+        image = None
+        if erik and self.vision.wants(tagged_text):
+            # "co je toto?" — snimka okna hry (len hra, nikdy cely monitor), ~50 ms + ~0.2 s pre model
+            image = self.vision.capture()
+            if image and not job.cancelled:
+                self.overlay.scan()
+        lines = [self.game.line(), stream, wiki, "[OBRAZOVKA] priložená snímka hry" if image else None,
+                 self.chat.line() if erik else None]
         job.tagged_text = tagged_text
         job.user_text = "\n".join([x for x in lines if x] + [tagged_text])
         answer = self.brain.ask_stream(
-            job.user_text, None, self.memory.as_messages(),
+            job.user_text, None, self.memory.as_messages(), image_b64=image,
             on_sentence=lambda sentence: self._on_sentence(job, sentence),
             should_stop=lambda: job.cancelled,
             on_lookup=lambda title=None: self._on_lookup(job, title),
@@ -380,8 +438,8 @@ class Mirana:
             current = job.gen == self._gen and self.state is State.PROCESSING
         if current and not job.started and not job.searched:
             job.searched = True
-            self.fillers.play_search()
-            self.overlay.search(None)
+            spoken = self.fillers.play_search()  # nahlas len prva; na HUD sa pri dlhsom hladani stridaju
+            self.overlay.search(None, self.fillers.search_lines(spoken))
 
     def _on_sentence(self, job: Job, sentence: str) -> None:
         if job.cancelled:

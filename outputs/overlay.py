@@ -65,9 +65,14 @@ class Overlay:
         """Len pre [SYSTEM] hlasky — Erikove otazky sa na HUD nezobrazuju (rozhodnutie 2026-09-21)."""
         self._send({"type": "question", "text": text}, remember=False)
 
-    def search(self, title: str | None) -> None:
-        """Hladanie v databaze (wiki): None = zacina sa hladat, inak nazov najdeneho clanku."""
-        self._send({"type": "search", "title": title}, remember=False)
+    def search(self, title: str | None, lines: list[str] | None = None) -> None:
+        """Hladanie v databaze (wiki): None = zacina sa hladat (HUD strieda `lines` kazde 2 s),
+        inak nazov najdeneho clanku."""
+        self._send({"type": "search", "title": title, "lines": lines or []}, remember=False)
+
+    def scan(self) -> None:
+        """Mirana sa pozera na obrazovku (posiela sa snimka hry)."""
+        self._send({"type": "scan"}, remember=False)
 
     def game_fx(self, kind: str, text: str) -> None:
         """Efekt na HUD pri udalosti z hry (level, quest, smrt, policia)."""

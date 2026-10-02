@@ -16,4 +16,5 @@ websockets
 requests      # Cyberpunk Fandom wiki (core/wiki.py)
 # ovladacie okno (gui.py)
 customtkinter
+pillow        # snimka okna hry (core/vision.py)
 ruamel.yaml   # nastavenia z okna zapisuju config.yaml so zachovanim komentarov

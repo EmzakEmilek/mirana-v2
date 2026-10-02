@@ -388,6 +388,21 @@ class SettingsWindow(ctk.CTkToplevel):
         self._entry(tab, "overlay.port", "Port", hud["port"], hint="OBS Browser Source: http://IP-herného-PC:port")
         self._entry(tab, "overlay.typewriter_ms_per_char", "Písanie (ms/znak)", hud["typewriter_ms_per_char"],
                     hint="Len záloha, keď hlas vypadne. Inak sa text píše v tempe reči.")
+        ctk.CTkLabel(tab, text="Test efektov na HUD (Mirana musí bežať; len vizuál, nič nepovie):",
+                     text_color=TEXT, anchor="w").pack(fill="x", padx=10, pady=(14, 4))
+        grid = ctk.CTkFrame(tab, fg_color="transparent")
+        grid.pack(fill="x", padx=10)
+        tests = [("Odpoveď", "answer"), ("Databáza", "db"), ("Sken obrazovky", "scan"), ("Level", "level"),
+                 ("Quest", "quest"), ("Smrť", "death"), ("Polícia", "police"), ("Kritické HP", "critical")]
+        for i, (label, kind) in enumerate(tests):
+            ctk.CTkButton(grid, text=label, width=150, fg_color=PANEL, border_width=1, border_color=CYAN,
+                          text_color=TEXT, command=lambda k=kind: self._hud_test(k)).grid(row=i // 4, column=i % 4, padx=4, pady=4)
+
+    def _hud_test(self, kind: str) -> None:
+        if not self.app._send("hud_test", text=kind):
+            self.hint.configure(text="Mirana nebeží — test HUD sa nedá spustiť.", text_color=RED)
+        else:
+            self.hint.configure(text="Pozri HUD (tlačidlo HUD v hlavnom okne alebo OBS).", text_color=DIM)
 
     def _tab_chat(self, tab):
         chat = self.cfg.get("twitch_chat") or {}

@@ -190,6 +190,11 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
     -> ostava Whisper, Azure ako volba; TTS streaming (syntéza vety 0.25 s, zisk ~0.12 s); bez premyslania
     (Sonnet between_tools pomalsi 2.66 vs 2.15 s a cital nahlas vlastne uvahy)
   * namerane pre dalsiu fazu: obrazovka (vision) +0.24 c (Sonnet, 1280 px) a +0.17 s k prvej vete
+- Vision + HUD testy (2026-10-02): core/vision.py — pri "co je toto / kto je to / vidis / pozri" snimka LEN okna hry
+  (EnumWindows podla nazvu, klientska cast, DPI aware; ziadne okno / cierna snimka = nic sa neposle), 1280 px JPEG,
+  [OBRAZOVKA] v sprave, do pamate nejde. Test na okne MIRANA: snimka 113 ms, model okno spravne opisal.
+  HUD: databaza strieda hlasky kazde 2 s (nahlas len prva), vizualny sken; Nastavenia -> HUD -> Test efektov
+  (odpoved, databaza, sken, level, quest, smrt, policia, kriticke HP — prikaz hud_test, len vizual).
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

@@ -134,6 +134,11 @@ wiki:
   prefetch: true              # pri „kto je / čo je X“ priloží článok hneď k otázke (bez ďalšieho kola modelu, ~2-3 s rýchlejšie)
   timeout_sec: 5
 
+vision:
+  enabled: true               # pri „čo je toto / vidíš / pozri“ pošle snímku okna hry (len hra, nikdy celý monitor)
+  window_title: "Cyberpunk 2077"   # názov okna hry; hra musí bežať v okne alebo okne bez okrajov
+  max_width: 1280             # ~1200 tokenov = ~0,24 c na Sonnete 5.5, +0,2 s k prvej vete
+
 idle_nudge:
   enabled: true               # keď sa Erik dlho neozve, Mirana sa vtipne pripomenie (môže siahnuť po stave hry)
   after_min: 10               # po koľkých minútach ticha
