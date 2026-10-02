@@ -7,7 +7,7 @@ audio:
   # "názov, hostapi" = presný match; samotný názov by trafil aj MME variant, index sa mení po pripojení zariadenia
   output_device: "default"    # "default" = predvolený výstup Windows (teraz 24G1WG4 HDMI -> strihová karta -> stream)
   stream_output_device: null  # druhý výstup naraz (napr. slúchadlá + HDMI): "default" alebo názov; null = len jeden
-  volume: 100                 # hlasitosť Mirany v % (posúvač v hlavnom okne), 0-150
+  volume: 150                 # hlasitosť Mirany v % (posúvač v hlavnom okne), 0-150
   output_latency_ms: 100      # rezerva zvuku vo výstupe; HDMI má predvolene ~22 ms a pri záťaži hrou praská
   sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
   ptt_key: "mouse_x1"         # kláves ("f4") alebo tlačidlo myši: mouse_x1 = zadné bočné, mouse_x2 = predné bočné, mouse_middle
@@ -136,7 +136,7 @@ game_state:
   poll_interval_sec: 2
   stale_after_sec: 10         # starší stav = hra nebeží alebo je v menu, riadok [HRA] sa neposiela
   quiet_after_erik_sec: 30    # proaktívna hláška nepríde skôr ako 30 s po Erikovej otázke
-  speak_on: ["hp_critical", "hp_low", "death", "level_up", "district_change", "quest_changed", "quest_completed", "wanted_up"]   # ostatne udalosti len do logu; pocas sceny mlci
+  speak_on: ["hp_critical", "hp_low", "death", "level_up", "quest_changed", "quest_completed", "wanted_up"]   # ostatne udalosti len do logu; pocas sceny mlci
   hp_low_threshold: 25
   hp_critical_threshold: 10
 

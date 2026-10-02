@@ -13,7 +13,7 @@ ostatne idu dalej a v "errors" je, ktory.
 Texty z hry (questy, stvrte, veci) su v jazyku hry — Mirana ich berie ako vlastne mena.
 ]]
 
-local VERSION = 3
+local VERSION = 4
 local INTERVAL = 2.0          -- sekundy medzi zapismi
 local STORY_INTERVAL = 30.0   -- zoznam dokoncenych questov je drahsi, staci raz za 30 s
 local elapsed = 0
@@ -223,6 +223,9 @@ local function collect()
         if not kind then return end
         local name = target:GetDisplayName()
         if name == nil or name == "" then return end
+        if name:find("^Gameplay%-") or name:find("^LocKey#") then  -- zariadenia vracaju kluc, nie text
+            name = loc(name) or name
+        end
         local t = { name = name, kind = kind }
         if kind == "npc" then
             local tid = target:GetEntityID()
@@ -249,8 +252,8 @@ local function collect()
         state.time = string.format("%02d:%02d", GameTime.Hours(now), GameTime.Minutes(now))
     end)
     safe("weather", function()
-        local weather = Game.GetWeatherSystem():GetWeatherState()
-        state.weather = weather and weather.name and weather.name.value or nil  -- napr. "24h_weather_rain"
+        -- worldWeatherScriptInterface ma len dazd: NoRain / LightRain / HeavyRain
+        state.weather = enumName(Game.GetWeatherSystem():GetRainIntensityType())
     end)
     safe("scene", function()
         local defs = GetAllBlackboardDefs().PlayerStateMachine

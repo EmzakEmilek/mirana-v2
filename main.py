@@ -20,6 +20,7 @@ if sys.stderr is None:
 
 import logging
 import queue
+import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -27,7 +28,7 @@ from enum import Enum, auto
 
 from core.brain import Answer, Brain
 from core.budget import Budget
-from core.config import load_config
+from core.config import BASE_DIR, load_config
 from core.memory import Memory
 from core.safety import Safety
 from core.session import HEARTBEAT_PATH, ConversationLog, ensure_single_instance, setup_logging
@@ -42,6 +43,18 @@ from outputs.voice import Voice
 logger = logging.getLogger(__name__)
 
 MAX_TYPED_CHARS = 500  # pisana otazka z ovladacieho okna
+NOTE_VERB = re.compile(r"zap[ií]š|zapis|poznač|poznac|zaznač|zaznac", re.I)
+NOTE_PLACE = re.compile(r"do logu|log|poznám|poznam", re.I)
+NOTES_PATH = BASE_DIR / "logs" / "poznamky.md"
+
+
+def save_note(text: str) -> None:
+    """"Mirana, zapis si do logu, ze ..." -> logs/poznamky.md (podklad na upravy Mirany)."""
+    if NOTE_VERB.search(text) and NOTE_PLACE.search(text):
+        NOTES_PATH.parent.mkdir(exist_ok=True)
+        with NOTES_PATH.open("a", encoding="utf-8") as f:
+            f.write(f"- {time.strftime('%Y-%m-%d %H:%M')} {text}\n")
+        logger.info("poznamka ulozena do %s", NOTES_PATH.name)
 
 
 class State(Enum):
@@ -191,6 +204,7 @@ class Mirana:
                 self._events.put(("silent", job, None))
                 return
             logger.info("Erik: %s  (STT %.1f s)", transcript, stt_sec)
+            save_note(transcript)
             self.overlay.erik(transcript)
             if self.budget.exceeded():
                 self._events.put(("fallback", job, "budget_reached"))
@@ -358,6 +372,7 @@ class Mirana:
     def _work_text(self, job: Job, text: str) -> None:
         try:
             logger.info("Erik (pisane): %s", text)
+            save_note(text)
             self.overlay.erik(text)
             if self.budget.exceeded():
                 self._events.put(("fallback", job, "budget_reached"))

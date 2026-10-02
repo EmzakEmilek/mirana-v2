@@ -87,10 +87,13 @@ def resolve_json_path(cfg: dict) -> Path | None:
 PSEUDO_QUESTS = {"Neobjevené", "Neobjavené", "Undiscovered"}
 PSEUDO_QUEST_IDS = {"generic_sts_quest"}
 
+TARGET_HOLD_SEC = 10  # ako dlho po odvrateni pohladu sa ciel este posiela ("pred chvilou zameriaval")
+
 # Od tejto urovne je hrac v scene (rozhovor s volbami, cutscena) — gamePSMHighLevel.SceneTier3+
 SCENE_TIER = 3
 
-WEATHER = [  # (kus nazvu stavu pocasia z hry, slovensky) — prvy zhodny vyhrava
+WEATHER = [  # (kus nazvu stavu pocasia z hry, slovensky) — prvy zhodny vyhrava; None = nespominat
+    ("norain", None), ("heavyrain", "silný dážď"), ("lightrain", "slabý dážď"),  # mod v4: len dazd
     ("toxic", "toxický dážď"), ("sandstorm", "piesočná búrka"), ("rain", "dážď"), ("pollution", "smog"),
     ("fog", "hmla"), ("heavy_clouds", "zamračené"), ("cloudy", "zamračené"), ("light_clouds", "polooblačno"),
     ("sunny", "jasno"), ("clear", "jasno"),
@@ -102,6 +105,14 @@ ATTRIBUTES = [("body", "Telo"), ("reflexes", "Reflexy"), ("tech", "Technika"), (
 
 def _plural(n: int, one: str, few: str, many: str) -> str:
     return one if n == 1 else few if 2 <= n <= 4 else many
+
+
+def _thing_name(value) -> str | None:
+    """Nazov z hry; neprelozeny kluc zariadenia "Gameplay-Devices-DisplayNames-ExplosivePropane"
+    -> "Explosive Propane" (lepsie nez nic, model to pochopi)."""
+    if isinstance(value, str) and value.startswith("Gameplay-"):
+        value = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", value.rsplit("-", 1)[-1])
+    return _text(value)
 
 
 def _text(value) -> str | None:
@@ -254,12 +265,14 @@ def _situation(s: Snapshot) -> str:
 
 def _target(s: Snapshot) -> str | None:
     t = s.get("target") if isinstance(s.get("target"), dict) else None
-    if not t or not _text(t.get("name")):
+    name = _thing_name(t.get("name")) if t else None
+    if not name:
         return None
+    verb = "pred chvíľou zameriaval" if t.get("recent") else "zameriava"
     if t.get("kind") == "vehicle":
-        return f"zameriava vozidlo {t['name']}"
+        return f"{verb} vozidlo {name}"
     if t.get("kind") == "device":
-        return f"zameriava zariadenie {t['name']}"
+        return f"{verb} zariadenie {name}"
     info = []
     if t.get("dead"):
         info.append("mŕtvy")
@@ -273,7 +286,7 @@ def _target(s: Snapshot) -> str | None:
         info.append(f"úroveň {t['level']}")
     if t.get("hp") is not None and not t.get("dead") and t.get("hp") < 100:
         info.append(f"zdravie {t['hp']} %")
-    return f"zameriava {t['name']}" + (f" ({', '.join(info)})" if info else "")
+    return f"{verb} {name}" + (f" ({', '.join(info)})" if info else "")
 
 
 def _vehicle(s: Snapshot) -> str | None:
@@ -386,6 +399,7 @@ class GameState:
         self._was_live = False
         self._last_quest: str | None = None
         self._errors: set[str] = set()
+        self._last_target: tuple[dict, float] | None = None
 
     def start(self) -> None:
         if not self.enabled:
@@ -428,6 +442,12 @@ class GameState:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 return  # mod prave zapisuje, precitame o chvilu
+            # Erik sa spyta "kto je toto?" az ked uz zameriavac uhol — ciel plati este TARGET_HOLD_SEC
+            target = data.get("target") if isinstance(data.get("target"), dict) else None
+            if target:
+                self._last_target = (dict(target), time.time())
+            elif self._last_target and time.time() - self._last_target[1] <= TARGET_HOLD_SEC:
+                data["target"] = {**self._last_target[0], "recent": True}
             snap = Snapshot(data)
             with self._lock:
                 prev, self._current = self._current, snap

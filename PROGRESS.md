@@ -162,6 +162,16 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   len ukaze na HUD). idle_nudge: po 10 min bez Erikovej otazky (hovorenej alebo pisanej) tag [IDLE] + [HRA] ->
   jedna vtipna veta; nie v boji, v scene, ked Mirana hovori ani do 60 s po hlaske z hry; max 3 za sebou, Erikova
   otazka pocitadlo vynuluje. Persona: tag [IDLE]. Overene bez zvuku + 4 ukazky z Opusu ($0.035), kazda ina.
+- PRVY TESTOVACI STREAM (2026-10-02, Twitch, ~3 h, 18:45-21:32): 106 volani (96 Erik, 9 hernych udalosti, 1 pripomienka),
+  $0.79 spolu, 0.74 c/otazka, 0 padov, 0 chyb API. Sonnet 5.5 medium (70) -> Erik prepol na Opus 5.5 low (36).
+  Prva veta median 3.5 s (Sonnet ~2.4 s, Opus ~5 s), max 15.8 s; STT v hre median 2.5 s. Chat videla v 56 otazkach.
+  Zistenia a opravy (mod v4): pocasie (worldWeatherScriptInterface ma len GetRainIntensityType), nazvy zariadeni
+  (Gameplay-Devices-... kluc), ciel pod zameriavacom drzany 10 s ("pred chvilou zameriaval"), [CHAT] so zoznamom kto
+  dnes pisal (pozdrav menovite), "zapis si do logu" -> logs/poznamky.md, district_change uz bez hlasky (Erik: "odveci").
+  Persona: menej nadavok (Erik: "strasne vela nadavas"), nesurit do questov ("Jackie caka" v mnohych odpovediach),
+  bez naznakov typu "zmeni to veci", [GAME_EVENT] bez turistickych opisov.
+  ZOSTAVA: lore (Sonnet nepozna vela veci; Erik chce wiki) — moznosti: web search tool Claude API (Fandom), alebo
+  lokalny lore index; Opus vie lore vyrazne lepsie.
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

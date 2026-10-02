@@ -66,6 +66,14 @@ def clean_text(text: str, max_chars: int) -> str:
     return text if len(text) <= max_chars else text[:max_chars].rstrip() + "…"
 
 
+MAX_CHATTERS = 25
+
+
+def _who(m: ChatMessage) -> str:
+    label = next((sk for badge, sk in BADGE_LABELS if badge in m.badges), None)
+    return f"{m.nick} ({label})" if label else m.nick
+
+
 def channel_name(raw: str | None) -> str:
     """"https://www.twitch.tv/Emzo", "#emzo", "Emzo" -> "emzo"."""
     raw = (raw or "").strip().rstrip("/")
@@ -86,6 +94,7 @@ class TwitchChat:
         self.on_message = on_message
         self.on_status = on_status
         self._messages: deque[ChatMessage] = deque(maxlen=200)
+        self._chatters: dict[str, str] = {}  # login -> nick (s odznakom), kto dnes v chate pisal
         self._lock = threading.Lock()
         self.connected = False
 
@@ -105,12 +114,12 @@ class TwitchChat:
         now = time.time()
         with self._lock:
             recent = [m for m in self._messages if now - m.at <= self.max_age][-self.max_messages:]
-        if not recent:
+            chatters = list(self._chatters.values())[-MAX_CHATTERS:]
+        if not recent and not chatters:
             return None
-        parts = []
-        for m in recent:
-            label = next((sk for badge, sk in BADGE_LABELS if badge in m.badges), None)
-            parts.append(f"{m.nick}{f' ({label})' if label else ''}: {m.text}")
+        parts = [f"{_who(m)}: {m.text}" for m in recent] or ["posledné minúty v chate ticho"]
+        if chatters:
+            parts.append("dnes v chate písali: " + ", ".join(chatters))
         return "[CHAT] " + " | ".join(parts)
 
     # --- vnutro -------------------------------------------------------------------------------
@@ -127,6 +136,8 @@ class TwitchChat:
             return
         with self._lock:
             self._messages.append(msg)
+            self._chatters.pop(msg.login, None)
+            self._chatters[msg.login] = _who(msg)  # najnovsi na konci
         logger.info("chat %s: %s", msg.nick, msg.text)
         if self.on_message:
             self.on_message(msg)
