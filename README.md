@@ -133,6 +133,20 @@ z verejného decapi.me — netreba prihlásenie), hodiny a kontext (kde si bol, 
 Automaticky sa zapíšu aj smrti, levely, dokončené hlavné questy a policajné naháňačky od 3 hviezd.
 Na „Mirana, zhrň stream“ dostane Mirana štatistiky (`[STREAM]`: dĺžka, smrti, levely, questy, značky).
 
+## Dlhodobá pamäť
+
+`data/memory.json` (upraviteľné v Nastaveniach → **Pamäť**): postup v hre (automaticky z telemetrie), história
+streamov (dĺžka, smrti, levely, questy, 2–3 momenty), fakty o tebe a dohody (rozhodnutia v hre, štýl hrania,
+„nadávaj menej“…) a diváci z chatu (návštevy, sub/mod + 1–3 poznámky: čo radia, ako vtipkujú — nikdy osobné údaje).
+
+- Postup v hre a štatistiky divákov sa zapisujú priebežne. Fakty, poznámky o divákoch a momenty zhrnie model
+  (`longterm.model`, ~2–5 c za stream) každých 30 min a pri vypnutí; čo nestihne (pád), doplní ďalší štart.
+  Chat sa na to ukladá do `logs/chat-<čas>.jsonl`.
+- Do promptu ide blok `[PAMÄŤ]` (hra, streamy, fakty; v cache, nič nespomalí) a pri otázke `[DIVÁCI]` len o
+  divákoch, ktorí sú práve v chate alebo ich spomenieš. Divákov sama neoslovuje — len keď sa pýtaš alebo máš pozdraviť chat.
+- Hlasom: „čo o mne vieš?“, „čo vieš o Kubovi?“, „zabudni Kuba“ (zmaže poznámky o divákovi), „zabudni, že…“.
+- Vypnutie Mirany trvá o pár sekúnd dlhšie (ukladá pamäť, najviac ~25 s).
+
 ## Mirana vidí hru
 
 Pri otázkach „čo je toto?“, „kto je to?“, „vidíš?“, „pozri…“ pošle Mirana modelu snímku **len okna hry**
@@ -210,6 +224,7 @@ Pauzu zakryje filler hláška.
 | `core/brain.py` | Claude, streaming po vetách, prompt cache |
 | `core/stt.py` | lokálny faster-whisper alebo Whisper API, filter halucinácií |
 | `core/wiki.py` | Cyberpunk Fandom wiki ako nástroj pre model |
+| `core/longterm.py` | dlhodobá pamäť (hra, streamy, fakty o Erikovi, diváci) |
 | `core/vision.py` | snímka okna hry pre otázky „čo je toto?“ |
 | `core/highlights.py` | momenty na strih, čas vo VOD-ke, štatistiky streamu |
 | `core/memory.py` | pamäť rozhovoru (12 výmen, orez na 6) |

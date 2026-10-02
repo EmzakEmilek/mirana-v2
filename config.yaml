@@ -139,6 +139,13 @@ vision:
   window_title: "Cyberpunk 2077"   # názov okna hry; hra musí bežať v okne alebo okne bez okrajov
   max_width: 1280             # ~1200 tokenov = ~0,24 c na Sonnete 5.5, +0,2 s k prvej vete
 
+longterm:
+  enabled: true               # dlhodobá pamäť (data/memory.json): hra, streamy, fakty o Erikovi, diváci
+  model: "claude-sonnet-5-5"  # zhrnutie rozhovoru a chatu do pamäte (~2-5 c za stream)
+  checkpoint_min: 30          # zhrnutie každých 30 min a pri vypnutí (čo nestihne, doplní ďalší štart)
+  max_facts: 25               # najviac faktov o Erikovi
+  viewer_notes: 3             # najviac poznámok na diváka
+
 idle_nudge:
   enabled: true               # keď sa Erik dlho neozve, Mirana sa vtipne pripomenie (môže siahnuť po stave hry)
   after_min: 10               # po koľkých minútach ticha
@@ -156,7 +163,7 @@ game_state:
   poll_interval_sec: 0.5      # mod zapisuje každú 1 s; čítanie len pri zmene súboru, takže nič nestojí
   stale_after_sec: 10         # starší stav = hra nebeží alebo je v menu, riadok [HRA] sa neposiela
   quiet_after_erik_sec: 30    # proaktívna hláška nepríde skôr ako 30 s po Erikovej otázke
-  speak_on: ["hp_critical", "hp_low", "death", "level_up", "quest_changed", "quest_completed", "wanted_up"]   # ostatne udalosti len do logu; pocas sceny mlci
+  speak_on: ["hp_critical", "hp_low", "death", "level_up", "quest_changed", "quest_completed", "wanted_up", "combat_start", "combat_end"] # ostatne udalosti len do logu; pocas sceny mlci
   hp_low_threshold: 25
   hp_critical_threshold: 10
 

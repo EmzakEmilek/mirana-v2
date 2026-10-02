@@ -100,6 +100,7 @@ class Brain:
             timeout=limits["api_timeout_sec"], max_retries=limits["api_retries"], default_headers=headers
         )
         self._cache_checked = False
+        self.memory_block = None  # callable -> [PAMÄŤ] text (core.longterm), nastavuje main.py
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
         """Whisper (api|local podla config), jazyk podla config. None pri zlyhani."""
@@ -112,6 +113,9 @@ class Brain:
             persona_block["cache_control"] = {"type": "ephemeral"}
 
         system = [persona_block]
+        memory = self.memory_block() if self.memory_block else None
+        if memory:  # dlhodoba pamat: meni sa len pri starte a po zhrnuti, preto vlastny cache breakpoint
+            system.append({"type": "text", "text": memory, "cache_control": {"type": "ephemeral"}})
         if game_state_line:
             system.append({"type": "text", "text": game_state_line})
         return system

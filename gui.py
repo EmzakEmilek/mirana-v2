@@ -184,13 +184,13 @@ class App(ctk.CTk):
         self._send("quit")
         proc = self.proc
         if wait:
-            deadline = time.time() + 8
+            deadline = time.time() + 35  # pri vypnuti sa uklada pamat (zhrnutie modelom, max ~25 s)
             while proc is not None and proc.poll() is None and time.time() < deadline:
                 time.sleep(0.2)
             self._kill_tree(proc)
         else:
             # ak by nereagovala, zabi supervisor aj Miranu — prave tento proces, nie novy po restarte
-            self.after(8000, lambda: self._kill_tree(proc))
+            self.after(35000, lambda: self._kill_tree(proc))
 
     def _kill_tree(self, proc: subprocess.Popen | None = None) -> None:
         proc = proc if proc is not None else self.proc

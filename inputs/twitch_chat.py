@@ -109,6 +109,11 @@ class TwitchChat:
 
     # --- pre prompt ---------------------------------------------------------------------------
 
+    def recent_logins(self) -> list[str]:
+        now = time.time()
+        with self._lock:
+            return list({m.login for m in self._messages if now - m.at <= self.max_age})
+
     def line(self) -> str | None:
         """Posledne spravy (najnovsia na konci) ako jeden riadok, alebo None, ked je chat ticho."""
         now = time.time()

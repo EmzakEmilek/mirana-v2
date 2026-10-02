@@ -195,6 +195,13 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   [OBRAZOVKA] v sprave, do pamate nejde. Test na okne MIRANA: snimka 113 ms, model okno spravne opisal.
   HUD: databaza strieda hlasky kazde 2 s (nahlas len prva), vizualny sken; Nastavenia -> HUD -> Test efektov
   (odpoved, databaza, sken, level, quest, smrt, policia, kriticke HP — prikaz hud_test, len vizual).
+- Dlhodoba pamat (2026-10-02, SPEC 5.6 + pamat divakov): core/longterm.py, data/memory.json — game (z telemetrie
+  raz za 30 s), streams (statistiky + momenty), erik.facts (zhrnutie modelom, max 25), viewers (statistiky automaticky
+  + 1-3 poznamky modelom, bez osobnych udajov). Zhrnutie Sonnet 5.5 low structured output kazdych 30 min, pri vypnuti
+  (max 25 s, GUI caka 35 s) a pri starte nespracovane sessions; prvy beh spracoval stream 2026-10-02 (aj chat z riadkov
+  [CHAT]) za 28 s. [PAMÄŤ] system blok s vlastnym cache breakpointom, [DIVÁCI] len pre divakov v chate/spomenutych,
+  "zabudni X" (divak) / "zabudni, ze..." (model vyberie fakty). Nastavenia -> Pamat (fakty, poznamky "login: a | b",
+  vymazat divakov, zabudnut vsetko -> memory_reload bez restartu). E2E test: pamat aj divaci spravne, zabudni funguje.
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

@@ -6,6 +6,7 @@ fillers/*.wav, aby sa pri starte vygenerovali novym hlasom.
 """
 
 import copy
+import json
 import re
 import threading
 import tkinter.messagebox as messagebox
@@ -112,7 +113,8 @@ class SettingsWindow(ctk.CTkToplevel):
         for name, build in (("Zvuk", self._tab_audio), ("Hlas", self._tab_voice), ("Model", self._tab_model),
                             ("Hra", self._tab_game),
                             ("Prepis", self._tab_stt), ("Fillery", self._tab_fillers), ("HUD", self._tab_hud),
-                            ("Chat", self._tab_chat), ("Bezpečnosť", self._tab_safety), ("Persona", self._tab_persona)):
+                            ("Chat", self._tab_chat), ("Bezpečnosť", self._tab_safety), ("Pamäť", self._tab_memory),
+                            ("Persona", self._tab_persona)):
             build(tabs.add(name))
 
         bar = ctk.CTkFrame(self, fg_color=BG)
@@ -426,6 +428,81 @@ class SettingsWindow(ctk.CTkToplevel):
                      anchor="w").pack(fill="x", padx=10, pady=(8, 0))
         self.words_box = self._textbox(tab, "\n".join(safety.get("blocked_words", [])), 220)
 
+    def _tab_memory(self, tab):
+        """Dlhodoba pamat (data/memory.json): fakty o Erikovi a poznamky o divakoch sa daju upravit."""
+        from core.longterm import MEMORY_PATH
+        try:
+            mem = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            mem = {}
+        self.memory_original = mem
+        game, streams = mem.get("game") or {}, [s for s in mem.get("streams") or [] if s.get("date")]
+        info = []
+        if game:
+            info.append(f"Hra: úroveň {game.get('level', '?')}, dokončené hlavné questy {len(game.get('main_done') or [])}, "
+                        f"naposledy {', '.join(x for x in (game.get('last_location'), game.get('last_quest')) if x) or '?'}")
+        if streams:
+            info.append(f"Streamov v pamäti: {len(streams)} (posledný {streams[-1]['date']})")
+        ctk.CTkLabel(tab, text="\n".join(info) or "Pamäť je zatiaľ prázdna — naplní sa počas streamu.",
+                     text_color=DIM, anchor="w", justify="left").pack(fill="x", padx=10, pady=(4, 6))
+        ctk.CTkLabel(tab, text="Fakty o tebe (jeden na riadok; zmazaním riadku Mirana zabudne):", text_color=TEXT,
+                     anchor="w").pack(fill="x", padx=10)
+        self.facts_box = self._textbox(tab, "\n".join((mem.get("erik") or {}).get("facts") or []), 150)
+        ctk.CTkLabel(tab, text="Diváci — poznámky (login: poznámka | poznámka). Štatistiky návštev ostávajú:",
+                     text_color=TEXT, anchor="w").pack(fill="x", padx=10, pady=(6, 0))
+        viewers = sorted((mem.get("viewers") or {}).items(), key=lambda kv: -kv[1].get("messages", 0))
+        self.viewers_box = self._textbox(tab, "\n".join(f"{login}: {' | '.join(v.get('notes') or [])}" for login, v in viewers), 150)
+        row = ctk.CTkFrame(tab, fg_color="transparent")
+        row.pack(fill="x", padx=10, pady=4)
+        ctk.CTkButton(row, text="Vymazať poznámky o divákoch", width=220, fg_color=PANEL, border_width=1,
+                      border_color=RED, text_color=TEXT, command=self._clear_viewer_notes).pack(side="left")
+        ctk.CTkButton(row, text="Zabudnúť všetko", width=160, fg_color=PANEL, border_width=1, border_color=RED,
+                      text_color=TEXT, command=self._forget_all).pack(side="left", padx=8)
+        self._forget_everything = False
+
+    def _clear_viewer_notes(self):
+        lines = [ln.split(":", 1)[0] + ": " for ln in self.viewers_box.get("1.0", "end").splitlines() if ln.strip()]
+        self.viewers_box.delete("1.0", "end")
+        self.viewers_box.insert("1.0", "\n".join(lines))
+
+    def _forget_all(self):
+        if messagebox.askyesno("Pamäť", "Naozaj zabudnúť všetko (fakty, divákov, streamy, postup v hre)?", parent=self):
+            self._forget_everything = True
+            self.facts_box.delete("1.0", "end")
+            self.viewers_box.delete("1.0", "end")
+            self.hint.configure(text="Pamäť sa vymaže po uložení.", text_color=RED)
+
+    def _save_memory(self) -> bool:
+        """Zapise upravy pamate do data/memory.json (cerstvy subor + len fakty a poznamky). True = zmena."""
+        from core.longterm import MEMORY_PATH
+        facts = [ln.strip() for ln in self.facts_box.get("1.0", "end").splitlines() if ln.strip()]
+        notes = {}
+        for ln in self.viewers_box.get("1.0", "end").splitlines():
+            if ":" in ln:
+                login, _, rest = ln.partition(":")
+                notes[login.strip().lower()] = [n.strip() for n in rest.split(" | ") if n.strip()]
+        orig = self.memory_original
+        orig_notes = {k: v.get("notes") or [] for k, v in (orig.get("viewers") or {}).items()}
+        if not self._forget_everything and facts == ((orig.get("erik") or {}).get("facts") or []) and all(
+                notes.get(k, []) == n for k, n in orig_notes.items()):
+            return False
+        try:
+            mem = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            mem = {}
+        if self._forget_everything:  # spracovane sessions ostanu oznacene, aby sa stare logy nespracovali znova
+            mem = {"version": 1, "game": {}, "streams": [], "erik": {"facts": []}, "viewers": {},
+                   "processed": mem.get("processed", {})}
+        else:
+            mem.setdefault("erik", {})["facts"] = facts
+            for login, v in (mem.get("viewers") or {}).items():
+                v["notes"] = notes.get(login, [])
+        MEMORY_PATH.parent.mkdir(exist_ok=True)
+        tmp = MEMORY_PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(mem, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(MEMORY_PATH)
+        return True
+
     def _tab_persona(self, tab):
         ctk.CTkLabel(tab, text="Osobnosť Mirany (persona.md). Záloha pred uložením: data/persona.md.bak  ·  Ctrl+F = hľadať",
                      text_color=DIM, anchor="w").pack(fill="x", padx=10)
@@ -701,6 +778,8 @@ class SettingsWindow(ctk.CTkToplevel):
                 wav.unlink(missing_ok=True)
 
         settings.save(self.cfg)
+        if self._save_memory():
+            self.app._send("memory_reload")  # bezaca Mirana si pamat hned nacita (bez restartu)
         persona = self.persona_box.get("1.0", "end").rstrip()
         if persona != self.persona_original.rstrip():
             settings.save_persona(persona)

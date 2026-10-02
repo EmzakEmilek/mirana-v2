@@ -28,6 +28,7 @@ from enum import Enum, auto
 
 from core.brain import Answer, Brain
 from core.highlights import Highlights
+from core.longterm import LongTermMemory
 from core.budget import Budget
 from core.config import BASE_DIR, load_config
 from core.memory import Memory
@@ -48,6 +49,7 @@ MAX_TYPED_CHARS = 500  # pisana otazka z ovladacieho okna
 NOTE_VERB = re.compile(r"zap[ií]š|zapis|poznač|poznac|zaznač|zaznac", re.I)
 NOTE_PLACE = re.compile(r"do logu|log|poznám|poznam", re.I)
 NOTES_PATH = BASE_DIR / "logs" / "poznamky.md"
+FORGET = re.compile(r"\bzabudni\b", re.I)  # "Mirana, zabudni Kuba" / "zabudni, ze nemam rad stealth"
 STREAM_WORDS = re.compile(r"stream|zhr[nň]|dnes", re.I)  # otazka o streame -> riadok [STREAM] so statistikami
 
 
@@ -112,12 +114,15 @@ class Mirana:
 
         self.conversation = ConversationLog(session_id)
         self.highlights = Highlights(config)
+        self.longterm = LongTermMemory(config, session_id)
+        self._longterm_game_at = 0.0
         self.vision = Vision(config)
         self._questions = 0
         self._last_exchange = ("", "")  # posledna otazka a odpoved — kontext k znacke na strih
         self.budget = Budget(config)
         self.memory = Memory(config)
         self.brain = Brain(config, self.budget)
+        self.brain.memory_block = lambda: self.longterm.block
         self.voice = Voice(config)
         self.fillers = Fillers(config, self.voice)
         self.overlay = Overlay(config)
@@ -139,7 +144,7 @@ class Mirana:
         self.game = GameState(config, on_event=lambda name, snap, text: self._events.put(
                                   ("game_event", None, (name, snap, self._record_game_event(name, snap, text)))),
                               on_snapshot=self._on_game_snapshot)
-        self.chat = TwitchChat(config, on_message=lambda m: self.overlay.chat(m.nick, m.text),
+        self.chat = TwitchChat(config, on_message=self._on_chat,
                                on_status=self.overlay.chat_status)
         self.ptt.on_panic = self._on_panic
         self.ptt.on_marker = self._on_marker
@@ -175,6 +180,14 @@ class Mirana:
             else:
                 self._set_state(State.IDLE)
                 logger.info("panic mute vypnuty")
+
+    def _on_chat(self, msg) -> None:
+        self.overlay.chat(msg.nick, msg.text)
+        self.longterm.add_chat(msg)
+
+    def _save_stream(self) -> None:
+        minutes = int((time.time() - self.highlights.session_start) // 60)
+        self.longterm.update_stream(self.highlights.stats, minutes)
 
     def _on_marker(self) -> None:
         """Bocne tlacidlo: moment na strih. Sietove volanie (cas streamu) mimo hooku mysi."""
@@ -243,6 +256,8 @@ class Mirana:
             self._events.put(("quit",))
         elif cmd == "ask" and text:
             self._events.put(("typed", text))
+        elif cmd == "memory_reload":
+            self.longterm.reload()
         elif cmd == "hud_test" and text:
             threading.Thread(target=self._hud_test, args=(text,), name="hud-test", daemon=True).start()
         elif cmd == "volume" and text:
@@ -307,6 +322,17 @@ class Mirana:
             if found and not job.cancelled:
                 self.overlay.search(found[0])
                 wiki = f"[WIKI {found[0]}] {found[1]}"
+        viewers = system = None
+        if erik:
+            question = tagged_text[7:]
+            if FORGET.search(question):
+                nick = self.longterm.forget_viewer(question)
+                if nick:
+                    system = f"[SYSTÉM] poznámky o divákovi {nick} sú zmazané"
+                else:
+                    n = self.longterm.forget_fact(self.brain.anthropic_client, question)
+                    system = f"[SYSTÉM] z pamäte o Erikovi zmazané fakty: {n}" if n else "[SYSTÉM] v pamäti som nič také nenašla"
+            viewers = self.longterm.viewers_line(self.chat.recent_logins(), question)
         image = None
         if erik and self.vision.wants(tagged_text):
             # "co je toto?" — snimka okna hry (len hra, nikdy cely monitor), ~50 ms + ~0.2 s pre model
@@ -314,7 +340,7 @@ class Mirana:
             if image and not job.cancelled:
                 self.overlay.scan()
         lines = [self.game.line(), stream, wiki, "[OBRAZOVKA] priložená snímka hry" if image else None,
-                 self.chat.line() if erik else None]
+                 self.chat.line() if erik else None, viewers, system]
         job.tagged_text = tagged_text
         job.user_text = "\n".join([x for x in lines if x] + [tagged_text])
         answer = self.brain.ask_stream(
@@ -374,6 +400,9 @@ class Mirana:
         if shown != self._telemetry_shown:
             self._telemetry_shown = shown
             self.overlay.telemetry(*shown)
+        if snap and time.time() - self._longterm_game_at > 30:
+            self._longterm_game_at = time.time()
+            self.longterm.update_game(snap)
         line = self.game.line()
         if line != self._game_line_shown:  # ovladacie okno: aktualne zdravie, cas, ciel...
             self._game_line_shown = line
@@ -589,9 +618,22 @@ class Mirana:
             self._cancel_filler(job)
             self.speaker.say_all(job, self.fallback[payload])
 
+    def _shutdown_memory(self) -> None:
+        """Pred vypnutim: statistiky dna a zhrnutie modelom (max ~25 s; co nestihne, doplni dalsi start)."""
+        try:
+            self._save_stream()
+            self.overlay.notice("Ukladám pamäť…")
+            worker = threading.Thread(target=self.longterm.extract, args=(self.brain.anthropic_client,), daemon=True)
+            worker.start()
+            worker.join(timeout=25)
+            self.longterm.save(force=True)
+        except Exception:
+            logger.exception("pamat sa pri vypnuti neulozila")
+
     def run(self) -> None:
         self.overlay.start()
         self.highlights.start()
+        self.longterm.start(self.brain.anthropic_client, stats_fn=self._save_stream)
         self.game.start()
         self.chat.start()
         self.ptt.start()
@@ -613,6 +655,7 @@ class Mirana:
             if event == "quit":
                 logger.info("vypnutie z ovladacieho okna")
                 self.voice.stop()
+                self._shutdown_memory()
                 return
             try:
                 if event == "recording":
