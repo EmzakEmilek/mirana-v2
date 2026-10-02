@@ -25,6 +25,13 @@
 
   .hud { position: relative; width: 100%; height: 100vh; }
 
+  /* Režim "fit": zdroj v OBS má tvar panela (napr. 1000x160) -> panel vyplní celý zdroj
+     a v OBS sa dá ťahať za rohy ako obrázok. Pri zdroji na celú obrazovku ostáva dole v strede. */
+  html.fit .panel {
+    left: 50%; top: 50%; bottom: auto; width: 980px;
+    transform: translate(-50%, -50%) scale(var(--fit, 1));
+  }
+
   /* ==================================================================
      HLAVNÝ PANEL — dole na stred. Vľavo jadro (canvas), vpravo text.
      Farba akcentu sa mení so stavom (idle tlmená, listening cyan,
@@ -119,6 +126,17 @@
   }
 </style>
 <script>if (!window.obsstudio) document.documentElement.classList.add('preview');</script>
+<script>
+  // Zdroj aspoň 3x širší ako vysoký = režim fit: panel (980x150) sa zmenší/zväčší na celý zdroj.
+  function fitHud() {
+    const w = window.innerWidth, h = window.innerHeight, root = document.documentElement;
+    const fit = w / h >= 3;
+    root.classList.toggle('fit', fit);
+    if (fit) root.style.setProperty('--fit', Math.min((w - 6) / 980, (h - 6) / 150).toFixed(4));
+  }
+  window.addEventListener('resize', fitHud);
+  document.addEventListener('DOMContentLoaded', fitHud);
+</script>
 </head>
 <body>
 

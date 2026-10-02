@@ -23,7 +23,9 @@ Obe sa menia v Nastaveniach → Zvuk (tlačidlo **Stlačiť…** a stlač, čo c
 Hra tlačidlo dostane tiež, preto nech v nej nemá priradenú akciu.
 
 HUD: `http://localhost:8080`; na streamovacom notebooku v OBS Browser Source `http://192.168.1.110:8080`
-(IP herného PC, alebo `http://ErikPC:8080`). Vo firewalle herného PC je pravidlo „MIRANA HUD (TCP 8080)" len pre domácu sieť.
+(IP herného PC, alebo `http://ErikPC:8080`). Rozlíšenie zdroja: buď celá obrazovka (1920×1080, HUD dole v strede),
+alebo v tvare panela, napr. **1960×300** — vtedy HUD vyplní celý zdroj a v OBS ho stačí ťahať za rohy ako obrázok
+(väčšie rozlíšenie = ostrejší text pri zväčšení). Vo firewalle herného PC je pravidlo „MIRANA HUD (TCP 8080)" len pre domácu sieť.
 
 **Dual PC setup:** Mirana hrá na predvolený výstup Windows (`audio.output_device: "default"` = HDMI monitora
 → strihová karta → notebook), rovnako ako hra, takže je v streame bez Voicemeeteru. Ak chceš Miranu aj
