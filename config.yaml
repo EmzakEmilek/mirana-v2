@@ -6,6 +6,7 @@ audio:
   input_device: "Microphone (Logitech G733 Gaming Headset), Windows WASAPI"   # docasne slúchadlá; neskôr druhý mikrofón
   # "názov, hostapi" = presný match; samotný názov by trafil aj MME variant, index sa mení po pripojení zariadenia
   output_device: "Speakers (Logitech G733 Gaming Headset), Windows WASAPI"     # docasne; pre stream: "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
+  stream_output_device: "default"   # druhý výstup pre stream (HDMI -> strihová karta): "default" = predvolený výstup Windows, null = vypnuté
   sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
   ptt_key: "mouse_x1"         # kláves ("f4") alebo tlačidlo myši: mouse_x1 = zadné bočné, mouse_x2 = predné bočné, mouse_middle
   panic_mute_key: "mouse_x2"  # to isté; okamžite stíši Miranu, druhé stlačenie ju vráti
@@ -148,7 +149,7 @@ kick_chat:
 
 twitch_chat:
   enabled: true               # Mirana chat len číta (anonymne, bez bota, nič nepíše); komentuje ho, len keď sa Erik spýta
-  channel: ""                 # názov kanála alebo odkaz twitch.tv/... (Nastavenia -> Chat)
+  channel: "emzakemil"        # názov kanála alebo odkaz twitch.tv/... (Nastavenia -> Chat)
   max_messages: 15            # koľko posledných správ ide k Erikovej otázke (riadok [CHAT])
   max_age_sec: 300            # staršie správy sa neposielajú
   max_chars: 150              # dlhšia správa sa oreže

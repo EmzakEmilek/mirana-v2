@@ -74,13 +74,12 @@ Herný PC na kábli, nie Wi-Fi.
 
 28. ✅ **[CODE]** Efekty hlasu priamo v Mirane (`outputs/voice_fx.py`) — VST pluginy netreba.
     Preset sa vyberá v Nastaveniach → Hlas (teraz `robot`).
-29. ⏳ **[ERIK]** Herný PC: Nastavenia → Zvuk → Výstup = `Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI`,
-    vo Voicemeeteri VBAN send `VoiceToStream` na IP notebooku. Do slúchadiel si Miranu pusti cez Voicemeeter (A1).
-30. ⏳ **[ERIK]** Notebook: VoiceMeeter VBAN receive → OBS Audio Input Capture ako samostatná stopa.
-31. ⏳ **[ERIK]** Notebook: OBS Browser Source na `http://IP-herného-PC:8080`.
+29. ✅ **[CODE]** Zvuk do streamu bez Voicemeeteru: Mirana hrá naraz do slúchadiel aj na predvolený výstup Windows
+    (HDMI 24G1WG4 → strihová karta → notebook), `audio.stream_output_device: "default"`.
+30. ⏳ **[ERIK]** Na notebooku overiť, že Miranu počuť v OBS (ide spolu so zvukom hry cez strihovú kartu).
+31. ⏳ **[ERIK]** Notebook: OBS Browser Source na `http://192.168.1.110:8080` (herný PC, DHCP — ideálne rezervácia v routeri).
     **Shutdown source when not visible musí byť vypnuté** — inak zomrie WebSocket.
-32. ⏳ **[ERIK]** Firewall na hernom PC: TCP 8080 a UDP 6980, obe len Private.
-    Statická IP alebo DHCP rezervácia pre herný PC.
+32. ✅ **[CODE]** Firewall na hernom PC: pravidlo „MIRANA HUD (TCP 8080)“, len LocalSubnet (2026-10-02). VBAN netreba.
 
 ## Fáza 7 — Hardening ✅ (okrem suchého behu)
 
@@ -95,7 +94,7 @@ Herný PC na kábli, nie Wi-Fi.
 - [ ] Herný PC: okno MIRANA svieti STANDBY, bez červených chýb; dnešná útrata ďaleko od stropu
 - [ ] Cyberpunk beží, v okne je riadok „Hra: …" (mod posiela údaje)
 - [ ] Testovacia otázka cez zadné bočné tlačidlo myši → počuť odpoveď s efektom
-- [ ] Výstup je Voicemeeter (nie slúchadlá), Miranin hlas vidno v OBS audio mixeri
+- [ ] Miranin hlas počuť aj na notebooku (OBS mixer, zvuk zo strihovej karty)
 - [ ] Notebook: overlay v OBS svieti (stav STANDBY)
 - [ ] V okne svieti „Chat: #kanál pripojený“ (Twitch)
 - [ ] Vieš, kde je panic mute (predné bočné tlačidlo myši)

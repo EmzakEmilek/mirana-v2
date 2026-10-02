@@ -2,6 +2,7 @@
 
 import ctypes
 import io
+import logging
 import os
 import re
 import sys
@@ -17,6 +18,8 @@ import yaml
 
 from core.config import BASE_DIR
 from outputs.voice_fx import VoiceFx
+
+logger = logging.getLogger(__name__)
 
 _EMOJI_PATTERN = re.compile(
     "["
@@ -134,8 +137,24 @@ def sanitize_text(text: str) -> str:
     return text.strip()
 
 
+def resolve_output(spec) -> int | None:
+    """Vystup z configu -> index zariadenia. "default" = predvoleny vystup Windows (WASAPI), null = ziadny."""
+    if spec in (None, "", "none"):
+        return None
+    if str(spec).lower() == "default":
+        for api in sd.query_hostapis():
+            if api["name"] == "Windows WASAPI" and api["default_output_device"] >= 0:
+                return int(api["default_output_device"])
+        return int(sd.default.device[1])
+    return int(sd.query_devices(spec, "output")["index"])
+
+
 class Voice:
-    """Azure TTS -> WAV v pamati -> prehratie na audio.output_device."""
+    """Azure TTS -> WAV v pamati -> prehratie na audio.output_device (+ audio.stream_output_device).
+
+    Druhy vystup je pre stream: herny PC posiela zvuk cez HDMI do strihovej karty a na notebook,
+    Erik pocuva v sluchadlach. Mirana hra do oboch naraz, Voicemeeter netreba.
+    """
 
     def __init__(self, config: dict):
         tts_cfg = config["tts"]
@@ -157,9 +176,19 @@ class Voice:
         # WASAPI neprevzorkuje — necham Azure vratit WAV rovno v nativnej frekvencii vystupu
         # (VoiceMeeter 48 kHz, G733 44.1 kHz). Ine frekvencie preveziem v play() cez numpy.
         self.device_rate = int(sd.query_devices(self.output_device, "output")["default_samplerate"])
+        self.stream_device: int | None = None
+        try:
+            stream_device = resolve_output(config["audio"].get("stream_output_device"))
+            if stream_device is not None and stream_device != resolve_output(self.output_device):
+                self.stream_device = stream_device
+                self.stream_rate = int(sd.query_devices(stream_device)["default_samplerate"])
+                logger.info("vystup pre stream: %s", sd.query_devices(stream_device)["name"])
+        except Exception as e:
+            logger.warning("stream_output_device sa neda pouzit: %s", e)
         self._play_lock = threading.Lock()   # naraz hra len jedno
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._stream_warned = False
         self.on_level = None  # callback(0..1) pre kazdy prehrany kus — HUD vizualizacia hlasu
         output_format = _AZURE_FORMATS.get(self.device_rate, speechsdk.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
         speech_config.set_speech_synthesis_output_format(output_format)
@@ -223,11 +252,34 @@ class Voice:
     def stopped(self) -> bool:
         return self._stop_event.is_set()
 
+    def _play_stream_copy(self, audio: np.ndarray) -> None:
+        """Ta ista veta do druheho vystupu (stream), vo vlastnom vlakne — dve zariadenia zapisovane
+        striedavo v jednej slucke si cakania scitavali (+0.3 s na vetu). Chyba tu Miranu nezastavi."""
+        _ensure_com()
+        try:
+            if self.stream_rate != self.device_rate:
+                audio = _resample(audio, self.device_rate, self.stream_rate)
+            chunk = int(self.stream_rate * 0.05)
+            with sd.OutputStream(samplerate=self.stream_rate, device=self.stream_device,
+                                 channels=audio.shape[1], dtype="int16") as stream:
+                for start in range(0, audio.shape[0], chunk):
+                    if self._stop_event.is_set():
+                        break
+                    stream.write(np.ascontiguousarray(audio[start:start + chunk]))
+        except Exception as e:
+            if not self._stream_warned:
+                self._stream_warned = True
+                logger.warning("vystup pre stream zlyhal, hram len do sluchadiel: %s", e)
+
     def _play_blocking(self, audio: np.ndarray) -> None:
         _ensure_com()  # WASAPI stream z ineho vlakna (filler timer, worker) inak zlyha
         with self._play_lock:
             if self._stop_event.is_set():
                 return
+            copy = None
+            if self.stream_device is not None:
+                copy = threading.Thread(target=self._play_stream_copy, args=(audio,), daemon=True)
+                copy.start()
             chunk = int(self.device_rate * 0.05)
             with sd.OutputStream(
                 samplerate=self.device_rate, device=self.output_device, channels=audio.shape[1], dtype="int16"
@@ -239,6 +291,8 @@ class Voice:
                     if self.on_level is not None:
                         self.on_level(_level(piece))
                     stream.write(piece)
+            if copy is not None:
+                copy.join(timeout=2)  # dalsia veta az ked doznie aj v streame
             if self.on_level is not None:
                 self.on_level(0.0)
 

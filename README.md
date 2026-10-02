@@ -22,7 +22,12 @@ Cyberpunk 2077 ─► CET mod ─► state.json ─► riadok [HRA] + herné uda
 Obe sa menia v Nastaveniach → Zvuk (tlačidlo **Stlačiť…** a stlač, čo chceš: kláves alebo tlačidlo myši).
 Hra tlačidlo dostane tiež, preto nech v nej nemá priradenú akciu.
 
-HUD: `http://localhost:8080` (na notebooku v OBS: `http://IP-herného-PC:8080`).
+HUD: `http://localhost:8080`; na streamovacom notebooku v OBS Browser Source `http://192.168.1.110:8080`
+(IP herného PC, alebo `http://ErikPC:8080`). Vo firewalle herného PC je pravidlo „MIRANA HUD (TCP 8080)" len pre domácu sieť.
+
+**Dual PC setup:** Mirana hrá naraz do slúchadiel (`audio.output_device`) aj na predvolený výstup Windows
+(`audio.stream_output_device: "default"` = HDMI monitora → strihová karta → notebook), takže je v streame
+bez Voicemeeteru. Nastavenia → Zvuk → „Výstup pre stream".
 
 ## Inštalácia
 
