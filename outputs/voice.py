@@ -166,6 +166,9 @@ class Voice:
             self.output_device = resolve_output("default")
         logger.info("vystup: %s", sd.query_devices(self.output_device)["name"])
         self.volume = max(0.0, float(config["audio"].get("volume", 100)) / 100)  # meni sa za behu z okna
+        # Rezerva zvuku v zariadeni. HDMI (NVIDIA) ma predvolene len ~22 ms — pri zatazi hrou zvuk praska.
+        self.latency = max(0.02, float(config["audio"].get("output_latency_ms", 100)) / 1000)
+        self.channels = max(1, min(2, int(sd.query_devices(self.output_device)["max_output_channels"])))
         self._voice = tts_cfg["voice"]
         self._rate = tts_cfg["rate"]
         self._pitch = tts_cfg["pitch"]
@@ -259,12 +262,16 @@ class Voice:
     def stopped(self) -> bool:
         return self._stop_event.is_set()
 
-    def _gain(self, piece: np.ndarray) -> np.ndarray:
-        """Hlasitost z okna, po 50 ms kusoch — posuvnik zaberie aj uprostred vety."""
+    def _gain(self, piece: np.ndarray, channels: int = 1) -> np.ndarray:
+        """Hlasitost z okna (po 50 ms kusoch, posuvnik zaberie aj uprostred vety) + mono -> stereo.
+
+        Mono do stereo zariadenia inak prevadza ovladac; HDMI vystupy NVIDIA to robia zle (praskanie)."""
         volume = self.volume
-        if volume == 1.0:
-            return piece
-        return np.clip(piece.astype(np.float32) * volume, -32768, 32767).astype(np.int16)
+        if volume != 1.0:
+            piece = np.clip(piece.astype(np.float32) * volume, -32768, 32767).astype(np.int16)
+        if channels > piece.shape[1]:
+            piece = np.repeat(piece[:, :1], channels, axis=1)
+        return np.ascontiguousarray(piece)
 
     def _play_stream_copy(self, audio: np.ndarray) -> None:
         """Ta ista veta do druheho vystupu (stream), vo vlastnom vlakne — dve zariadenia zapisovane
@@ -274,12 +281,14 @@ class Voice:
             if self.stream_rate != self.device_rate:
                 audio = _resample(audio, self.device_rate, self.stream_rate)
             chunk = int(self.stream_rate * 0.05)
-            with sd.OutputStream(samplerate=self.stream_rate, device=self.stream_device,
-                                 channels=audio.shape[1], dtype="int16") as stream:
+            channels = max(1, min(2, int(sd.query_devices(self.stream_device)["max_output_channels"])))
+            with sd.OutputStream(samplerate=self.stream_rate, device=self.stream_device, channels=channels,
+                                 dtype="int16", latency=self.latency) as stream:
                 for start in range(0, audio.shape[0], chunk):
                     if self._stop_event.is_set():
+                        stream.abort()  # prerusenie: zahod rezervu, nech stichne hned
                         break
-                    stream.write(self._gain(np.ascontiguousarray(audio[start:start + chunk])))
+                    stream.write(self._gain(audio[start:start + chunk], channels))
         except Exception as e:
             if not self._stream_warned:
                 self._stream_warned = True
@@ -296,15 +305,17 @@ class Voice:
                 copy.start()
             chunk = int(self.device_rate * 0.05)
             with sd.OutputStream(
-                samplerate=self.device_rate, device=self.output_device, channels=audio.shape[1], dtype="int16"
+                samplerate=self.device_rate, device=self.output_device, channels=self.channels, dtype="int16",
+                latency=self.latency,
             ) as stream:
                 for start in range(0, audio.shape[0], chunk):
                     if self._stop_event.is_set():
+                        stream.abort()  # prerusenie: zahod rezervu, nech stichne hned
                         break
-                    piece = np.ascontiguousarray(audio[start:start + chunk])
+                    piece = audio[start:start + chunk]
                     if self.on_level is not None:
                         self.on_level(_level(piece))
-                    stream.write(self._gain(piece))
+                    stream.write(self._gain(piece, self.channels))
             if copy is not None:
                 copy.join(timeout=2)  # dalsia veta az ked doznie aj v streame
             if self.on_level is not None:
