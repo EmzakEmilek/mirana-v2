@@ -106,7 +106,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.persona_original = settings.load_persona()
         self.v: dict[str, ctk.Variable] = {}
 
-        tabs = ctk.CTkTabview(self, fg_color=PANEL, segmented_button_selected_color="#8a8200",
+        self.tabs = tabs = ctk.CTkTabview(self, fg_color=PANEL, segmented_button_selected_color="#8a8200",
                               segmented_button_selected_hover_color="#a39a00")
         tabs.pack(fill="both", expand=True, padx=12, pady=(8, 4))
         for name, build in (("Zvuk", self._tab_audio), ("Hlas", self._tab_voice), ("Model", self._tab_model),
@@ -404,9 +404,72 @@ class SettingsWindow(ctk.CTkToplevel):
         self.words_box = self._textbox(tab, "\n".join(safety.get("blocked_words", [])), 220)
 
     def _tab_persona(self, tab):
-        ctk.CTkLabel(tab, text="Osobnosť Mirany (persona.md). Záloha pred uložením: data/persona.md.bak",
+        ctk.CTkLabel(tab, text="Osobnosť Mirany (persona.md). Záloha pred uložením: data/persona.md.bak  ·  Ctrl+F = hľadať",
                      text_color=DIM, anchor="w").pack(fill="x", padx=10)
-        self.persona_box = self._textbox(tab, self.persona_original, 420)
+        bar = ctk.CTkFrame(tab, fg_color="transparent")
+        bar.pack(fill="x", padx=10, pady=(4, 0))
+        self.find_var = ctk.StringVar()
+        self.find_entry = ctk.CTkEntry(bar, textvariable=self.find_var, placeholder_text="Hľadať v persone…", width=260)
+        self.find_entry.pack(side="left")
+        ctk.CTkButton(bar, text="▲", width=32, command=lambda: self._find(backwards=True), fg_color=PANEL).pack(side="left", padx=(6, 2))
+        ctk.CTkButton(bar, text="▼", width=32, command=self._find, fg_color=PANEL).pack(side="left", padx=2)
+        self.find_label = ctk.CTkLabel(bar, text="", text_color=DIM)
+        self.find_label.pack(side="left", padx=8)
+        self.persona_box = self._textbox(tab, self.persona_original, 390)
+        text = self.persona_box._textbox  # tkinter Text pod CTkTextbox — tagy a hladanie
+        text.tag_configure("find", background="#5a5200", foreground="#ffffff")
+        text.tag_configure("find_current", background=YELLOW, foreground="#000000")
+        self.find_var.trace_add("write", lambda *_: self._find(restart=True))
+        self.find_entry.bind("<Return>", lambda _e: self._find())
+        self.find_entry.bind("<Shift-Return>", lambda _e: self._find(backwards=True))
+        self.find_entry.bind("<Escape>", lambda _e: (self.find_var.set(""), self.persona_box.focus_set()))
+        for widget in (self, text, self.find_entry):
+            widget.bind("<Control-f>", self._focus_find)
+            widget.bind("<Control-F>", self._focus_find)
+        self._find_tab = tab
+
+    def _focus_find(self, _event=None):
+        try:
+            self.tabs.set("Persona")
+        except Exception:
+            pass
+        self.find_entry.focus_set()
+        self.find_entry.select_range(0, "end")
+        return "break"
+
+    def _find(self, backwards: bool = False, restart: bool = False):
+        """Zvyrazni vsetky vyskyty (bez ohladu na velkost pismen) a skoci na dalsi/predchadzajuci."""
+        text = self.persona_box._textbox
+        text.tag_remove("find", "1.0", "end")
+        text.tag_remove("find_current", "1.0", "end")
+        needle = self.find_var.get()
+        if not needle:
+            self.find_label.configure(text="")
+            return "break"
+        hits, start = [], "1.0"
+        while True:
+            pos = text.search(needle, start, stopindex="end", nocase=True)
+            if not pos:
+                break
+            end = f"{pos}+{len(needle)}c"
+            text.tag_add("find", pos, end)
+            hits.append(pos)
+            start = end
+        if not hits:
+            self.find_label.configure(text="nenájdené", text_color=RED)
+            return "break"
+        cursor = "1.0" if restart else text.index("insert")
+        if backwards:
+            before = [h for h in hits if text.compare(f"{h}+{len(needle)}c", "<", cursor)]
+            pos = before[-1] if before else hits[-1]
+        else:
+            after = [h for h in hits if text.compare(h, ">=" if restart else ">", cursor)]
+            pos = after[0] if after else hits[0]
+        text.tag_add("find_current", pos, f"{pos}+{len(needle)}c")
+        text.mark_set("insert", pos)
+        text.see(pos)
+        self.find_label.configure(text=f"{hits.index(pos) + 1} z {len(hits)}", text_color=DIM)
+        return "break"
 
     # --- testy --------------------------------------------------------------------------------
 
