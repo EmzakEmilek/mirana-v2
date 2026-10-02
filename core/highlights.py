@@ -1,0 +1,153 @@
+"""Momenty zo streamu na strih: znacky (bocne tlacidlo mysi) a automaticke udalosti z hry.
+
+Kazdy moment sa hned zapise do logs/strih-<datum>.md s casom vo VOD-ke (ako dlho stream bezal) aj
+s hodinami, aby sa dal v zazname rychlo najst. Cas streamu sa zisti z verejneho decapi.me (ziadne
+prihlasenie): "uptime" kanala -> zaciatok streamu = teraz - uptime. Ked stream nebezi alebo sluzba
+nepomoze, ostane len cas na hodinach.
+
+Drzi aj denne statistiky (smrti, levely, questy, znacky) — prezivu restart Mirany pocas streamu.
+"""
+
+import json
+import logging
+import re
+import threading
+import time
+from datetime import date, datetime
+
+import requests
+
+from core.config import BASE_DIR
+
+logger = logging.getLogger(__name__)
+
+LOGS_DIR = BASE_DIR / "logs"
+STATS_PATH = BASE_DIR / "data" / "stream_stats.json"
+UPTIME_URL = "https://decapi.me/twitch/uptime/{channel}"
+REFRESH_SEC = 300
+UNITS = {"day": 86400, "hour": 3600, "minute": 60, "second": 1}
+
+KIND_LABELS = {
+    "marker": "ZNAČKA", "death": "SMRŤ", "level_up": "LEVEL", "quest_completed": "QUEST",
+    "wanted_up": "POLÍCIA",
+}
+
+
+def parse_uptime(text: str) -> int | None:
+    """'1 hour, 2 minutes, 3 seconds' -> 3723; 'xyz is offline' -> None."""
+    if not text or "offline" in text.lower():
+        return None
+    total, found = 0, False
+    for number, unit in re.findall(r"(\d+)\s*(day|hour|minute|second)s?", text.lower()):
+        total += int(number) * UNITS[unit]
+        found = True
+    return total if found else None
+
+
+def fmt_offset(seconds: float) -> str:
+    seconds = int(seconds)
+    return f"{seconds // 3600}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
+
+
+class Highlights:
+    def __init__(self, config: dict):
+        self.channel = (config.get("twitch_chat") or {}).get("channel") or ""
+        self.channel = self.channel.strip().rstrip("/").rsplit("/", 1)[-1].lstrip("#").lower()
+        self.path = LOGS_DIR / f"strih-{datetime.now():%Y%m%d}.md"
+        self._lock = threading.Lock()
+        self._stream_start: float | None = None
+        self._checked = 0.0
+        self.session_start = time.time()
+        self.stats = self._load_stats()
+
+    # --- cas streamu --------------------------------------------------------------------------
+
+    def refresh_clock(self) -> None:
+        """Zisti zaciatok streamu (sietove volanie, volat mimo hlavneho vlakna)."""
+        if not self.channel:
+            return
+        try:
+            r = requests.get(UPTIME_URL.format(channel=self.channel), timeout=4)
+            uptime = parse_uptime(r.text)
+        except Exception as e:
+            logger.info("cas streamu sa nepodarilo zistit: %s", e)
+            return
+        with self._lock:
+            self._checked = time.time()
+            self._stream_start = time.time() - uptime if uptime is not None else None
+        logger.info("stream: %s", f"bezi {fmt_offset(uptime)}" if uptime is not None else "offline")
+
+    def start(self) -> None:
+        def loop():
+            while True:
+                self.refresh_clock()
+                time.sleep(REFRESH_SEC)
+        threading.Thread(target=loop, name="stream-clock", daemon=True).start()
+
+    def vod_offset(self) -> str | None:
+        with self._lock:
+            start = self._stream_start
+        return fmt_offset(time.time() - start) if start else None
+
+    # --- momenty -------------------------------------------------------------------------------
+
+    def add(self, kind: str, text: str, refresh: bool = False) -> str:
+        """Zapise moment, vrati cas, ktory sa ukaze v okne ("1:23:45" alebo "21:14:07")."""
+        if refresh:
+            self.refresh_clock()
+        clock = datetime.now().strftime("%H:%M:%S")
+        vod = self.vod_offset()
+        self._count(kind)
+        line = f"- **{vod or '—'}** · {clock} · {KIND_LABELS.get(kind, kind.upper())} · {text}\n"
+        with self._lock:
+            new = not self.path.exists()
+            try:
+                LOGS_DIR.mkdir(exist_ok=True)
+                with self.path.open("a", encoding="utf-8") as f:
+                    if new:
+                        f.write(f"# Momenty na strih — {datetime.now():%d.%m.%Y}\n\n"
+                                "Prvý čas = čas vo VOD-ke (ako dlho stream bežal), druhý = hodiny.\n\n")
+                    f.write(line)
+            except OSError:
+                logger.exception("momenty na strih sa nedaju zapisat")
+        logger.info("moment na strih: %s %s (%s)", kind, text, vod or clock)
+        return vod or clock
+
+    # --- statistiky dna -----------------------------------------------------------------------
+
+    def _load_stats(self) -> dict:
+        today = date.today().isoformat()
+        try:
+            data = json.loads(STATS_PATH.read_text(encoding="utf-8"))
+            if data.get("day") == today:
+                return data
+        except (OSError, ValueError):
+            pass
+        return {"day": today, "death": 0, "level_up": 0, "quest_completed": 0, "marker": 0, "wanted_up": 0}
+
+    def _count(self, kind: str) -> None:
+        with self._lock:
+            if self.stats.get("day") != date.today().isoformat():
+                self.stats = self._load_stats()
+            self.stats[kind] = self.stats.get(kind, 0) + 1
+            try:
+                STATS_PATH.parent.mkdir(exist_ok=True)
+                STATS_PATH.write_text(json.dumps(self.stats), encoding="utf-8")
+            except OSError:
+                pass
+
+    @property
+    def deaths(self) -> int:
+        return self.stats.get("death", 0)
+
+    def summary_line(self, questions: int) -> str:
+        """[STREAM] riadok pre model, keď sa Erik pýta na stream."""
+        s = self.stats
+        minutes = int((time.time() - self.session_start) // 60)
+        vod = self.vod_offset()
+        parts = [f"stream beží {vod}" if vod else f"Mirana beží {minutes // 60} h {minutes % 60} min",
+                 f"smrti dnes {s.get('death', 0)}", f"nové levely {s.get('level_up', 0)}",
+                 f"dokončené hlavné questy {s.get('quest_completed', 0)}",
+                 f"policajné naháňačky {s.get('wanted_up', 0)}", f"značky na strih {s.get('marker', 0)}",
+                 f"otázok v tejto session {questions}"]
+        return "[STREAM] " + " | ".join(parts)

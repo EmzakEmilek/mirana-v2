@@ -65,9 +65,20 @@ class Overlay:
         """Len pre [SYSTEM] hlasky — Erikove otazky sa na HUD nezobrazuju (rozhodnutie 2026-09-21)."""
         self._send({"type": "question", "text": text}, remember=False)
 
-    def telemetry(self, location: str, quest: str, combat: bool = False) -> None:
-        """HP sa na HUD neukazuje (ma ho hra), len lokacia + quest; combat zafarbi jadro."""
-        self._send({"type": "telemetry", "location": location, "quest": quest, "combat": combat})
+    def search(self, title: str | None) -> None:
+        """Hladanie v databaze (wiki): None = zacina sa hladat, inak nazov najdeneho clanku."""
+        self._send({"type": "search", "title": title}, remember=False)
+
+    def game_fx(self, kind: str, text: str) -> None:
+        """Efekt na HUD pri udalosti z hry (level, quest, smrt, policia)."""
+        self._send({"type": "game_fx", "kind": kind, "text": text}, remember=False)
+
+    def telemetry(self, location: str, quest: str, combat: bool = False, wanted: int = 0,
+                  critical: bool = False, deaths: int = 0) -> None:
+        """HP sa na HUD neukazuje (ma ho hra): lokacia + quest, boj a kriticke HP zafarbia jadro,
+        hviezdy policie a pocitadlo smrti su v hlavicke panela."""
+        self._send({"type": "telemetry", "location": location, "quest": quest, "combat": combat,
+                    "wanted": wanted, "critical": critical, "deaths": deaths})
 
     def level(self, value: float) -> None:
         """Hlasitost 0..1 (hlas Mirany alebo Erikov mikrofon), ~20x/s. Nepamata sa."""

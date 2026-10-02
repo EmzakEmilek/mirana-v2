@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 
 from core.brain import Answer, Brain
+from core.highlights import Highlights
 from core.budget import Budget
 from core.config import BASE_DIR, load_config
 from core.memory import Memory
@@ -46,6 +47,7 @@ MAX_TYPED_CHARS = 500  # pisana otazka z ovladacieho okna
 NOTE_VERB = re.compile(r"zap[ií]š|zapis|poznač|poznac|zaznač|zaznac", re.I)
 NOTE_PLACE = re.compile(r"do logu|log|poznám|poznam", re.I)
 NOTES_PATH = BASE_DIR / "logs" / "poznamky.md"
+STREAM_WORDS = re.compile(r"stream|zhr[nň]|dnes", re.I)  # otazka o streame -> riadok [STREAM] so statistikami
 
 
 def save_note(text: str) -> None:
@@ -75,7 +77,8 @@ class Job:
     first_sentence: bool = True
     searched: bool = False                   # hlaska "hladam v databaze" uz zaznela
     remember: bool = True                    # fallback hlasky sa do pamate nedavaju
-    user_text: str | None = None
+    user_text: str | None = None             # cela sprava pre model ([HRA] + [CHAT] + otazka)
+    tagged_text: str | None = None           # len otazka/udalost — ide do pamate
     answer: Answer | None = None
     spoken: list[str] = field(default_factory=list)
     remembered: bool = False
@@ -107,6 +110,9 @@ class Mirana:
         self._events: queue.Queue = queue.Queue()
 
         self.conversation = ConversationLog(session_id)
+        self.highlights = Highlights(config)
+        self._questions = 0
+        self._last_exchange = ("", "")  # posledna otazka a odpoved — kontext k znacke na strih
         self.budget = Budget(config)
         self.memory = Memory(config)
         self.brain = Brain(config, self.budget)
@@ -126,11 +132,14 @@ class Mirana:
         self.speak_on = set(gs.get("speak_on", []))
         self.proactive_cooldown = config["limits"].get("proactive_cooldown_sec", 300)
         self.quiet_after_erik = gs.get("quiet_after_erik_sec", 30)
-        self.game = GameState(config, on_event=lambda name, snap, text: self._events.put(("game_event", None, (name, snap, text))),
+        self.game = GameState(config, on_event=lambda name, snap, text: self._events.put(
+                                  ("game_event", None, (name, snap, self._record_game_event(name, snap, text)))),
                               on_snapshot=self._on_game_snapshot)
         self.chat = TwitchChat(config, on_message=lambda m: self.overlay.chat(m.nick, m.text),
                                on_status=self.overlay.chat_status)
         self.ptt.on_panic = self._on_panic
+        self.ptt.on_marker = self._on_marker
+        self.hp_critical = gs.get("hp_critical_threshold", 10)
         self.overlay.on_command = self._on_command
 
     def _set_state(self, state: State) -> None:
@@ -162,6 +171,18 @@ class Mirana:
             else:
                 self._set_state(State.IDLE)
                 logger.info("panic mute vypnuty")
+
+    def _on_marker(self) -> None:
+        """Bocne tlacidlo: moment na strih. Sietove volanie (cas streamu) mimo hooku mysi."""
+        def work():
+            snap = self.game.current
+            where = ", ".join(x for x in ((snap.location if snap else ""), (snap.quest if snap else "") or "") if x)
+            question, answer = self._last_exchange
+            context = " · ".join(x for x in (where, f"Erik: {question}" if question else "",
+                                             f"Mirana: {answer[:120]}" if answer else "") if x)
+            when = self.highlights.add("marker", context or "bez kontextu", refresh=True)
+            self.overlay.notice(f"◆ Značka na strih: {when}")
+        threading.Thread(target=work, name="marker", daemon=True).start()
 
     def _on_command(self, cmd: str, text: str | None = None) -> None:
         """Prikazy z ovladacieho okna (gui.py)."""
@@ -214,6 +235,7 @@ class Mirana:
 
             self._last_erik = self._idle_since = time.time()
             self._nudges_in_row = 0
+            self._questions += 1
             self._ask(job, f"[ERIK] {transcript}", stt_sec)  # tag zdroja podla persona.md
         except Exception:
             logger.exception("neocakavana chyba vo workeri")
@@ -223,13 +245,23 @@ class Mirana:
         """LLM stream. Stav hry ide ako riadok [HRA] na zaciatok spravy — v system prompte by
         kazda zmena HP zrusila cache pamate, v sprave sa ulozi do historie a cache nerusi.
         Chat divakov ([CHAT]) ide len k Erikovym otazkam, nie k hernym udalostiam."""
-        lines = [self.game.line(), self.chat.line() if tagged_text.startswith("[ERIK]") else None]
+        erik = tagged_text.startswith("[ERIK]")
+        stream = self.highlights.summary_line(self._questions) if erik and STREAM_WORDS.search(tagged_text) else None
+        wiki = None
+        if erik and self.brain.wiki.enabled:
+            # clanok k otazke uz teraz (~0.5 s) — model ho dostane hned a netreba dalsie kolo s hladanim (~2-3 s)
+            found = self.brain.wiki.prefetch(tagged_text[7:])
+            if found and not job.cancelled:
+                self.overlay.search(found[0])
+                wiki = f"[WIKI {found[0]}] {found[1]}"
+        lines = [self.game.line(), stream, wiki, self.chat.line() if erik else None]
+        job.tagged_text = tagged_text
         job.user_text = "\n".join([x for x in lines if x] + [tagged_text])
         answer = self.brain.ask_stream(
             job.user_text, None, self.memory.as_messages(),
             on_sentence=lambda sentence: self._on_sentence(job, sentence),
             should_stop=lambda: job.cancelled,
-            on_lookup=lambda: self._on_lookup(job),
+            on_lookup=lambda title=None: self._on_lookup(job, title),
         )
         self._events.put(("answer", job, (answer, stt_sec)))
 
@@ -273,7 +305,12 @@ class Mirana:
     # --- telemetria (vlakno game-state) ---------------------------------------------------------
 
     def _on_game_snapshot(self, snap) -> None:
-        shown = (snap.location, snap.quest or "", bool(snap.get("combat"))) if snap else ("", "", False)
+        if snap:
+            hp = snap.get("hp")
+            shown = (snap.location, snap.quest or "", bool(snap.get("combat")), int(snap.get("wanted") or 0),
+                     hp is not None and 0 < hp <= self.hp_critical, self.highlights.deaths)
+        else:
+            shown = ("", "", False, 0, False, self.highlights.deaths)
         if shown != self._telemetry_shown:
             self._telemetry_shown = shown
             self.overlay.telemetry(*shown)
@@ -281,6 +318,25 @@ class Mirana:
         if line != self._game_line_shown:  # ovladacie okno: aktualne zdravie, cas, ciel...
             self._game_line_shown = line
             self.overlay.game(live=snap is not None, line=line)
+
+    def _record_game_event(self, name: str, snap, text: str) -> str:
+        """Moment na strih + efekt na HUD (vzdy, aj ked Mirana mlci). Vrati text pre model."""
+        wanted = snap.get("wanted") or 0
+        if name == "death":
+            self.highlights.add("death", snap.location or "")
+            text += f" (dnes už {self.highlights.deaths}. smrť)"
+            self.overlay.game_fx("death", f"FLATLINE #{self.highlights.deaths}")
+        elif name == "level_up":
+            self.highlights.add("level_up", f"úroveň {snap.get('level')}")
+            self.overlay.game_fx("level_up", f"LEVEL {snap.get('level')}")
+        elif name == "quest_completed":
+            self.highlights.add("quest_completed", text)
+            self.overlay.game_fx("quest_completed", "QUEST DOKONČENÝ")
+        elif name == "wanted_up" and wanted >= 3:
+            self.highlights.add("wanted_up", f"{wanted} hviezdy, {snap.location}")
+        if name == "wanted_up":
+            self.overlay.game_fx("wanted", "NCPD " + "★" * wanted)
+        return text
 
     def _handle_game_event(self, name: str, snap, text: str) -> None:
         """Proaktivna hlaska: len ked Mirana mlci a nie hned po Erikovej otazke; max raz za cooldown.
@@ -309,16 +365,21 @@ class Mirana:
         self.voice.arm()
         threading.Thread(target=self._work_game_event, args=(job, text), daemon=True).start()
 
-    def _on_lookup(self, job: Job) -> None:
-        """Model hlada vo wiki: povie "hladam v databaze" (aj na HUD), bezny filler uz netreba."""
+    def _on_lookup(self, job: Job, title: str | None = None) -> None:
+        """Model hlada vo wiki: povie "hladam v databaze" a HUD ukaze pristup do databazy;
+        po najdeni (title) HUD ukaze nazov clanku. Bezny filler uz netreba."""
+        if job.cancelled:
+            return
+        if title is not None:
+            self.overlay.search(title)
+            return
         self._cancel_filler(job)
         with self._lock:
-            current = not job.cancelled and job.gen == self._gen and self.state is State.PROCESSING
+            current = job.gen == self._gen and self.state is State.PROCESSING
         if current and not job.started and not job.searched:
             job.searched = True
-            line = self.fillers.play_search()
-            if line:
-                self.overlay.filler(line)
+            self.fillers.play_search()
+            self.overlay.search(None)
 
     def _on_sentence(self, job: Job, sentence: str) -> None:
         if job.cancelled:
@@ -396,6 +457,7 @@ class Mirana:
                 return
             self._last_erik = self._idle_since = time.time()
             self._nudges_in_row = 0
+            self._questions += 1
             self._ask(job, f"[ERIK] {text}")
         except Exception:
             logger.exception("neocakavana chyba pri pisanej otazke")
@@ -414,7 +476,11 @@ class Mirana:
         else:
             return
         job.remembered = True
-        self.memory.add_exchange(job.user_text, text)
+        if job.tagged_text and job.tagged_text.startswith("[ERIK]"):
+            self._last_exchange = (job.tagged_text[7:], text)
+        # Do pamate ide len otazka, nie [HRA] a [CHAT]: tie tvorili 85 % pamate, aktualne su vzdy v novej
+        # sprave a stary chat by sa vracal ako novy. Kratsia pamat = viac vymen za rovnaku cenu.
+        self.memory.add_exchange(job.tagged_text or job.user_text, text)
 
     def _handle_event(self, event: str, job: Job, payload) -> None:
         if event == "game_event":
@@ -465,6 +531,7 @@ class Mirana:
 
     def run(self) -> None:
         self.overlay.start()
+        self.highlights.start()
         self.game.start()
         self.chat.start()
         self.ptt.start()

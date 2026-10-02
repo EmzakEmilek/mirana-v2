@@ -114,6 +114,53 @@
   .answer.cut { color: rgba(252,238,10,.55); }      /* prerušená odpoveď (barge-in) zostane, len zbledne */
   @keyframes caret { 50% { opacity: 0; } }
 
+  /* hlavicka: pocitadlo smrti a hviezdy policie */
+  .stats { display: inline-flex; gap: 12px; margin-left: auto; margin-right: 6px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 2px; }
+  .stats:empty { display: none; }
+  .stats .deaths { color: rgba(255,255,255,.55); }
+  .stats .wanted { color: var(--red); text-shadow: 0 0 8px rgba(255,0,60,.7); animation: wantedBlink 1s steps(1) infinite; }
+  @keyframes wantedBlink { 50% { color: #fff; text-shadow: 0 0 8px rgba(255,255,255,.6); } }
+
+  /* banner pri udalosti z hry (level, quest, smrt, policia) — prekryje na chvilu telemetriu */
+  .alert {
+    position: absolute; top: 10px; right: 30px; z-index: 3;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 4px;
+    color: var(--fx, var(--yellow)); text-shadow: 0 0 14px var(--fx, var(--yellow));
+    opacity: 0; pointer-events: none; white-space: nowrap;
+  }
+  .alert.show { animation: alertIn 3.6s ease-out forwards; }
+  @keyframes alertIn {
+    0%   { opacity: 0; transform: translateX(14px); clip-path: inset(0 0 60% 0); }
+    6%   { opacity: 1; transform: translateX(-3px); clip-path: inset(40% 0 0 0); }
+    10%  { opacity: 1; transform: none; clip-path: none; }
+    85%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-4px); }
+  }
+  .panel.alerting .telemetry { opacity: 0; }
+
+  /* pristup do databazy (wiki) — v riadku "sub" */
+  .db { display: inline-flex; align-items: center; gap: 10px; color: var(--cyan); font-style: normal;
+    text-shadow: 0 0 10px rgba(0,240,255,.55); letter-spacing: 1.5px; }
+  .db .bar { position: relative; width: 120px; height: 3px; background: rgba(0,240,255,.15); overflow: hidden; }
+  .db .bar::after { content: ""; position: absolute; top: 0; left: -40%; width: 40%; height: 100%;
+    background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: scan .7s linear infinite; }
+  .db.found .bar::after { left: 0; width: 100%; animation: none; }
+  .db .hex { opacity: .55; font-size: 12px; }
+  @keyframes scan { to { left: 100%; } }
+
+  /* kriticke HP: cerveny tep okraja; smrt: zablesk */
+  .panel.critical { --accent: var(--red); animation: critPulse 1s ease-in-out infinite; }
+  @keyframes critPulse { 50% { box-shadow: inset 0 0 26px rgba(255,0,60,.55); } }
+  .panel.flatline { animation: flatline 1.4s steps(6); }
+  @keyframes flatline {
+    0%   { filter: none; }
+    15%  { filter: saturate(3) hue-rotate(-30deg) brightness(1.6); transform: var(--base) translateX(-6px); }
+    30%  { filter: grayscale(1) brightness(.5); transform: var(--base) translateX(5px); }
+    60%  { filter: saturate(2) brightness(1.3); transform: var(--base); }
+    100% { filter: none; transform: var(--base); }
+  }
+
   .glitch { animation: glitchIn .18s steps(2); }
   @keyframes glitchIn {
     0%   { transform: translateX(-3px); opacity: .2; clip-path: inset(10% 0 50% 0); }
@@ -145,9 +192,11 @@
 <div class="hud">
   <div class="panel offline" id="panel">
     <canvas id="core" width="300" height="300"></canvas>
+    <div class="alert" id="alert"></div>
     <div class="text">
       <div class="head">
         <div class="status"><span class="dot"></span><span id="status-label">MIRANA · OFFLINE</span></div>
+        <div class="stats" id="stats"></div>
         <div class="telemetry" id="telemetry"></div>
       </div>
       <div class="sub" id="sub"></div>
@@ -164,7 +213,9 @@
      filler {text}                     hláška do riadku "sub"
      answer_start / answer_append {text, ms_per_char}   odpoveď po vetách (streaming)
      question {text}                   [SYSTÉM] hlášky do "sub" (Erikove otázky sa neposielajú)
-     telemetry {location, quest, combat}
+     telemetry {location, quest, combat, wanted, critical, deaths}
+     search {title}                    pristup do databazy (null = hlada, inak nazov clanku)
+     game_fx {kind, text}              banner pri leveli, queste, smrti, policii
      queue {n}                         nepoužíva sa
    ========================================================== */
 const el = (id) => document.getElementById(id);
@@ -180,7 +231,7 @@ const COLORS = {
   speaking: [252,238,10], offline: [160,160,160], muted: [255,0,60], combat: [255,0,60],
 };
 
-let state = 'offline', combat = false;
+let state = 'offline', combat = false, critical = false, deaths = 0, wanted = 0;
 let fadeTimer = null;
 const FADE_AFTER_MS = 5000;   // odpoveď zmizne 5 s po tom, čo Mirana dohovorí
 
@@ -198,14 +249,15 @@ function scheduleFade() {
 
 function setState(s) {
   const prev = state; state = s;
-  panel.className = 'panel ' + s + (combat ? ' combat' : '');
+  const keep = ['alerting', 'flatline'].filter(c => panel.classList.contains(c));
+  panel.className = ['panel', s, combat ? 'combat' : '', critical ? 'critical' : '', ...keep].filter(Boolean).join(' ');
   statusLabel.textContent = LABELS[s] || s;
   if (s !== 'speaking' && prev === 'speaking') {
     if (s === 'idle') finishTyping();            // dohovorila — text sa dopíše celý, nikdy sa neutne
     else cutTyping();                            // barge-in: prerušená veta ostane, zbledne
     scheduleFade();
   }
-  if (s === 'listening' || s === 'idle') { el('sub').textContent = ''; el('sub').className = 'sub'; }
+  if (s === 'listening' || s === 'idle') { clearInterval(hexTimer); el('sub').textContent = ''; el('sub').className = 'sub'; }
   if (prev !== s) { panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240); }
 }
 function showSub(text, system) {
@@ -215,6 +267,7 @@ function showSub(text, system) {
 }
 function answerStart() {
   clearTimeout(fadeTimer);
+  clearInterval(hexTimer);
   full = ''; shown = 0;
   const a = el('answer'); a.className = 'answer'; a.textContent = '';
   el('answer-box').scrollTop = 0;
@@ -248,9 +301,61 @@ function cutTyping() {
   el('answer').classList.add('done', 'cut');
 }
 function setTelemetry(t) {
-  combat = !!t.combat;
-  el('telemetry').innerHTML = (t.location ? `<b>${t.location}</b>` : '') + (t.quest ? ` · ${t.quest}` : '');
+  combat = !!t.combat; critical = !!t.critical;
+  deaths = t.deaths || 0; wanted = t.wanted || 0;
+  const tel = el('telemetry'); tel.textContent = '';
+  if (t.location) { const b = document.createElement('b'); b.textContent = t.location; tel.appendChild(b); }
+  if (t.quest) tel.appendChild(document.createTextNode(' · ' + t.quest));
+  renderStats();
   setState(state);
+}
+function renderStats() {
+  const st = el('stats'); st.textContent = '';
+  if (wanted > 0) { const w = document.createElement('span'); w.className = 'wanted'; w.textContent = '★'.repeat(wanted); st.appendChild(w); }
+  if (deaths > 0) { const d = document.createElement('span'); d.className = 'deaths'; d.textContent = '☠ ' + deaths; st.appendChild(d); }
+}
+
+/* ---------- efekty z hry ---------- */
+const FX_COLORS = { level_up: 'var(--yellow)', quest_completed: 'var(--cyan)', death: 'var(--red)', wanted: 'var(--red)' };
+let alertTimer = null;
+function gameFx(kind, text) {
+  const a = el('alert');
+  a.style.setProperty('--fx', FX_COLORS[kind] || 'var(--yellow)');
+  a.textContent = text;
+  a.classList.remove('show'); void a.offsetWidth; a.classList.add('show');
+  panel.classList.add('alerting');
+  clearTimeout(alertTimer); alertTimer = setTimeout(() => panel.classList.remove('alerting'), 3600);
+  if (kind === 'death') {
+    panel.classList.remove('flatline'); void panel.offsetWidth; panel.classList.add('flatline');
+    setTimeout(() => panel.classList.remove('flatline'), 1500);
+    burst = 1;
+  } else {
+    panel.classList.add('pglitch'); setTimeout(() => panel.classList.remove('pglitch'), 240);
+    burst = 0.7;
+  }
+}
+
+/* ---------- pristup do databazy (wiki) ---------- */
+let hexTimer = null;
+function dbSearch(title) {
+  const q = el('sub');
+  clearInterval(hexTimer);
+  q.className = 'sub';
+  q.textContent = '';
+  const box = document.createElement('span'); box.className = 'db' + (title ? ' found' : '');
+  const label = document.createElement('span');
+  label.textContent = title ? '◇ DATABÁZA: ' + title : '◇ PRÍSTUP DO DATABÁZY';
+  const bar = document.createElement('span'); bar.className = 'bar';
+  const hex = document.createElement('span'); hex.className = 'hex';
+  box.append(label, bar, hex); q.appendChild(box);
+  if (!title) {
+    hexTimer = setInterval(() => {
+      hex.textContent = Array.from({ length: 4 }, () => Math.floor(Math.random() * 65536).toString(16).toUpperCase().padStart(4, '0')).join(' ');
+    }, 90);
+  } else {
+    hex.textContent = 'OK';
+  }
+  q.classList.remove('glitch'); void q.offsetWidth; q.classList.add('glitch');
 }
 
 /* ---------- ŽIVÉ JADRO ---------------------------------------------------
@@ -263,7 +368,7 @@ const cv = el('core'), ctx = cv.getContext('2d');
 const S = 300, C = S / 2;
 let level = 0, target = 0, energy = 0;         // energy = pomaly doznievajúca hlasitosť
 const N = 96, noise = Array.from({ length: N }, () => Math.random() * 6.28);
-let rot = 0, t0 = performance.now();
+let rot = 0, t0 = performance.now(), burst = 0;
 
 function lerpColor(a, b, k) { return a.map((v, i) => Math.round(v + (b[i] - v) * k)); }
 let colorNow = COLORS.offline;
@@ -271,7 +376,7 @@ let colorNow = COLORS.offline;
 function draw(now) {
   const dt = Math.min(0.05, (now - t0) / 1000); t0 = now;
   const time = now / 1000;
-  const want = combat ? COLORS.combat : (COLORS[state] || COLORS.offline);
+  const want = (combat || critical) ? COLORS.combat : (COLORS[state] || COLORS.offline);
   colorNow = lerpColor(colorNow, want, 0.08);
   const [r, g, b] = colorNow;
   const rgba = (a) => `rgba(${r},${g},${b},${a})`;
@@ -280,6 +385,12 @@ function draw(now) {
   target = (state === 'speaking' || state === 'listening') ? target : 0;
   level += (target - level) * (target > level ? 0.55 : 0.18);
   energy = Math.max(level, energy - dt * 0.9);
+  burst = Math.max(0, burst - dt * 1.2);
+  if (critical) {                                   // srdcovy tep: dva udery za sekundu, potom pauza
+    const ph = (time * 1.1) % 1;
+    energy = Math.max(energy, ph < 0.1 ? 0.9 : ph < 0.2 ? 0.25 : ph < 0.3 ? 0.7 : 0);
+  }
+  energy = Math.max(energy, burst);
   const breath = 0.5 + 0.5 * Math.sin(time * (state === 'processing' ? 4 : 1.2));
   panel.style.setProperty('--breath', (0.25 + 0.35 * breath + 0.4 * energy).toFixed(2));
 
@@ -356,6 +467,8 @@ function handle(ev) {
     case 'answer_append': answerAppend(ev.text, ev.ms_per_char); break;
     case 'question':  showSub(ev.text, true); break;
     case 'telemetry': setTelemetry(ev); break;
+    case 'search':    dbSearch(ev.title); break;
+    case 'game_fx':   gameFx(ev.kind, ev.text); break;
     case 'queue':     break;
   }
 }

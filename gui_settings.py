@@ -205,6 +205,9 @@ class SettingsWindow(ctk.CTkToplevel):
         self._capture_button(box.master, "audio.ptt_key")
         box = self._combo(tab, "audio.panic_mute_key", "Panic mute", KEYS, audio.get("panic_mute_key", "f11"), width=160)
         self._capture_button(box.master, "audio.panic_mute_key")
+        box = self._combo(tab, "audio.marker_key", "Značka na strih", KEYS, audio.get("marker_key") or "", width=160,
+                          hint="Ťuknutie zapíše čas vo VOD-ke do logs/strih-<dátum>.md. Prázdne = vypnuté.")
+        self._capture_button(box.master, "audio.marker_key")
 
     def _capture_button(self, row, key):
         button = ctk.CTkButton(row, text="Stlačiť…", width=80, fg_color=PANEL, border_width=1, border_color=YELLOW,
@@ -583,9 +586,13 @@ class SettingsWindow(ctk.CTkToplevel):
         _put(c["audio"], "stream_output_device", _stream_value(v["audio.stream_output_device"].get()))
         _put(c["audio"], "ptt_key", v["audio.ptt_key"].get())
         _put(c["audio"], "panic_mute_key", v["audio.panic_mute_key"].get())
-        if c["audio"]["ptt_key"] == c["audio"]["panic_mute_key"]:
-            raise ValueError("Kláves na hovor a panic mute musia byť rôzne.")
-        for key in ("audio.ptt_key", "audio.panic_mute_key"):
+        _put(c["audio"], "marker_key", v["audio.marker_key"].get().strip() or None)
+        keys = [k for k in (c["audio"]["ptt_key"], c["audio"]["panic_mute_key"], c["audio"].get("marker_key")) if k]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Kláves na hovor, panic mute a značka musia byť rôzne.")
+        for key in ("audio.ptt_key", "audio.panic_mute_key", "audio.marker_key"):
+            if not v[key].get().strip():
+                continue
             try:
                 parse_key(v[key].get())
             except ValueError:

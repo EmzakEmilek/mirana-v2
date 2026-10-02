@@ -78,6 +78,9 @@ class PushToTalk:
         self.ptt_key = parse_key(audio_cfg["ptt_key"])
         self.panic_key = parse_key(audio_cfg.get("panic_mute_key"))
         self._panic_down = False
+        self.marker_key = parse_key(audio_cfg.get("marker_key"))  # znacka na strih (moment vo VOD-ke)
+        self.on_marker = None
+        self._marker_down = False
 
         self._recording = False
         self._frames: list[np.ndarray] = []
@@ -102,6 +105,11 @@ class PushToTalk:
             self._on_release(button)
 
     def _on_press(self, key):
+        if key == self.marker_key and self.marker_key is not None:
+            if not self._marker_down and self.on_marker is not None:
+                self.on_marker()
+            self._marker_down = True
+            return
         if key == self.panic_key and self.panic_key is not None:
             if not self._panic_down and self.on_panic is not None:  # drzanie posiela opakovane press eventy
                 self.on_panic()
@@ -115,6 +123,9 @@ class PushToTalk:
                 self.on_start()
 
     def _on_release(self, key):
+        if key == self.marker_key:
+            self._marker_down = False
+            return
         if key == self.panic_key:
             self._panic_down = False
             return
@@ -146,7 +157,7 @@ class PushToTalk:
         self._stream.start()
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         self._listener.start()
-        if isinstance(self.ptt_key, mouse.Button) or isinstance(self.panic_key, mouse.Button):
+        if any(isinstance(k, mouse.Button) for k in (self.ptt_key, self.panic_key, self.marker_key)):
             self._mouse_listener = mouse.Listener(on_click=self._on_click)
             self._mouse_listener.start()
         return self._listener

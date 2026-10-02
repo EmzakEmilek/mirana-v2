@@ -1,6 +1,6 @@
 """Stav hry z CET modu (mod/mirana_state) -> slovensky riadok [HRA] a herne udalosti.
 
-Mod kazde 2 s zapise state.json do svojho priecinka. Tento modul subor sleduje (podla casu zmeny),
+Mod kazdu 1 s zapise state.json do svojho priecinka. Tento modul subor sleduje (podla casu zmeny),
 drzi posledny stav a porovnanim s predchadzajucim vyraba udalosti: hp_low, hp_critical, death,
 district_change, quest_changed, quest_completed, level_up, wanted_up, wanted_clear,
 combat_start, combat_end.

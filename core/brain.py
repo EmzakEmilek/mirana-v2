@@ -89,6 +89,7 @@ class Brain:
 
         self.stt = create_stt(config)
         self.wiki = Wiki(config)
+        self.wiki.start()
         self.max_lookups = config.get("wiki", {}).get("max_lookups", 2)
         # API kluc si SDK cita z ANTHROPIC_API_KEY (nacitane v core.config). Kluc bez workspace
         # vyzaduje hlavicku anthropic-workspace-id — ANTHROPIC_WORKSPACE_ID v .env (alebo kluc vytvoreny vo workspace).
@@ -182,7 +183,7 @@ class Brain:
                             break
                         if event.type == "content_block_start" and event.content_block.type == "tool_use":
                             if on_lookup is not None:
-                                on_lookup()
+                                on_lookup(None)
                         elif event.type == "text":
                             for sentence in splitter.feed(event.text):
                                 emit(sentence)
@@ -199,8 +200,12 @@ class Brain:
                 if message.stop_reason != "tool_use" or not calls:
                     break
                 lookups += len(calls)
-                results = [{"type": "tool_result", "tool_use_id": c.id,
-                            "content": self.wiki.lookup((c.input or {}).get("query", ""))} for c in calls]
+                results = []
+                for c in calls:
+                    title, text = self.wiki.search((c.input or {}).get("query", ""))
+                    if on_lookup is not None and title:
+                        on_lookup(title)
+                    results.append({"type": "tool_result", "tool_use_id": c.id, "content": text})
                 # append-only: odpoved modelu (aj s thinking blokmi) presne tak, ako prisla, potom vysledky
                 kwargs["messages"] = [*kwargs["messages"], {"role": "assistant", "content": message.content},
                                       {"role": "user", "content": results}]

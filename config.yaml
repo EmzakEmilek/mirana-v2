@@ -11,7 +11,8 @@ audio:
   output_latency_ms: 100      # rezerva zvuku vo výstupe; HDMI má predvolene ~22 ms a pri záťaži hrou praská
   sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
   ptt_key: "mouse_x1"         # kláves ("f4") alebo tlačidlo myši: mouse_x1 = zadné bočné, mouse_x2 = predné bočné, mouse_middle
-  panic_mute_key: "mouse_x2"  # to isté; okamžite stíši Miranu, druhé stlačenie ju vráti
+  panic_mute_key: "f11"       # to isté; okamžite stíši Miranu, druhé stlačenie ju vráti
+  marker_key: "mouse_x2"      # ťuknutie = značka na strih (čas vo VOD-ke) do logs/strih-<dátum>.md
 
 stt:
   provider: "local"           # "local" (faster-whisper na GPU) alebo "api" (Whisper API)
@@ -104,8 +105,8 @@ tts:
     params: {}                # jemné doladenie presetu, napr. {ring_mix: 0.08, echo_ms: 60}
 
 memory:
-  max_exchanges: 12           # pri prekroceni sa pamat oreze naraz na trim_to (nie po jednej) — kvoli prompt cache
-  trim_to: 6                  # priemerne ~9 vymen v pamati; cachovana historia stoji 5 % ceny vstupu
+  max_exchanges: 30           # pri prekročení sa pamäť oreže naraz na trim_to (nie po jednej) — kvôli prompt cache
+  trim_to: 15                 # v pamäti je len otázka a odpoveď (bez [HRA] a [CHAT]), ~90 tokenov na výmenu
 
 fillers:
   enabled: true
@@ -129,6 +130,7 @@ fillers:
 wiki:
   enabled: true               # Mirana si pri neistote pozrie Cyberpunk Fandom wiki (core/wiki.py), zadarmo, ~1 s + kolo modelu
   max_lookups: 2              # najviac toľko hľadaní na jednu otázku
+  prefetch: true              # pri „kto je / čo je X“ priloží článok hneď k otázke (bez ďalšieho kola modelu, ~2-3 s rýchlejšie)
   timeout_sec: 5
 
 idle_nudge:
@@ -145,7 +147,7 @@ overlay:
 game_state:
   enabled: true               # bez bežiacej hry sa nič nedeje, Mirana funguje ďalej bez telemetrie
   json_path: "auto"           # auto = nájde hru (Steam/GOG/Epic) a číta state.json z CET modu mirana_state
-  poll_interval_sec: 2
+  poll_interval_sec: 0.5      # mod zapisuje každú 1 s; čítanie len pri zmene súboru, takže nič nestojí
   stale_after_sec: 10         # starší stav = hra nebeží alebo je v menu, riadok [HRA] sa neposiela
   quiet_after_erik_sec: 30    # proaktívna hláška nepríde skôr ako 30 s po Erikovej otázke
   speak_on: ["hp_critical", "hp_low", "death", "level_up", "quest_changed", "quest_completed", "wanted_up"]   # ostatne udalosti len do logu; pocas sceny mlci

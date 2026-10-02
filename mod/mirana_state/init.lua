@@ -1,5 +1,5 @@
 --[[
-MIRANA state — CET mod. Kazde 2 s zapise stav hraca do state.json vo svojom priecinku
+MIRANA state — CET mod. Kazdu 1 s zapise stav hraca do state.json vo svojom priecinku
 (CET dovoli modu zapisovat len do vlastneho priecinka). Mirana (inputs/game_state.py) subor cita.
 
 Instalacia: priecinok mirana_state skopiruj do
@@ -13,8 +13,8 @@ ostatne idu dalej a v "errors" je, ktory.
 Texty z hry (questy, stvrte, veci) su v jazyku hry — Mirana ich berie ako vlastne mena.
 ]]
 
-local VERSION = 4
-local INTERVAL = 2.0          -- sekundy medzi zapismi
+local VERSION = 5
+local INTERVAL = 1.0          -- sekundy medzi zapismi (rychla reakcia na kriticke HP)
 local STORY_INTERVAL = 30.0   -- zoznam dokoncenych questov je drahsi, staci raz za 30 s
 local elapsed = 0
 local storyElapsed = STORY_INTERVAL

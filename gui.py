@@ -141,7 +141,8 @@ class App(ctk.CTk):
     def _show_keys(self) -> None:
         audio = load_config()["audio"]
         ptt, self.panic_label = key_label(audio["ptt_key"]), key_label(audio.get("panic_mute_key"))
-        self.keys_label.configure(text=f"Otázka: drž {ptt} (počas odpovede ju preruší)  ·  Stlmiť: {self.panic_label}")
+        marker = f"  ·  Značka na strih: {key_label(audio['marker_key'])}" if audio.get("marker_key") else ""
+        self.keys_label.configure(text=f"Otázka: drž {ptt} (počas odpovede ju preruší)  ·  Stlmiť: {self.panic_label}{marker}")
 
     def _write(self, text: str, tag: str, newline: bool = True) -> None:
         self.log.configure(state="normal")
