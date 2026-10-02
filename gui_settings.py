@@ -368,7 +368,11 @@ class SettingsWindow(ctk.CTkToplevel):
         self._slider(tab, "fillers.skip_if_faster_than_ms", "Pauza pred fillerom", fill["skip_if_faster_than_ms"],
                      500, 3000, lambda v: f"{v} ms", hint="Keď odpoveď príde skôr, filler sa nezahrá.")
         ctk.CTkLabel(tab, text="Hlášky (jedna na riadok):", text_color=TEXT, anchor="w").pack(fill="x", padx=10, pady=(8, 0))
-        self.fillers_box = self._textbox(tab, "\n".join(fill["lines"]), 130)
+        self.fillers_box = self._textbox(tab, "\n".join(fill["lines"]), 80)
+        wiki = self.cfg.get("wiki") or {}
+        self._switch(tab, "wiki.enabled", "Hľadať vo wiki", wiki.get("enabled", False),
+                     hint="Pri lore otázkach Mirana pozrie Cyberpunk Fandom wiki. Hlášky pri hľadaní (nahlas):")
+        self.search_box = self._textbox(tab, "\n".join(fill.get("search_lines") or []), 80)
         idle = self.cfg.get("idle_nudge") or {}
         self._switch(tab, "idle_nudge.enabled", "Pripomenúť sa po tichu", idle.get("enabled", False),
                      hint="Keď sa dlho neozveš, Mirana sa vtipne ozve sama (nie v boji ani v cutscéne).")
@@ -633,6 +637,11 @@ class SettingsWindow(ctk.CTkToplevel):
         if c["fillers"]["enabled"] and not lines:
             raise ValueError("Zapnuté fillery potrebujú aspoň jednu hlášku.")
         _put(c["fillers"], "lines", lines)
+        search = [ln.strip() for ln in self.search_box.get("1.0", "end").splitlines() if ln.strip()]
+        _put(c["fillers"], "search_lines", search)
+        if "wiki" not in c:
+            c["wiki"] = {"enabled": False, "max_lookups": 2, "timeout_sec": 5}
+        _put(c["wiki"], "enabled", v["wiki.enabled"].get())
 
         _put(c["overlay"], "enabled", v["overlay.enabled"].get())
         _put(c["overlay"], "port", number("overlay.port", int, 1024))
@@ -663,6 +672,7 @@ class SettingsWindow(ctk.CTkToplevel):
         voice_keys = ("voice", "rate", "pitch", "phonetics_file")
         voice_changed = any(self.cfg["tts"].get(k) != self.original["tts"].get(k) for k in voice_keys)
         lines_changed = list(self.cfg["fillers"]["lines"]) != list(self.original["fillers"]["lines"])
+        lines_changed |= list(self.cfg["fillers"].get("search_lines") or []) != list(self.original["fillers"].get("search_lines") or [])
         if voice_changed or lines_changed:
             for wav in (BASE_DIR / "fillers").glob("*.wav"):
                 wav.unlink(missing_ok=True)

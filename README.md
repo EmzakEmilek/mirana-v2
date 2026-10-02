@@ -115,6 +115,13 @@ Bez hry: `venv\Scripts\python tools\simulate_game.py` zapisuje falošný stav (j
 nízke HP, level, quest, neobjavené miesto) do `data/sim_state.json`; Miranu vtedy spusti s
 `set MIRANA_GAME_STATE_PATH=C:\mirana-v2\data\sim_state.json`.
 
+## Wiki (lore)
+
+Pri otázkach „kto je / čo je“ z lore si Mirana pozrie **Cyberpunk Fandom wiki** (verejné MediaWiki API, bez kľúča,
+`core/wiki.py`) a pritom nahlas povie hlášku („hľadám v databáze“, `fillers.search_lines`). Posiela sa jej
+vybraná časť infoboxu (bez stavu a smrti postavy) a začiatok článku; persona z neho nesmie prezradiť spoilery.
+Hľadanie trvá ~1 s + jedno kolo modelu; s wiki stačí aj Sonnet 5.5 low. Vypína sa v Nastaveniach → Fillery.
+
 ## Twitch chat
 
 Mirana chat **len číta** (anonymne, bez bota a tokenu, do chatu nič nepíše). Posledných 15 správ
@@ -172,6 +179,7 @@ Pauzu zakryje filler hláška.
 | `run.py`, `start.bat` | supervisor (reštart, heartbeat), spustenie bez okna |
 | `core/brain.py` | Claude, streaming po vetách, prompt cache |
 | `core/stt.py` | lokálny faster-whisper alebo Whisper API, filter halucinácií |
+| `core/wiki.py` | Cyberpunk Fandom wiki ako nástroj pre model |
 | `core/memory.py` | pamäť rozhovoru (12 výmen, orez na 6) |
 | `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |
 | `core/config.py`, `core/settings.py` | načítanie configu a .env; zápis so zachovaním komentárov |

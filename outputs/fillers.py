@@ -38,6 +38,10 @@ class Fillers:
         self._voice = voice
         self._clips: list[tuple[str, np.ndarray | None]] = []
         self._last_index: int | None = None
+        self._search: list[tuple[str, np.ndarray]] = []
+        self._last_search: int | None = None
+        if cfg.get("search_lines"):  # pri hladani vo wiki, vzdy nahlas (hladanie trva par sekund)
+            self._search = self._load_clips(cfg["search_lines"], "search_")
         if self.enabled and self.speak:
             self._load(cfg["lines"])
         elif self.enabled:
@@ -54,6 +58,31 @@ class Fillers:
                 generated += 1
             self._clips.append((line, self._voice.to_device_audio(path.read_bytes())))
         logger.info("fillery: %d hlasok (%d novo vygenerovanych)", len(self._clips), generated)
+
+    def _load_clips(self, lines: list[str], prefix: str) -> list[tuple[str, np.ndarray]]:
+        FILLERS_DIR.mkdir(exist_ok=True)
+        clips = []
+        for i, line in enumerate(lines, 1):
+            path = FILLERS_DIR / f"{prefix}{i:02d}_{_slug(line)}.wav"
+            try:
+                if not path.exists():
+                    path.write_bytes(self._voice.synthesize(line, timeout=15))
+                clips.append((line, self._voice.to_device_audio(path.read_bytes())))
+            except Exception as e:
+                logger.warning("hlaska %r sa nevygenerovala: %s", line, e)
+        logger.info("hlasky pri hladani: %d", len(clips))
+        return clips
+
+    def play_search(self) -> str | None:
+        """Hlaska "hladam v databaze" — nahlas, neblokujuco, ina nez naposledy."""
+        if not self._search:
+            return None
+        choices = [i for i in range(len(self._search)) if i != self._last_search] or [0]
+        self._last_search = random.choice(choices)
+        line, audio = self._search[self._last_search]
+        logger.info("hladanie: %s", line)
+        self._voice.play_audio(audio, block=False)
+        return line
 
     def play_random(self) -> str | None:
         """Neblokujuce prehratie nahodnej hlasky (ina nez naposledy; bez hlasu, ked speak=false). Vrati text pre HUD."""

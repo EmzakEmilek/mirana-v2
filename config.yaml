@@ -82,7 +82,7 @@ stt:
     - "braindance"
 
 llm:
-  model: "claude-opus-5-5"    # alternativa "claude-opus-5": test 2026-09-23 — prvy text 1.9 s vs 3.4 s pri 5.5 (5.5 viac premysla)
+  model: "claude-sonnet-5-5"  # alternativa "claude-opus-5": test 2026-09-23 — prvy text 1.9 s vs 3.4 s pri 5.5 (5.5 viac premysla)
   max_tokens: 2000            # strop pre premyslanie + odpoved dokopy (Opus 5.5 premysla vzdy, aj na low); plati sa len skutocne pouzite
   effort: "low"               # Opus 5.5 ma default medium — low nastavit vyslovne, inak dlhsie premyslanie = neskorsi hlas
   fallbacks: "default"        # ked bezpecnostny filter odmietne (falosny poplach), server otazku zopakuje na inom modeli; null = vypnute
@@ -118,6 +118,19 @@ fillers:
     - "momentík"
     - "daj mi chvíľku"
     - "overujem"
+  search_lines:               # keď Mirana hľadá vo wiki — tieto hovorí nahlas (hľadanie trvá pár sekúnd)
+    - "hľadám v databáze"
+    - "moment, prehľadávam databázu"
+    - "skúsim to dohľadať"
+    - "pozriem sa do archívu"
+    - "sekundu, ťahám to zo siete"
+    - "preverujem v databáze"
+    - "hneď to vyhrabem"
+
+wiki:
+  enabled: true               # Mirana si pri neistote pozrie Cyberpunk Fandom wiki (core/wiki.py), zadarmo, ~1 s + kolo modelu
+  max_lookups: 2              # najviac toľko hľadaní na jednu otázku
+  timeout_sec: 5
 
 idle_nudge:
   enabled: true               # keď sa Erik dlho neozve, Mirana sa vtipne pripomenie (môže siahnuť po stave hry)

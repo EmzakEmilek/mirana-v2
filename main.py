@@ -73,6 +73,7 @@ class Job:
     started: bool = False                    # prva veta uz znie (nastavuje Speaker)
     tts_failed: bool = False
     first_sentence: bool = True
+    searched: bool = False                   # hlaska "hladam v databaze" uz zaznela
     remember: bool = True                    # fallback hlasky sa do pamate nedavaju
     user_text: str | None = None
     answer: Answer | None = None
@@ -227,6 +228,7 @@ class Mirana:
             job.user_text, None, self.memory.as_messages(),
             on_sentence=lambda sentence: self._on_sentence(job, sentence),
             should_stop=lambda: job.cancelled,
+            on_lookup=lambda: self._on_lookup(job),
         )
         self._events.put(("answer", job, (answer, stt_sec)))
 
@@ -302,6 +304,17 @@ class Mirana:
             self._last_proactive = now
         self.voice.arm()
         threading.Thread(target=self._work_game_event, args=(job, text), daemon=True).start()
+
+    def _on_lookup(self, job: Job) -> None:
+        """Model hlada vo wiki: povie "hladam v databaze" (aj na HUD), bezny filler uz netreba."""
+        self._cancel_filler(job)
+        with self._lock:
+            current = not job.cancelled and job.gen == self._gen and self.state is State.PROCESSING
+        if current and not job.started and not job.searched:
+            job.searched = True
+            line = self.fillers.play_search()
+            if line:
+                self.overlay.filler(line)
 
     def _on_sentence(self, job: Job, sentence: str) -> None:
         if job.cancelled:

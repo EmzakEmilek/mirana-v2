@@ -172,6 +172,12 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   bez naznakov typu "zmeni to veci", [GAME_EVENT] bez turistickych opisov.
   ZOSTAVA: lore (Sonnet nepozna vela veci; Erik chce wiki) — moznosti: web search tool Claude API (Fandom), alebo
   lokalny lore index; Opus vie lore vyrazne lepsie.
+- Wiki (2026-10-03): core/wiki.py = Cyberpunk Fandom MediaWiki API (search + wikitext, bez kluca, ~1 s), nastroj `wiki`
+  pre model (max 2 hladania na otazku, potom tool_choice none), infobox bez status/dod/smrti, uvod + dalsie sekcie do 1800 zn.
+  Pri zaciatku volania nastroja zaznie nahlas fillers.search_lines (7 hlasok, fillers/search_*.wav). Persona: pri "kto je /
+  co je" z lore vzdy hladaj (Sonnet low si inak vymyslal, napr. Mox). Test Sonnet 5.5 low: Tanishi, Padre, Dum Dum, Scalpel,
+  Mox, Royce, Dex spravne; spoilery (Jackie, Evelyn, Takemura) drzane; cena aj prva veta bez zmeny (~4.8 s median).
+  Model prepnuty na Sonnet 5.5 low.
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

@@ -16,6 +16,7 @@ from anthropic import Anthropic
 from core.budget import Budget
 from core.config import load_persona
 from core.stt import create_stt
+from core.wiki import TOOL as WIKI_TOOL, Wiki
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class Answer:
     first_sentence_sec: float | None = None
     total_sec: float = 0.0
     error: str | None = None
+    lookups: int = 0                     # kolkokrat model hladal vo wiki
 
 
 class SentenceSplitter:
@@ -86,6 +88,8 @@ class Brain:
         limits = config["limits"]
 
         self.stt = create_stt(config)
+        self.wiki = Wiki(config)
+        self.max_lookups = config.get("wiki", {}).get("max_lookups", 2)
         # API kluc si SDK cita z ANTHROPIC_API_KEY (nacitane v core.config). Kluc bez workspace
         # vyzaduje hlavicku anthropic-workspace-id — ANTHROPIC_WORKSPACE_ID v .env (alebo kluc vytvoreny vo workspace).
         headers = {}
@@ -119,16 +123,27 @@ class Brain:
             block["cache_control"] = {"type": "ephemeral"}
         return {"role": "user", "content": [block]}
 
+    def _log_usage(self, message, cost: float, started: float, answer: "Answer") -> None:
+        usage = message.usage
+        logger.info(
+            "tokens (%s): input=%s cache_read=%s cache_create=%s output=%s | $%.4f | prva veta %.1f s, %s %.1f s",
+            message.model, usage.input_tokens, usage.cache_read_input_tokens, usage.cache_creation_input_tokens,
+            usage.output_tokens, cost, answer.first_sentence_sec or -1,
+            "wiki po" if message.stop_reason == "tool_use" else "spolu", time.perf_counter() - started,
+        )
+
     def _route(self, user_text: str) -> tuple[str, str]:
         if user_text.startswith("[CHAT_") and self.llm_cfg.get("chat_model"):
             return self.llm_cfg["chat_model"], self.llm_cfg.get("chat_effort", self.llm_cfg["effort"])
         return self.llm_cfg["model"], self.llm_cfg["effort"]
 
     def ask_stream(self, user_text: str, game_state_line: str | None, memory_messages: list[dict],
-                   on_sentence=None, should_stop=None) -> Answer:
+                   on_sentence=None, should_stop=None, on_lookup=None) -> Answer:
         """Streamuje odpoved; kazdu hotovu vetu posle cez on_sentence(veta).
 
         should_stop() -> True preruší stream (barge-in) — dalsie tokeny sa uz neplatia.
+        Ked model siahne po wiki, on_lookup() sa zavola hned na zaciatku volania nastroja (hlaska
+        "hladam v databaze"), vysledok ide spat modelu a odpoved pokracuje v dalsom kole.
         """
         model, effort = self._route(user_text)
         started = time.perf_counter()
@@ -155,23 +170,48 @@ class Brain:
             if on_sentence is not None:
                 on_sentence(sentence)
 
+        if self.wiki.enabled:
+            kwargs["tools"] = [WIKI_TOOL]
+        lookups, cost, message = 0, 0.0, None
         try:
-            with self.anthropic_client.beta.messages.stream(**kwargs) as stream:
-                for text in stream.text_stream:
-                    if should_stop is not None and should_stop():
-                        answer.error = "prerusene"
+            while True:
+                with self.anthropic_client.beta.messages.stream(**kwargs) as stream:
+                    for event in stream:
+                        if should_stop is not None and should_stop():
+                            answer.error = "prerusene"
+                            break
+                        if event.type == "content_block_start" and event.content_block.type == "tool_use":
+                            if on_lookup is not None:
+                                on_lookup()
+                        elif event.type == "text":
+                            for sentence in splitter.feed(event.text):
+                                emit(sentence)
+                    if answer.error is not None:
                         break
-                    for sentence in splitter.feed(text):
-                        emit(sentence)
-                if answer.error is None:
                     message = stream.get_final_message()
+                cost += self.budget.add(model, message.usage)
+                self._log_usage(message, cost, started, answer)
+                calls = [b for b in message.content if b.type == "tool_use"]
+                if message.stop_reason != "tool_use" or not calls:
+                    break
+                lookups += len(calls)
+                results = [{"type": "tool_result", "tool_use_id": c.id,
+                            "content": self.wiki.lookup((c.input or {}).get("query", ""))} for c in calls]
+                # append-only: odpoved modelu (aj s thinking blokmi) presne tak, ako prisla, potom vysledky
+                kwargs["messages"] = [*kwargs["messages"], {"role": "assistant", "content": message.content},
+                                      {"role": "user", "content": results}]
+                if lookups >= self.max_lookups:
+                    kwargs["tool_choice"] = {"type": "none"}  # dost hladania, teraz odpovedz
         except Exception as e:
             logger.warning("Claude ask zlyhalo: %s", e)
             answer.error = str(e)
+            answer.cost = cost
             answer.total_sec = time.perf_counter() - started
             return answer
 
         answer.total_sec = time.perf_counter() - started
+        answer.cost = cost
+        answer.lookups = lookups
         if answer.error == "prerusene":
             return answer
 
@@ -186,13 +226,7 @@ class Brain:
                     rest = ""
             if rest:
                 emit(rest)
-        answer.cost = self.budget.add(model, message.usage)
         usage = message.usage
-        logger.info(
-            "tokens (%s): input=%s cache_read=%s cache_create=%s output=%s | $%.4f | prva veta %.1f s, spolu %.1f s",
-            message.model, usage.input_tokens, usage.cache_read_input_tokens, usage.cache_creation_input_tokens,
-            usage.output_tokens, answer.cost, answer.first_sentence_sec or -1, answer.total_sec,
-        )
         if not self._cache_checked and memory_messages:
             self._cache_checked = True
             if not usage.cache_read_input_tokens:
