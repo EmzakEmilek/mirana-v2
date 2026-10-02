@@ -19,6 +19,7 @@ BUDGET_PATH = BASE_DIR / "data" / "budget.json"
 PRICES = {
     "claude-opus-5-5": (4.0, 0.20, 5.0, 20.0),
     "claude-opus-5": (5.0, 0.50, 6.25, 25.0),
+    "claude-sonnet-5-5": (2.0, 0.20, 2.5, 10.0),
     "claude-sonnet-5": (2.0, 0.20, 2.5, 10.0),
     "claude-haiku-4-5": (1.0, 0.10, 1.25, 5.0),
 }

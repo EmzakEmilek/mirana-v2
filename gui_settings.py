@@ -25,9 +25,10 @@ BG, PANEL, TEXT = "#0a0a0c", "#141418", "#e6e6e6"
 
 VOICES = ["sk-SK-ViktoriaNeural", "sk-SK-LukasNeural", "en-US-EmmaMultilingualNeural", "en-US-AvaMultilingualNeural"]
 MODELS = {
-    "claude-opus-5-5": "najpresnejší, prvý zvuk ~4,4 s, ~$1,25 / 4 h",
-    "claude-opus-5": "o ~1 s rýchlejší, ~$1,00 / 4 h",
-    "claude-sonnet-5": "~2× rýchlejší, ~$0,30 / 4 h, častejšie si vymýšľa lore",
+    "claude-opus-5-5": "najlepšie lore; low ~$1,50 / 4 h (občas kalky), medium ~$1,95 / 4 h, pomalší",
+    "claude-sonnet-5-5": "najrýchlejší (low ~2 s), ~$0,95 / 4 h, čistá slovenčina, slabšie lore",
+    "claude-opus-5": "staršia generácia, ~$1,00 / 4 h",
+    "claude-sonnet-5": "staršia generácia, ~$0,30 / 4 h, častejšie si vymýšľa lore",
 }
 KEYS = [f"f{i}" for i in range(1, 13)] + ["insert", "home", "end", "page_up", "page_down", "pause", "scroll_lock",
                                           "mouse_x1", "mouse_x2", "mouse_middle"]

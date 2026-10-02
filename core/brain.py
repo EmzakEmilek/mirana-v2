@@ -141,7 +141,7 @@ class Brain:
             messages=[*memory_messages, self._user_message(user_text)],
         )
         fallbacks = self.llm_cfg.get("fallbacks")
-        if fallbacks and model.startswith("claude-opus"):
+        if fallbacks and (model.startswith("claude-opus") or model == "claude-sonnet-5-5"):
             # Ked bezpecnostny klasifikator odmietne (napr. falosny poplach pri "zabi ho katanou"),
             # server otazku potichu zopakuje na odporucanom modeli namiesto ticha.
             kwargs.update(betas=["server-side-fallback-2026-07-01"], fallbacks=fallbacks)
