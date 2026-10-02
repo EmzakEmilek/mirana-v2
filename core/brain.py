@@ -187,6 +187,10 @@ class Brain:
                             for sentence in splitter.feed(event.text):
                                 emit(sentence)
                     if answer.error is not None:
+                        # prerusene (barge-in): zaplati sa aj to, co model stihol vygenerovat
+                        partial = getattr(stream, "current_message_snapshot", None)
+                        if partial is not None and getattr(partial, "usage", None) is not None:
+                            cost += self.budget.add(model, partial.usage)
                         break
                     message = stream.get_final_message()
                 cost += self.budget.add(model, message.usage)

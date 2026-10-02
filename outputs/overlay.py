@@ -150,6 +150,12 @@ class Overlay:
         if host not in ("127.0.0.1", "::1"):
             logger.warning("prikaz %r z %s odmietnuty (len localhost)", data.get("cmd"), host)
             return
+        # Prehliadac posiela vzdy hlavicku Origin, ovladacie okno (Python klient) nie. Bez tejto kontroly
+        # by lubovolna webova stranka otvorena na tomto PC mohla cez ws://localhost Mirane nieco poslat.
+        request = getattr(websocket, "request", None)
+        if request is not None and request.headers.get("Origin"):
+            logger.warning("prikaz %r z prehliadaca (%s) odmietnuty", data.get("cmd"), request.headers.get("Origin"))
+            return
         text = data.get("text")
         self.on_command(str(data.get("cmd")), str(text) if text is not None else None)
 

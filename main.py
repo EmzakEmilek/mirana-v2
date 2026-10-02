@@ -102,6 +102,7 @@ class Mirana:
         self._last_nudge = 0.0
         self._nudges_in_row = 0         # pripomienky bez Erikovej reakcie; po max_in_row Mirana zmlkne (je asi AFK)
         self._telemetry_shown = None   # posledny stav poslany na HUD (posiela sa len zmena)
+        self._game_line_shown = None
         self._pending_urgent = None    # (nazov, snapshot, text, cas) — kriticke HP pocas reci pocka, kym dohovori
         self._events: queue.Queue = queue.Queue()
 
@@ -276,7 +277,10 @@ class Mirana:
         if shown != self._telemetry_shown:
             self._telemetry_shown = shown
             self.overlay.telemetry(*shown)
-            self.overlay.game(live=snap is not None, line=self.game.line())
+        line = self.game.line()
+        if line != self._game_line_shown:  # ovladacie okno: aktualne zdravie, cas, ciel...
+            self._game_line_shown = line
+            self.overlay.game(live=snap is not None, line=line)
 
     def _handle_game_event(self, name: str, snap, text: str) -> None:
         """Proaktivna hlaska: len ked Mirana mlci a nie hned po Erikovej otazke; max raz za cooldown.

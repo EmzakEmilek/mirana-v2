@@ -29,7 +29,7 @@
      a v OBS sa dá ťahať za rohy ako obrázok. Pri zdroji na celú obrazovku ostáva dole v strede. */
   html.fit .panel {
     left: 50%; top: 50%; bottom: auto; width: 980px;
-    transform: translate(-50%, -50%) scale(var(--fit, 1));
+    --base: translate(-50%, -50%) scale(var(--fit, 1));
   }
 
   /* ==================================================================
@@ -38,7 +38,9 @@
      processing/speaking žltá, combat červená).
      ================================================================== */
   .panel {
-    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    position: absolute; left: 50%; bottom: 22px;
+    --base: translateX(-50%);    /* zakladny posun; glitch animacia sa k nemu len pripocita */
+    transform: var(--base);
     width: min(78vw, 980px); height: 150px; box-sizing: border-box;
     display: grid; grid-template-columns: 116px 1fr; gap: 0 20px; align-items: center;
     padding: 12px 26px 14px 12px;
@@ -120,9 +122,9 @@
   }
   .panel.pglitch { animation: panelGlitch .22s steps(3); }
   @keyframes panelGlitch {
-    0%   { transform: translateX(-50%); filter: none; }
-    40%  { transform: translateX(calc(-50% - 3px)) translateY(-1px); filter: hue-rotate(10deg) brightness(1.2); }
-    100% { transform: translateX(-50%); filter: none; }
+    0%   { transform: var(--base); filter: none; }
+    40%  { transform: var(--base) translate(-3px, -1px); filter: hue-rotate(10deg) brightness(1.2); }
+    100% { transform: var(--base); filter: none; }
   }
 </style>
 <script>if (!window.obsstudio) document.documentElement.classList.add('preview');</script>

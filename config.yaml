@@ -82,14 +82,13 @@ stt:
     - "braindance"
 
 llm:
-  model: "claude-sonnet-5-5"  # alternativa "claude-opus-5": test 2026-09-23 — prvy text 1.9 s vs 3.4 s pri 5.5 (5.5 viac premysla)
-  max_tokens: 2000            # strop pre premyslanie + odpoved dokopy (Opus 5.5 premysla vzdy, aj na low); plati sa len skutocne pouzite
-  effort: "low"               # Opus 5.5 ma default medium — low nastavit vyslovne, inak dlhsie premyslanie = neskorsi hlas
+  model: "claude-sonnet-5-5"  # s wiki stačí Sonnet 5.5 low (najrýchlejší, ~0,4 c/otázka); claude-opus-5-5 = lepšie lore, ~2x drahší
+  max_tokens: 2000            # strop pre premýšľanie + odpoveď dokopy (modely 5.5 premýšľajú vždy); platí sa len skutočne použité
+  effort: "low"               # low = najrýchlejší hlas; Sonnet 5.5 má predvolene high, Opus 5.5 medium (test 2026-10-03: bez premýšľania nebol rýchlejší)
   fallbacks: "default"        # ked bezpecnostny filter odmietne (falosny poplach), server otazku zopakuje na inom modeli; null = vypnute
   # Chat divakov ([CHAT_SUB], [CHAT_NESUB]) ide na lacnejsi model — kratke odpovede, nizsie stavky.
-  chat_model: "claude-sonnet-5"
-  chat_effort: "medium"
-                              # (temperature Sonnet 5 neprijíma, štýl rieši persona.md)
+  chat_model: "claude-sonnet-5-5"   # pripravené pre Kick (fáza 5), teraz sa nepoužíva
+  chat_effort: "low"
   cache_persona: true         # persona ako cacheable blok — zásadné pre rozpočet
   cache_memory: true          # aj pamäť rozhovoru ide do cache (breakpoint na novej otázke)
 

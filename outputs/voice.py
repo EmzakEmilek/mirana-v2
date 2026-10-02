@@ -54,6 +54,20 @@ def _ensure_com() -> None:
         ctypes.windll.ole32.CoInitializeEx(None, 0)  # COINIT_MULTITHREADED
 
 
+LIMIT = 0.89  # -1 dBFS — odtial sa spicky mäkko stlacaju
+
+
+def _soft_limit(x: np.ndarray) -> np.ndarray:
+    """Pod LIMIT bez zmeny, nad nim tanh krivka smerom k 1.0 — ziadne tvrde orezanie."""
+    a = np.abs(x)
+    over = a > LIMIT
+    if over.any():
+        knee = 1.0 - LIMIT
+        x = x.copy()
+        x[over] = np.sign(x[over]) * (LIMIT + knee * np.tanh((a[over] - LIMIT) / knee))
+    return x
+
+
 def _level(chunk: np.ndarray) -> float:
     """RMS int16 kusu -> 0..1, s miernou kompresiou, aby aj tichsia rec hybala vizualom."""
     rms = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2))) / 32767.0
@@ -268,7 +282,10 @@ class Voice:
         Mono do stereo zariadenia inak prevadza ovladac; HDMI vystupy NVIDIA to robia zle (praskanie)."""
         volume = self.volume
         if volume != 1.0:
-            piece = np.clip(piece.astype(np.float32) * volume, -32768, 32767).astype(np.int16)
+            x = piece.astype(np.float32) * (volume / 32768.0)
+            if volume > 1.0:
+                x = _soft_limit(x)  # spicky nad -1 dBFS sa zaoblia namiesto tvrdeho orezania (praskanie)
+            piece = (np.clip(x, -1.0, 1.0) * 32767).astype(np.int16)
         if channels > piece.shape[1]:
             piece = np.repeat(piece[:, :1], channels, axis=1)
         return np.ascontiguousarray(piece)
