@@ -8,3 +8,4 @@ fillers/
 mirana_state.json
 data/
 logs/
+.pytest_cache/

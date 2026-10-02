@@ -14,6 +14,7 @@ from http import HTTPStatus
 
 from websockets.asyncio.server import serve
 
+from core import protocol
 from core.config import BASE_DIR
 
 logger = logging.getLogger(__name__)
@@ -43,15 +44,15 @@ class Overlay:
         threading.Thread(target=self._run, name="overlay", daemon=True).start()
 
     def state(self, name: str) -> None:
-        self._send({"type": "state", "state": name})
+        self._send("state", state=name)
 
     def filler(self, text: str) -> None:
-        self._send({"type": "filler", "text": text}, remember=False)
+        self._send("filler", text=text)
 
     def answer_start(self) -> None:
         """Nova odpoved — HUD vymaze staru. Odpovede sa nepamataju: po reconnecte (refresh v OBS)
         by sa inak stara odpoved vypisala znova."""
-        self._send({"type": "answer_start"}, remember=False)
+        self._send("answer_start")
 
     def answer_append(self, text: str, duration_sec: float | None = None, ms_per_char: int | None = None) -> None:
         """Dalsia veta odpovede. Tempo pisania z dlzky jej audia, aby text dobehol s hlasom."""
@@ -59,70 +60,64 @@ class Overlay:
             ms_per_char = self.ms_per_char
             if duration_sec and text:
                 ms_per_char = max(15, int(duration_sec * 1000 / len(text)))
-        self._send({"type": "answer_append", "text": text, "ms_per_char": ms_per_char}, remember=False)
+        self._send("answer_append", text=text, ms_per_char=ms_per_char)
 
     def question(self, text: str) -> None:
         """Len pre [SYSTEM] hlasky — Erikove otazky sa na HUD nezobrazuju (rozhodnutie 2026-09-21)."""
-        self._send({"type": "question", "text": text}, remember=False)
+        self._send("question", text=text)
 
     def search(self, title: str | None, lines: list[str] | None = None) -> None:
         """Hladanie v databaze (wiki): None = zacina sa hladat (HUD strieda `lines` kazde 2 s),
         inak nazov najdeneho clanku."""
-        self._send({"type": "search", "title": title, "lines": lines or []}, remember=False)
+        self._send("search", title=title, lines=lines or [])
 
     def scan(self) -> None:
         """Mirana sa pozera na obrazovku (posiela sa snimka hry)."""
-        self._send({"type": "scan"}, remember=False)
+        self._send("scan")
 
     def game_fx(self, kind: str, text: str) -> None:
         """Efekt na HUD pri udalosti z hry (level, quest, smrt, policia)."""
-        self._send({"type": "game_fx", "kind": kind, "text": text}, remember=False)
+        self._send("game_fx", kind=kind, text=text)
 
-    def telemetry(self, location: str, quest: str, combat: bool = False, wanted: int = 0,
+    def telemetry(self, *, location: str = "", quest: str = "", combat: bool = False, wanted: int = 0,
                   critical: bool = False, deaths: int = 0) -> None:
         """HP sa na HUD neukazuje (ma ho hra): lokacia + quest, boj a kriticke HP zafarbia jadro,
         hviezdy policie a pocitadlo smrti su v hlavicke panela."""
-        self._send({"type": "telemetry", "location": location, "quest": quest, "combat": combat,
-                    "wanted": wanted, "critical": critical, "deaths": deaths})
+        self._send("telemetry", location=location, quest=quest, combat=combat, wanted=wanted,
+                   critical=critical, deaths=deaths)
 
     def level(self, value: float) -> None:
         """Hlasitost 0..1 (hlas Mirany alebo Erikov mikrofon), ~20x/s. Nepamata sa."""
-        self._send({"type": "level", "v": round(value, 3)}, remember=False)
+        self._send("level", v=round(value, 3))
 
     def erik(self, text: str) -> None:
         """Prepis Erikovej otazky — pre ovladacie okno. HUD ho ignoruje (otazky sa na streame neukazuju)."""
-        self._send({"type": "erik", "text": text}, remember=False)
+        self._send("erik", text=text)
 
     def budget(self, spent: float, cap: float) -> None:
-        self._send({"type": "budget", "spent": round(spent, 4), "cap": cap})
+        self._send("budget", spent=round(spent, 4), cap=cap)
 
     def game(self, live: bool, line: str | None) -> None:
         """Stav telemetrie pre ovladacie okno (HUD ma vlastny setTelemetry)."""
-        self._send({"type": "game", "live": live, "line": line})
+        self._send("game", live=live, line=line)
 
     def info(self, **data) -> None:
         """Staticke info o behu (model, effort) pre ovladacie okno."""
-        self._send({"type": "info", **data})
-
-    def chat(self, nick: str, text: str) -> None:
-        """Sprava z chatu pre ovladacie okno (HUD ju ignoruje)."""
-        self._send({"type": "chat", "nick": nick, "text": text}, remember=False)
+        self._send("info", **data)
 
     def notice(self, text: str) -> None:
         """Systemova hlaska len pre ovladacie okno (na HUD v streame nepatri)."""
-        self._send({"type": "notice", "text": text}, remember=False)
+        self._send("notice", text=text)
 
     def chat_status(self, text: str) -> None:
-        self._send({"type": "chat_status", "text": text})
-
-    def queue(self, n: int) -> None:
-        self._send({"type": "queue", "n": n})
+        self._send("chat_status", text=text)
 
     # --- vnutro ---------------------------------------------------------------------------
 
-    def _send(self, event: dict, remember: bool = True) -> None:
-        if remember:
-            self._last[event["type"]] = event
+    def _send(self, kind: str, /, **fields) -> None:
+        event = protocol.event(kind, **fields)
+        if kind in protocol.REMEMBERED:
+            self._last[kind] = event
         if self._loop is None or not self._clients:
             return
         try:
@@ -161,6 +156,9 @@ class Overlay:
         except ValueError:
             return
         if data.get("type") != "command" or self.on_command is None:
+            return
+        if data.get("cmd") not in protocol.COMMANDS:
+            logger.warning("neznamy prikaz %r", data.get("cmd"))
             return
         host = (websocket.remote_address or ("",))[0]
         if host not in ("127.0.0.1", "::1"):

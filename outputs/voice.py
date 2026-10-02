@@ -21,6 +21,10 @@ from outputs.voice_fx import VoiceFx
 
 logger = logging.getLogger(__name__)
 
+# MIRANA_NO_AUDIO=1: nic sa neprehrava (testy, skusky bez repro) — prehravanie len odmeria cas vety,
+# aby barge-in, fronta a HUD fungovali ako naozaj. MIRANA_NO_AUDIO_SPEED zrychli cakanie (testy: 50).
+NO_AUDIO = os.environ.get("MIRANA_NO_AUDIO") == "1"
+
 _EMOJI_PATTERN = re.compile(
     "["
     "\U0001F300-\U0001FAFF"
@@ -311,7 +315,24 @@ class Voice:
                 self._stream_warned = True
                 logger.warning("vystup pre stream zlyhal, hram len do sluchadiel: %s", e)
 
+    def _play_silent(self, audio: np.ndarray) -> None:
+        """NO_AUDIO: rovnaky priebeh ako prehravanie (stop po 50 ms kusoch, HUD uroven), ale bez zvuku."""
+        speed = max(1.0, float(os.environ.get("MIRANA_NO_AUDIO_SPEED", "1")))
+        chunk = int(self.device_rate * 0.05)
+        for start in range(0, audio.shape[0], chunk):
+            if self._stop_event.wait(0.05 / speed):
+                break
+            if self.on_level is not None:
+                self.on_level(_level(audio[start:start + chunk]))
+        if self.on_level is not None:
+            self.on_level(0.0)
+
     def _play_blocking(self, audio: np.ndarray) -> None:
+        if NO_AUDIO:
+            with self._play_lock:
+                if not self._stop_event.is_set():
+                    self._play_silent(audio)
+            return
         _ensure_com()  # WASAPI stream z ineho vlakna (filler timer, worker) inak zlyha
         with self._play_lock:
             if self._stop_event.is_set():

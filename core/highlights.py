@@ -8,16 +8,16 @@ nepomoze, ostane len cas na hodinach.
 Drzi aj denne statistiky (smrti, levely, questy, znacky) — prezivu restart Mirany pocas streamu.
 """
 
-import json
 import logging
 import re
 import threading
 import time
-from datetime import date, datetime
+from datetime import datetime
 
 import requests
 
 from core.config import BASE_DIR
+from core.store import DailyJson
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class Highlights:
         self._stream_start: float | None = None
         self._checked = 0.0
         self.session_start = time.time()
-        self.stats = self._load_stats()
+        self._daily = DailyJson(STATS_PATH, {k: 0 for k in ("death", "level_up", "quest_completed", "marker", "wanted_up")})
 
     # --- cas streamu --------------------------------------------------------------------------
 
@@ -115,26 +115,17 @@ class Highlights:
 
     # --- statistiky dna -----------------------------------------------------------------------
 
-    def _load_stats(self) -> dict:
-        today = date.today().isoformat()
-        try:
-            data = json.loads(STATS_PATH.read_text(encoding="utf-8"))
-            if data.get("day") == today:
-                return data
-        except (OSError, ValueError):
-            pass
-        return {"day": today, "death": 0, "level_up": 0, "quest_completed": 0, "marker": 0, "wanted_up": 0}
+    @property
+    def stats(self) -> dict:
+        with self._lock:
+            self._daily.roll()
+            return dict(self._daily.data)
 
     def _count(self, kind: str) -> None:
         with self._lock:
-            if self.stats.get("day") != date.today().isoformat():
-                self.stats = self._load_stats()
-            self.stats[kind] = self.stats.get(kind, 0) + 1
-            try:
-                STATS_PATH.parent.mkdir(exist_ok=True)
-                STATS_PATH.write_text(json.dumps(self.stats), encoding="utf-8")
-            except OSError:
-                pass
+            self._daily.roll()
+            self._daily.data[kind] = self._daily.data.get(kind, 0) + 1
+            self._daily.save()
 
     @property
     def deaths(self) -> int:

@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 
 from core.brain import Answer, Brain
+from core.events import (Answered, Fallback, GameEvent, Interrupted, Quit, Recording, Silent,
+                         Spoken, Typed)
 from core.highlights import Highlights
 from core.longterm import LongTermMemory
 from core.budget import Budget
@@ -128,11 +130,11 @@ class Mirana:
         self.overlay = Overlay(config)
         self.voice.on_level = self.overlay.level
         self.speaker = Speaker(config, self.voice, self.overlay, on_start=self._on_speech_start,
-                               on_done=lambda job: self._events.put(("spoken", job)), safety=Safety(config))
+                               on_done=lambda job: self._events.put(Spoken(job)), safety=Safety(config))
         self.ptt = PushToTalk(
             config,
             on_start=self._on_ptt_press,
-            on_recording=lambda wav: self._events.put(("recording", wav)),
+            on_recording=lambda wav: self._events.put(Recording(wav)),
         )
         self.ptt.on_level = self.overlay.level
         if hasattr(self.brain.stt, "begin"):  # Azure: prepis bezi uz pocas drzania PTT
@@ -142,7 +144,7 @@ class Mirana:
         self.proactive_cooldown = config["limits"].get("proactive_cooldown_sec", 300)
         self.quiet_after_erik = gs.get("quiet_after_erik_sec", 30)
         self.game = GameState(config, on_event=lambda name, snap, text: self._events.put(
-                                  ("game_event", None, (name, snap, self._record_game_event(name, snap, text)))),
+                                  GameEvent(name, snap, self._record_game_event(name, snap, text))),
                               on_snapshot=self._on_game_snapshot)
         self.chat = TwitchChat(config, on_message=self._on_chat,
                                on_status=self.overlay.chat_status)
@@ -165,7 +167,7 @@ class Mirana:
         if job is not None and not job.cancelled:
             job.cancelled = True
             self._cancel_filler(job)
-            self._events.put(("interrupted", job))
+            self._events.put(Interrupted(job))
         self.voice.stop()
 
     def _on_panic(self) -> None:
@@ -182,7 +184,6 @@ class Mirana:
                 logger.info("panic mute vypnuty")
 
     def _on_chat(self, msg) -> None:
-        self.overlay.chat(msg.nick, msg.text)
         self.longterm.add_chat(msg)
 
     def _save_stream(self) -> None:
@@ -205,13 +206,14 @@ class Mirana:
         """Ukazka efektu na HUD z okna Nastavenia -> HUD. Len vizual: ziadny model, hlas ani zapis do statistik."""
         ov = self.overlay
         snap = self.game.current
-        base = ((snap.location if snap else "") or "Watson, Kabuki", (snap.quest if snap else "") or "Jízda")
+        base = {"location": (snap.location if snap else "") or "Watson, Kabuki",
+                "quest": (snap.quest if snap else "") or "Jízda"}
 
         def restore(after: float) -> None:
             time.sleep(after)
             self._telemetry_shown = None  # dalsi snimok z hry posle skutocny stav
             if snap is None:
-                ov.telemetry("", "", False, 0, False, self.highlights.deaths)
+                ov.telemetry(deaths=self.highlights.deaths)
             ov.state("muted" if self._muted else self.state.name.lower())
 
         if kind == "level":
@@ -219,15 +221,15 @@ class Mirana:
         elif kind == "quest":
             ov.game_fx("quest_completed", "QUEST DOKONČENÝ")
         elif kind == "death":
-            ov.telemetry(*base, False, 0, False, self.highlights.deaths + 1)
+            ov.telemetry(**base, deaths=self.highlights.deaths + 1)
             ov.game_fx("death", f"FLATLINE #{self.highlights.deaths + 1}")
             restore(5)
         elif kind == "police":
-            ov.telemetry(*base, True, 3, False, self.highlights.deaths)
+            ov.telemetry(**base, combat=True, wanted=3, deaths=self.highlights.deaths)
             ov.game_fx("wanted", "NCPD ★★★")
             restore(6)
         elif kind == "critical":
-            ov.telemetry(*base, True, 0, True, self.highlights.deaths)
+            ov.telemetry(**base, combat=True, critical=True, deaths=self.highlights.deaths)
             restore(6)
         elif kind == "db":
             ov.state("processing")
@@ -253,9 +255,9 @@ class Mirana:
         if cmd == "mute":
             self._on_panic()
         elif cmd == "quit":
-            self._events.put(("quit",))
+            self._events.put(Quit())
         elif cmd == "ask" and text:
-            self._events.put(("typed", text))
+            self._events.put(Typed(text))
         elif cmd == "memory_reload":
             self.longterm.reload()
         elif cmd == "hud_test" and text:
@@ -288,17 +290,17 @@ class Mirana:
             transcript = self.brain.transcribe(wav_bytes)
             stt_sec = time.perf_counter() - stt_started
             if transcript is None:
-                self._events.put(("fallback", job, "stt_failed"))
+                self._events.put(Fallback(job, "stt_failed"))
                 return
             if not transcript.strip():
                 self._cancel_filler(job)  # omylom stlacene PTT — ticho, bez fillera
-                self._events.put(("silent", job, None))
+                self._events.put(Silent(job))
                 return
             logger.info("Erik: %s  (STT %.1f s)", transcript, stt_sec)
             save_note(transcript)
             self.overlay.erik(transcript)
             if self.budget.exceeded():
-                self._events.put(("fallback", job, "budget_reached"))
+                self._events.put(Fallback(job, "budget_reached"))
                 return
 
             self._last_erik = self._idle_since = time.time()
@@ -307,7 +309,7 @@ class Mirana:
             self._ask(job, f"[ERIK] {transcript}", stt_sec)  # tag zdroja podla persona.md
         except Exception:
             logger.exception("neocakavana chyba vo workeri")
-            self._events.put(("fallback", job, "general_error"))
+            self._events.put(Fallback(job, "general_error"))
 
     def _ask(self, job: Job, tagged_text: str, stt_sec: float = 0.0) -> None:
         """LLM stream. Stav hry ide ako riadok [HRA] na zaciatok spravy — v system prompte by
@@ -349,7 +351,31 @@ class Mirana:
             should_stop=lambda: job.cancelled,
             on_lookup=lambda title=None: self._on_lookup(job, title),
         )
-        self._events.put(("answer", job, (answer, stt_sec)))
+        self._events.put(Answered(job, answer, stt_sec))
+
+    def _start_job(self, target, *args, allowed: tuple = (State.IDLE,), interrupt: bool = False,
+                   filler: bool = False) -> Job | None:
+        """Novy Job + worker vlakno target(job, *args). None, ked Mirana mlci alebo je v stave mimo `allowed`.
+
+        interrupt=True: beziaca odpoved sa zrusi (pisana otazka). filler=True: casovac fillera, ak prva
+        veta nepride vcas. voice.arm() zrusi stop z predchadzajuceho barge-inu."""
+        with self._lock:
+            if self._muted:
+                return None
+            if interrupt and self.state in (State.PROCESSING, State.SPEAKING):
+                logger.info("nova otazka prerusila %s", self.state.name)
+                self._cancel_current()
+            elif self.state not in allowed:
+                return None
+            self._set_state(State.PROCESSING)
+            job = Job(gen=self._gen, released_at=time.perf_counter())
+            self._job = job
+        self.voice.arm()
+        if filler and self.fillers.enabled:
+            job.filler_timer = threading.Timer(self.fillers.delay_sec, self._play_filler, args=(job,))
+            job.filler_timer.start()
+        threading.Thread(target=target, args=(job, *args), name="job", daemon=True).start()
+        return job
 
     def _maybe_nudge(self) -> None:
         """Erik sa dlho neozval: jedna vtipna pripomienka (moze siahnut po [HRA]). Nie v boji ani v scene,
@@ -364,42 +390,31 @@ class Mirana:
         snap = self.game.current
         if snap is not None and (snap.in_scene or snap.get("combat")):
             return  # skusi znova o chvilu
-        with self._lock:
-            if self.state is not State.IDLE:
-                return
-            self._set_state(State.PROCESSING)
-            job = Job(gen=self._gen, released_at=time.perf_counter())
-            self._job = job
+        minutes = int((now - self._idle_since) // 60)
+        if self._start_job(self._work_tagged, f"[IDLE] Erik sa ti neozval {minutes} minút.") is None:
+            return
         self._last_nudge = now
         self._nudges_in_row += 1
-        minutes = int((now - self._idle_since) // 60)
         logger.info("pripomienka po %d min ticha (%d. za sebou)", minutes, self._nudges_in_row)
-        self.voice.arm()
-        text = f"[IDLE] Erik sa ti neozval {minutes} minút."
-        threading.Thread(target=self._work_tagged, args=(job, text), daemon=True).start()
-
-    def _work_game_event(self, job: Job, text: str) -> None:
-        self._work_tagged(job, f"[GAME_EVENT] {text}")
 
     def _work_tagged(self, job: Job, tagged_text: str) -> None:
         try:
             self._ask(job, tagged_text)
         except Exception:
             logger.exception("chyba pri hernej udalosti")
-            self._events.put(("fallback", job, "general_error"))
+            self._events.put(Fallback(job, "general_error"))
 
     # --- telemetria (vlakno game-state) ---------------------------------------------------------
 
     def _on_game_snapshot(self, snap) -> None:
+        shown = {"deaths": self.highlights.deaths}
         if snap:
             hp = snap.get("hp")
-            shown = (snap.location, snap.quest or "", bool(snap.get("combat")), int(snap.get("wanted") or 0),
-                     hp is not None and 0 < hp <= self.hp_critical, self.highlights.deaths)
-        else:
-            shown = ("", "", False, 0, False, self.highlights.deaths)
+            shown.update(location=snap.location, quest=snap.quest or "", combat=bool(snap.get("combat")),
+                         wanted=int(snap.get("wanted") or 0), critical=hp is not None and 0 < hp <= self.hp_critical)
         if shown != self._telemetry_shown:
             self._telemetry_shown = shown
-            self.overlay.telemetry(*shown)
+            self.overlay.telemetry(**shown)
         if snap and time.time() - self._longterm_game_at > 30:
             self._longterm_game_at = time.time()
             self.longterm.update_game(snap)
@@ -440,19 +455,13 @@ class Mirana:
         if not urgent and (now - self._last_proactive < self.proactive_cooldown or now - self._last_erik < self.quiet_after_erik):
             logger.info("herna udalost %s bez hlasky (cooldown)", name)
             return
-        with self._lock:
-            if self.state is not State.IDLE:
-                if urgent:
-                    self._pending_urgent = (name, snap, text, now)  # povie ju hned, ako dohovori
-                return
-            self._set_state(State.PROCESSING)
-            job = Job(gen=self._gen, released_at=time.perf_counter())
-            self._job = job
+        if self._start_job(self._work_tagged, f"[GAME_EVENT] {text}") is None:
+            if urgent:  # povie ju hned, ako dohovori (Spoken aj tato funkcia bezia v hlavnej slucke)
+                self._pending_urgent = (name, snap, text, now)
+            return
         self._pending_urgent = None
         if not urgent:  # urgentna hlaska (kriticke HP) nema blokovat bezne hlasky na 5 minut
             self._last_proactive = now
-        self.voice.arm()
-        threading.Thread(target=self._work_game_event, args=(job, text), daemon=True).start()
 
     def _on_lookup(self, job: Job, title: str | None = None) -> None:
         """Model hlada vo wiki: povie "hladam v databaze" a HUD ukaze pristup do databazy;
@@ -501,40 +510,14 @@ class Mirana:
             if line:
                 self.overlay.filler(line)
 
-    def _handle_recording(self, wav_bytes: bytes) -> None:
-        with self._lock:
-            if self.state is not State.LISTENING:
-                return
-            self._set_state(State.PROCESSING)
-            job = Job(gen=self._gen, released_at=time.perf_counter())
-            self._job = job
-        self.voice.arm()  # novy job: zrus stop z predchadzajuceho barge-inu
-        if self.fillers.enabled:
-            job.filler_timer = threading.Timer(self.fillers.delay_sec, self._play_filler, args=(job,))
-            job.filler_timer.start()
-        threading.Thread(target=self._work, args=(job, wav_bytes), daemon=True).start()
-
     def _handle_typed(self, text: str) -> None:
         """Pisana otazka z ovladacieho okna: ako PTT, len bez nahravky a prepisu. Prerusi beziacu odpoved."""
         text = " ".join(text.split())[:MAX_TYPED_CHARS]
         if not text:
             return
-        with self._lock:
-            if self._muted:
-                logger.info("pisana otazka ignorovana, Mirana je stlmena: %s", text)
-                self.overlay.notice("Mirana je stlmená, otázka sa neposlala. Zapni hlas a pošli ju znova.")
-                return
-            if self.state in (State.PROCESSING, State.SPEAKING):
-                logger.info("pisana otazka prerusila %s", self.state.name)
-                self._cancel_current()
-            self._set_state(State.PROCESSING)
-            job = Job(gen=self._gen, released_at=time.perf_counter())
-            self._job = job
-        self.voice.arm()
-        if self.fillers.enabled:
-            job.filler_timer = threading.Timer(self.fillers.delay_sec, self._play_filler, args=(job,))
-            job.filler_timer.start()
-        threading.Thread(target=self._work_text, args=(job, text), daemon=True).start()
+        if self._start_job(self._work_text, text, allowed=tuple(State), interrupt=True, filler=True) is None:
+            logger.info("pisana otazka ignorovana, Mirana je stlmena: %s", text)
+            self.overlay.notice("Mirana je stlmená, otázka sa neposlala. Zapni hlas a pošli ju znova.")
 
     def _work_text(self, job: Job, text: str) -> None:
         try:
@@ -542,7 +525,7 @@ class Mirana:
             save_note(text)
             self.overlay.erik(text)
             if self.budget.exceeded():
-                self._events.put(("fallback", job, "budget_reached"))
+                self._events.put(Fallback(job, "budget_reached"))
                 return
             self._last_erik = self._idle_since = time.time()
             self._nudges_in_row = 0
@@ -550,7 +533,7 @@ class Mirana:
             self._ask(job, f"[ERIK] {text}")
         except Exception:
             logger.exception("neocakavana chyba pri pisanej otazke")
-            self._events.put(("fallback", job, "general_error"))
+            self._events.put(Fallback(job, "general_error"))
 
     def _remember(self, job: Job, interrupted: bool) -> None:
         """Do pamate ide to, co Erik naozaj pocul — pri preruseni len vyslovene vety."""
@@ -571,52 +554,53 @@ class Mirana:
         # sprave a stary chat by sa vracal ako novy. Kratsia pamat = viac vymen za rovnaku cenu.
         self.memory.add_exchange(job.tagged_text or job.user_text, text)
 
-    def _handle_event(self, event: str, job: Job, payload) -> None:
-        if event == "game_event":
-            self._handle_game_event(*payload)
-            return
-        if event == "interrupted":
-            self._remember(job, interrupted=True)
-            return
-        if event == "spoken":
-            self._remember(job, interrupted=False)
-            with self._lock:
-                if job.gen == self._gen and self.state in (State.PROCESSING, State.SPEAKING):
-                    self._set_state(State.IDLE)
-            pending, self._pending_urgent = self._pending_urgent, None
-            if pending and time.time() - pending[3] < 10:
-                self._handle_game_event(*pending[:3])
-            return
-        if event == "answer":
-            answer, stt_sec = payload
-            job.answer = answer
-            self.overlay.budget(self.budget.spent, self.budget.cap)
-            self.conversation.write(
-                erik=job.user_text, mirana=answer.text, model=answer.model, stop=answer.stop_reason,
-                stt_s=round(stt_sec, 2), prva_veta_s=answer.first_sentence_sec and round(answer.first_sentence_sec, 2),
-                spolu_s=round(answer.total_sec, 2), usd=round(answer.cost, 5), prerusene=job.cancelled,
-                chyba=answer.error,
-            )
-            if job.cancelled:
-                return
-            logger.info("Mirana: %s", answer.text)
-            if not answer.ok and not answer.sentences:
+    def _handle_event(self, event) -> None:
+        match event:
+            case Recording(wav):
+                self._start_job(self._work, wav, allowed=(State.LISTENING,), filler=True)
+            case Typed(text):
+                self._handle_typed(text)
+            case GameEvent(name, snap, text):
+                self._handle_game_event(name, snap, text)
+            case Interrupted(job):
+                self._remember(job, interrupted=True)
+            case Spoken(job):
+                self._remember(job, interrupted=False)
+                with self._lock:
+                    if job.gen == self._gen and self.state in (State.PROCESSING, State.SPEAKING):
+                        self._set_state(State.IDLE)
+                pending, self._pending_urgent = self._pending_urgent, None
+                if pending and time.time() - pending[3] < 10:
+                    self._handle_game_event(*pending[:3])
+            case Answered(job, answer, stt_sec):
+                self._handle_answer(job, answer, stt_sec)
+            case Silent(job) if not job.cancelled and job.gen == self._gen:
+                with self._lock:
+                    if self.state is State.PROCESSING:
+                        self._set_state(State.IDLE)
+            case Fallback(job, reason) if not job.cancelled and job.gen == self._gen:
+                logger.info("fallback: %s", reason)
                 job.remember = False
-                self.speaker.say_all(job, self.fallback["llm_failed"])
-                return
-            self.speaker.end(job)
+                self._cancel_filler(job)
+                self.speaker.say_all(job, self.fallback[reason])
+
+    def _handle_answer(self, job: Job, answer: Answer, stt_sec: float) -> None:
+        job.answer = answer
+        self.overlay.budget(self.budget.spent, self.budget.cap)
+        self.conversation.write(
+            erik=job.user_text, mirana=answer.text, model=answer.model, stop=answer.stop_reason,
+            stt_s=round(stt_sec, 2), prva_veta_s=answer.first_sentence_sec and round(answer.first_sentence_sec, 2),
+            spolu_s=round(answer.total_sec, 2), usd=round(answer.cost, 5), prerusene=job.cancelled,
+            chyba=answer.error,
+        )
+        if job.cancelled:
             return
-        if job.cancelled or job.gen != self._gen:
-            return
-        if event == "silent":
-            with self._lock:
-                if self.state is State.PROCESSING:
-                    self._set_state(State.IDLE)
-        elif event == "fallback":
-            logger.info("fallback: %s", payload)
+        logger.info("Mirana: %s", answer.text)
+        if not answer.ok and not answer.sentences:
             job.remember = False
-            self._cancel_filler(job)
-            self.speaker.say_all(job, self.fallback[payload])
+            self.speaker.say_all(job, self.fallback["llm_failed"])
+            return
+        self.speaker.end(job)
 
     def _shutdown_memory(self) -> None:
         """Pred vypnutim: statistiky dna a zhrnutie modelom (max ~25 s; co nestihne, doplni dalsi start)."""
@@ -648,25 +632,19 @@ class Mirana:
         while True:
             HEARTBEAT_PATH.write_text(str(time.time()))  # run.py podla neho pozna zamrznutie
             try:
-                event, *rest = self._events.get(timeout=5)
+                event = self._events.get(timeout=5)
             except queue.Empty:
                 self._maybe_nudge()
                 continue
-            if event == "quit":
+            if isinstance(event, Quit):
                 logger.info("vypnutie z ovladacieho okna")
                 self.voice.stop()
                 self._shutdown_memory()
                 return
             try:
-                if event == "recording":
-                    self._handle_recording(rest[0])
-                elif event == "typed":
-                    self._handle_typed(rest[0])
-                else:
-                    job, payload = (rest + [None])[:2]
-                    self._handle_event(event, job, payload)
+                self._handle_event(event)
             except Exception:
-                logger.exception("chyba v hlavnej slucke (%s)", event)
+                logger.exception("chyba v hlavnej slucke (%s)", type(event).__name__)
 
 
 if __name__ == "__main__":

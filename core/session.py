@@ -1,12 +1,12 @@
 """Beh jednej session: logovanie do suboru, zaznam rozhovoru a zamok proti druhej instancii."""
 
-import json
 import logging
 import socket
 import sys
 from datetime import datetime
 
 from core.config import BASE_DIR
+from core.store import append_jsonl
 
 LOGS_DIR = BASE_DIR / "logs"
 
@@ -57,9 +57,4 @@ class ConversationLog:
         self.path = LOGS_DIR / f"rozhovor-{session_id}.jsonl"
 
     def write(self, **record) -> None:
-        record = {"cas": datetime.now().isoformat(timespec="seconds"), **record}
-        try:
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-        except OSError:
-            logging.getLogger(__name__).exception("zaznam rozhovoru sa neda zapisat")
+        append_jsonl(self.path, {"cas": datetime.now().isoformat(timespec="seconds"), **record})

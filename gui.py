@@ -345,8 +345,6 @@ class App(ctk.CTk):
                 self.game_label.configure(text="Hra: " + line, text_color=CYAN)
             else:
                 self.game_label.configure(text="Hra: nebeží (alebo menu) — Mirana ide bez telemetrie", text_color=DIM)
-        elif kind == "chat":
-            pass  # spravy z chatu sa v okne nevypisuju (Mirana ich vidi aj tak), len stav pripojenia
         elif kind == "notice":
             self._write(ev["text"], "sys")
             self.mirana_line_open = False

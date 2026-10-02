@@ -1,0 +1,168 @@
+"""Cisto logicke casti: bez siete, zvuku a modelu."""
+
+import json
+from datetime import date
+from types import SimpleNamespace
+
+import pytest
+
+from core import store
+from core.brain import SentenceSplitter
+from core.highlights import fmt_offset, parse_uptime
+from core.safety import Safety
+from inputs.game_state import Snapshot, completed_quests, detect_events, event_text, telemetry_line
+from inputs.twitch_chat import channel_name, clean_text, parse_privmsg
+
+
+# --- store -------------------------------------------------------------------------------------
+
+def test_write_json_atomic_and_read_back(tmp_path):
+    path = tmp_path / "sub" / "x.json"
+    assert store.write_json(path, {"a": "ľščť"})
+    assert store.read_json(path) == {"a": "ľščť"}
+    assert not list(path.parent.glob("*.tmp"))
+
+
+def test_read_json_corrupted_returns_default(tmp_path):
+    path = tmp_path / "bad.json"
+    path.write_text("{nedokoncene", encoding="utf-8")
+    assert store.read_json(path, {"ok": 1}) == {"ok": 1}
+
+
+def test_append_jsonl(tmp_path):
+    path = tmp_path / "log.jsonl"
+    store.append_jsonl(path, {"n": 1})
+    store.append_jsonl(path, {"n": 2})
+    assert [json.loads(x)["n"] for x in path.read_text(encoding="utf-8").splitlines()] == [1, 2]
+
+
+def test_daily_json_rolls_over(tmp_path):
+    path = tmp_path / "d.json"
+    path.write_text(json.dumps({"day": "2000-01-01", "usd": 5.0}), encoding="utf-8")
+    d = store.DailyJson(path, {"usd": 0.0})
+    assert d.data == {"day": date.today().isoformat(), "usd": 0.0}
+    d.data["usd"] = 1.5
+    d.save()
+    assert store.DailyJson(path, {"usd": 0.0}).data["usd"] == 1.5
+    d.data["day"] = "2000-01-01"  # "polnoc"
+    d.roll()
+    assert d.data["usd"] == 0.0
+
+
+def test_budget_counts_and_caps(config, data_dir):
+    from core.budget import Budget
+    config["limits"]["daily_usd_cap"] = 0.003
+    b = Budget(config)
+    usage = SimpleNamespace(input_tokens=100, output_tokens=100, cache_read_input_tokens=0,
+                            cache_creation_input_tokens=0)
+    cost = b.add("claude-sonnet-5-5", usage)
+    assert cost == pytest.approx((100 * 2.0 + 100 * 10.0) / 1e6)
+    assert not b.exceeded()
+    for _ in range(2):
+        b.add("claude-sonnet-5-5", usage)
+    assert b.exceeded()
+    assert Budget(config).spent == pytest.approx(b.spent)  # prezije restart
+
+
+# --- vety -------------------------------------------------------------------------------------
+
+def feed_all(chunks):
+    s = SentenceSplitter()
+    out = []
+    for c in chunks:
+        out += s.feed(c)
+    rest = s.flush()
+    return out + ([rest] if rest else [])
+
+
+def test_splitter_streams_sentences():
+    out = feed_all(["Padre je fixer z Heyw", "oodu. Kedysi bol medzi Valentinos. A", "ko kňaz."])
+    assert out == ["Padre je fixer z Heywoodu.", "Kedysi bol medzi Valentinos.", "Ako kňaz."]
+
+
+def test_splitter_short_first_sentence_joined():
+    assert feed_all(["Nie. To fakt nie je dobrý nápad. Ide sa."])[0] == "Nie. To fakt nie je dobrý nápad."
+
+
+def test_splitter_keeps_abbreviations():
+    out = feed_all(["Zbraň je napr. Mk. 2 verzia od Arasaka. Dobrá vec."])
+    assert out[0].startswith("Zbraň je napr. Mk. 2 verzia")
+
+
+# --- hra ----------------------------------------------------------------------------------------
+
+def snap(**data):
+    return Snapshot({"in_game": True, **data})
+
+
+def test_detect_death_and_critical():
+    assert detect_events(snap(hp=40), snap(hp=0), 30, 10) == ["death"]
+    assert detect_events(snap(hp=40), snap(hp=8), 30, 10) == ["hp_critical"]
+    assert detect_events(snap(hp=40), snap(hp=25), 30, 10) == ["hp_low"]
+    assert detect_events(None, snap(hp=0), 30, 10) == []
+    assert detect_events(snap(hp=40), Snapshot({"in_game": False, "hp": 0}), 30, 10) == []
+
+
+def test_detect_level_wanted_combat():
+    events = detect_events(snap(level=5, wanted=0), snap(level=6, wanted=2, combat=True), 30, 10)
+    assert events == ["wanted_up", "level_up", "combat_start"]
+    assert detect_events(snap(level=0), snap(level=6), 30, 10) == []  # prvy snimok po nacitani nie je level up
+
+
+def test_pseudo_quest_is_not_new_quest():
+    prev = snap(quest="Jízda")
+    assert detect_events(prev, snap(quest="Neobjevené"), 30, 10) == []
+    assert detect_events(snap(quest="Neobjevené"), snap(quest="Jízda"), 30, 10, last_quest="Jízda") == []
+    assert detect_events(prev, snap(quest="Nový quest"), 30, 10) == ["quest_changed"]
+
+
+def test_completed_quests_and_text():
+    prev = snap(story={"main_done": [{"id": "q001", "title": "Prvý"}]})
+    cur = snap(story={"main_done": [{"id": "q001", "title": "Prvý"}, {"id": "q003", "title": "Pochôdzka"}]})
+    assert completed_quests(prev, cur) == ["Pochôdzka"]
+    assert event_text("quest_completed", cur, prev) == "Erik dokončil hlavný quest Pochôdzka"
+    assert event_text("wanted_up", snap(wanted=3)) == "polícia ho hľadá, už 3 hviezdy"
+
+
+def test_telemetry_line_skips_empty():
+    line = telemetry_line(snap(hp=80, district="Watson", subdistrict="Kabuki", money=1200))
+    assert line.startswith("[HRA] zdravie 80 %")
+    assert "Watson, Kabuki" in line and "1200 eddies" in line
+    assert "None" not in line
+
+
+# --- ostatne ------------------------------------------------------------------------------------
+
+def test_uptime_parsing():
+    assert parse_uptime("1 hour, 2 minutes, 3 seconds") == 3723
+    assert parse_uptime("emzakemil is offline") is None
+    assert parse_uptime("") is None
+    assert fmt_offset(3723) == "1:02:03"
+
+
+def test_safety(config):
+    s = Safety(config)
+    assert s.check("Padre je fixer.") is None
+    assert s.check("napíš mi na jano@example.com") == "email"
+    assert s.check("pozri www.example.com") == "odkaz"
+
+
+def test_twitch_privmsg():
+    m = parse_privmsg("@badges=moderator/1,subscriber/12;display-name=Kubo :kubo!kubo@kubo.tmi.twitch.tv "
+                      "PRIVMSG #emzakemil :ahoj Mirana")
+    assert (m.login, m.nick, m.text, m.badges) == ("kubo", "Kubo", "ahoj Mirana", ("moderator", "subscriber"))
+    assert parse_privmsg(":tmi.twitch.tv PING") is None
+    assert channel_name("https://www.twitch.tv/Emzakemil/") == "emzakemil"
+    assert clean_text("pozri https://x.y a | b", 100) == "pozri [odkaz] a / b"
+
+
+def test_ptt_keys():
+    from pynput import keyboard, mouse
+
+    from inputs.ptt import key_label, parse_key
+    assert parse_key("mouse_x1") == mouse.Button.x1
+    assert parse_key("F11") == keyboard.Key.f11
+    assert parse_key("") is None
+    assert key_label("mouse_x2") == "predné bočné tlačidlo myši"
+    with pytest.raises(ValueError):
+        parse_key("neexistuje")

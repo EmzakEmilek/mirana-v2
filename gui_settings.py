@@ -287,8 +287,8 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _tab_model(self, tab):
         llm, limits, memory = self.cfg["llm"], self.cfg["limits"], self.cfg["memory"]
-        box = self._combo(tab, "llm.model", "Model", list(MODELS), llm["model"], width=260,
-                          command=lambda m: self.model_hint.configure(text=MODELS.get(m, "")))
+        self._combo(tab, "llm.model", "Model", list(MODELS), llm["model"], width=260,
+                    command=lambda m: self.model_hint.configure(text=MODELS.get(m, "")))
         self.model_hint = ctk.CTkLabel(tab, text=MODELS.get(llm["model"], ""), text_color=DIM, anchor="w")
         self.model_hint.pack(fill="x", padx=(190, 12))
         var = ctk.StringVar(value=llm["effort"])
@@ -599,7 +599,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 self.after(0, lambda: self.mic_label.configure(text=f"Najvyššia úroveň {peak_all}/32767 — {verdict}",
                                                                text_color=TEXT if peak_all > 300 else RED))
             except Exception as e:
-                self.after(0, lambda: self.mic_label.configure(text=f"Chyba: {e}", text_color=RED))
+                self.after(0, lambda err=str(e): self.mic_label.configure(text=f"Chyba: {err}", text_color=RED))
             self.after(600, self.mic_bar.set, 0)
 
         threading.Thread(target=run, daemon=True).start()
@@ -619,7 +619,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 with sd.OutputStream(samplerate=rate, device=device_index, channels=1, dtype="int16") as stream:
                     stream.write(tone.reshape(-1, 1))
             except Exception as e:
-                self.after(0, lambda: self.hint.configure(text=f"Výstup: {e}", text_color=RED))
+                self.after(0, lambda err=str(e): self.hint.configure(text=f"Výstup: {err}", text_color=RED))
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -649,7 +649,7 @@ class SettingsWindow(ctk.CTkToplevel):
                     voice.play_audio(clip)
                 self.after(0, lambda: self.hint.configure(text="Zmeny sa prejavia po reštarte Mirany.", text_color=DIM))
             except Exception as e:
-                self.after(0, lambda: self.hint.configure(text=f"Ukážka zlyhala: {e}", text_color=RED))
+                self.after(0, lambda err=str(e): self.hint.configure(text=f"Ukážka zlyhala: {err}", text_color=RED))
 
         threading.Thread(target=run, daemon=True).start()
 

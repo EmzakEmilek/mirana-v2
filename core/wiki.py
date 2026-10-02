@@ -16,6 +16,7 @@ import unicodedata
 import requests
 
 from core.config import BASE_DIR
+from core.store import write_json
 
 logger = logging.getLogger(__name__)
 
@@ -187,8 +188,7 @@ class Wiki:
                     if "continue" not in data:
                         break
                     params.update(data["continue"])
-                TITLES_PATH.parent.mkdir(exist_ok=True)
-                TITLES_PATH.write_text(json.dumps(titles, ensure_ascii=False), encoding="utf-8")
+                write_json(TITLES_PATH, titles)
             index = {}
             for t in titles:
                 if "/" in t or t.startswith(("Archived Conversation", "List of")):

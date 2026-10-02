@@ -1,20 +1,20 @@
-# pip install -r requirements.txt  (vo venv)
-python-dotenv
-PyYAML
-numpy
-pedalboard
-sounddevice
-pynput
-anthropic>=1.8
-openai>=3
-azure-cognitiveservices-speech
-faster-whisper
+# pip install -r requirements.txt  (vo venv) — presne verzie, s ktorymi Mirana bezi a je otestovana.
+# Aktualizacia: zmen verziu, spusti testy (python -m pytest) a skus jeden stream.
+python-dotenv==1.2.3
+PyYAML==6.0.3
+ruamel.yaml==0.19.1        # nastavenia z okna zapisuju config.yaml so zachovanim komentarov
+numpy==2.5.3
+sounddevice==0.5.6
+pynput==1.8.2
+pedalboard==0.9.25         # efekty hlasu
+anthropic==1.8.0
+openai==3.16.2             # len zalozny prepis (stt.provider: api)
+azure-cognitiveservices-speech==1.51.2
+faster-whisper==1.2.1
 # CUDA runtime pre faster-whisper bez instalacie CUDA toolkitu (core/stt.py ich registruje)
-nvidia-cublas-cu12
-nvidia-cudnn-cu12
-websockets
-requests      # Cyberpunk Fandom wiki (core/wiki.py)
-# ovladacie okno (gui.py)
-customtkinter
-pillow        # snimka okna hry (core/vision.py)
-ruamel.yaml   # nastavenia z okna zapisuju config.yaml so zachovanim komentarov
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.26.0.51
+websockets==17.1
+requests==2.34.2           # Cyberpunk Fandom wiki, cas streamu
+customtkinter==6.0.0       # ovladacie okno
+pillow==12.3.0             # snimka okna hry

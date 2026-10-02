@@ -4,12 +4,11 @@ Stav prezije restart (inak by kazdy restart vynuloval strop). Novy den (lokalny 
 Whisper bezi lokalne a Azure TTS je vo free tieri, preto sa pocita len Claude.
 """
 
-import json
 import logging
 import threading
-from datetime import date
 
 from core.config import BASE_DIR
+from core.store import DailyJson
 
 logger = logging.getLogger(__name__)
 
@@ -44,26 +43,14 @@ class Budget:
     def __init__(self, config: dict):
         self.cap = float(config["limits"]["daily_usd_cap"])
         self._lock = threading.Lock()
-        self._day = date.today().isoformat()
-        self._spent = 0.0
-        try:
-            data = json.loads(BUDGET_PATH.read_text(encoding="utf-8"))
-            if data.get("day") == self._day:
-                self._spent = float(data.get("usd", 0.0))
-        except (OSError, ValueError):
-            pass
-        logger.info("rozpocet dnes: $%.3f z $%.2f", self._spent, self.cap)
-
-    def _roll_day(self) -> None:
-        today = date.today().isoformat()
-        if today != self._day:
-            self._day, self._spent = today, 0.0
+        self._day = DailyJson(BUDGET_PATH, {"usd": 0.0})
+        logger.info("rozpocet dnes: $%.3f z $%.2f", self.spent, self.cap)
 
     @property
     def spent(self) -> float:
         with self._lock:
-            self._roll_day()
-            return self._spent
+            self._day.roll()
+            return float(self._day.data["usd"])
 
     def exceeded(self) -> bool:
         return self.spent >= self.cap
@@ -72,14 +59,10 @@ class Budget:
         """Zapocita odpoved, vrati jej cenu. Pri prekroceni stropu zaloguje varovanie."""
         cost = cost_usd(model, usage)
         with self._lock:
-            self._roll_day()
-            self._spent += cost
-            spent = self._spent
-            try:
-                BUDGET_PATH.parent.mkdir(exist_ok=True)
-                BUDGET_PATH.write_text(json.dumps({"day": self._day, "usd": round(spent, 5)}), encoding="utf-8")
-            except OSError:
-                logger.exception("budget.json sa neda zapisat")
+            self._day.roll()
+            spent = float(self._day.data["usd"]) + cost
+            self._day.data["usd"] = round(spent, 5)
+            self._day.save()
         if spent >= self.cap:
             logger.warning("DENNY STROP DOSIAHNUTY: $%.3f / $%.2f — dalsie otazky sa neposielaju", spent, self.cap)
         return cost

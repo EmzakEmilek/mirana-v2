@@ -24,6 +24,7 @@ import unicodedata
 from datetime import date, datetime
 
 from core.config import BASE_DIR
+from core.store import append_jsonl, read_json, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,27 @@ def _nick_core(nick: str) -> str:
     return re.sub(r"\d+", "", _norm(core)) or _norm(nick)
 
 
+def _nick_cores(nick: str) -> set[str]:
+    """Ako sa da nick vyslovit: cely ("kubosk") aj casti oddelene _ - . ("Kubo_SK" -> "kubo")."""
+    cores = {_nick_core(nick)}
+    parts = re.split(r"[_\-. ]+", re.sub(r"(?i)^xx|xx$", "", nick or ""))
+    if len(parts) > 1:
+        cores |= {c for c in (re.sub(r"\d+", "", _norm(x)) for x in parts) if len(c) >= 4}
+    return {c for c in cores if len(c) >= 3}
+
+
+def _mentioned(nick: str, words: set[str]) -> bool:
+    """Spomenul Erik divaka? Aj vysklonovane: Kubo -> Kubovi, Kuba (koncova samohlaska sa meni)."""
+    for core in _nick_cores(nick):
+        stems = {core}
+        if len(core) >= 4 and core[-1] in "aeiouy":
+            stems.add(core[:-1])
+        for w in words:
+            if any(w.startswith(stem) and len(w) - len(stem) <= 3 for stem in stems):
+                return True
+    return False
+
+
 class LongTermMemory:
     def __init__(self, config: dict, session_id: str):
         cfg = config.get("longterm") or {}
@@ -100,9 +122,8 @@ class LongTermMemory:
     # --- subor ---------------------------------------------------------------------------------
 
     def _load(self) -> dict:
-        try:
-            data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        data = read_json(MEMORY_PATH, {})
+        if not isinstance(data, dict):
             data = {}
         data.setdefault("version", 1)
         data.setdefault("game", {})
@@ -125,14 +146,8 @@ class LongTermMemory:
                 return
             if not force and time.time() - self._saved < SAVE_EVERY_SEC:
                 return
-            try:
-                MEMORY_PATH.parent.mkdir(exist_ok=True)
-                tmp = MEMORY_PATH.with_suffix(".tmp")
-                tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=1), encoding="utf-8")
-                tmp.replace(MEMORY_PATH)
+            if write_json(MEMORY_PATH, self.data, indent=1):
                 self._dirty, self._saved = False, time.time()
-            except OSError:
-                logger.exception("pamat sa neda zapisat")
 
     # --- automaticke zapisy ------------------------------------------------------------------------
 
@@ -180,13 +195,8 @@ class LongTermMemory:
                 if badge in msg.badges and badge not in v["badges"]:
                     v["badges"].append(badge)
             self._dirty = True
-        try:
-            LOGS_DIR.mkdir(exist_ok=True)
-            with self.chat_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"cas": datetime.now().isoformat(timespec="seconds"), "login": msg.login,
-                                    "nick": msg.nick, "text": msg.text}, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
+        append_jsonl(self.chat_path, {"cas": datetime.now().isoformat(timespec="seconds"), "login": msg.login,
+                                       "nick": msg.nick, "text": msg.text})
         self.save()
 
     def update_stream(self, stats: dict, minutes: int) -> None:
@@ -257,9 +267,7 @@ class LongTermMemory:
         lower_chat = {n.lower() for n in nicks_in_chat}
         words = {_norm(w) for w in re.findall(r"\w+", question)} - {""}
         for login, v in viewers.items():
-            core = _nick_core(v.get("nick") or login)
-            if login in lower_chat or (v.get("nick") or "").lower() in lower_chat or (core and len(core) >= 3 and (
-                    core in words or any(w.startswith(core) and len(w) - len(core) <= 3 for w in words))):
+            if login in lower_chat or (v.get("nick") or "").lower() in lower_chat or _mentioned(v.get("nick") or login, words):
                 wanted.append((login, v))
         if not wanted:
             return None
@@ -282,8 +290,7 @@ class LongTermMemory:
         words = {_norm(w) for w in re.findall(r"\w+", question)} - {""}
         with self._lock:
             for login, v in self.data["viewers"].items():
-                core = _nick_core(v.get("nick") or login)
-                if core and len(core) >= 3 and any(w.startswith(core) and len(w) - len(core) <= 3 for w in words):
+                if _mentioned(v.get("nick") or login, words):
                     v["notes"] = []
                     self._dirty = True
                     self.save(force=True)
@@ -389,7 +396,7 @@ class LongTermMemory:
                     facts = list(self.data["erik"]["facts"])
                     active = {line.split(" ", 1)[0] for line in chat}
                     known = {login: v.get("notes", []) for login, v in self.data["viewers"].items() if login in active}
-                payload = (f"Doterajšie fakty o Erikovi:\n" + ("\n".join(f"- {f}" for f in facts) or "(žiadne)") +
+                payload = ("Doterajšie fakty o Erikovi:\n" + ("\n".join(f"- {f}" for f in facts) or "(žiadne)") +
                            "\n\nDoterajšie poznámky o divákoch z tohto chatu:\n" +
                            ("\n".join(f"- {k}: {'; '.join(n) or '(žiadne)'}" for k, n in known.items()) or "(žiadne)") +
                            "\n\nRozhovor Erika s Miranou:\n" + ("\n\n".join(talk[-150:]) or "(nič)") +

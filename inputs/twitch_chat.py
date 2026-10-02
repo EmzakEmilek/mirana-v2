@@ -164,7 +164,7 @@ class TwitchChat:
                                 await ws.send("PONG" + line[4:])
                             elif " RECONNECT" in line:
                                 raise ConnectionError("Twitch ziada reconnect")
-                            elif f" 366 " in line and not self.connected:  # koniec zoznamu mien = sme v kanali
+                            elif " 366 " in line and not self.connected:  # koniec zoznamu mien = sme v kanali
                                 self.connected = True
                                 delay = 2
                                 logger.info("twitch chat pripojeny: #%s", self.channel)

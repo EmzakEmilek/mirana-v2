@@ -10,6 +10,7 @@ import shutil
 from ruamel.yaml import YAML
 
 from core.config import BASE_DIR, CONFIG_PATH, PERSONA_PATH
+from core.store import write_text_atomic
 
 BACKUP_DIR = BASE_DIR / "data"
 
@@ -33,7 +34,7 @@ def save(data) -> None:
     shutil.copy2(CONFIG_PATH, BACKUP_DIR / "config.yaml.bak")
     buf = io.StringIO()
     _yaml().dump(data, buf)
-    CONFIG_PATH.write_text(buf.getvalue(), encoding="utf-8", newline="")
+    write_text_atomic(CONFIG_PATH, buf.getvalue())
 
 
 def load_persona() -> str:
@@ -43,4 +44,4 @@ def load_persona() -> str:
 def save_persona(text: str) -> None:
     BACKUP_DIR.mkdir(exist_ok=True)
     shutil.copy2(PERSONA_PATH, BACKUP_DIR / "persona.md.bak")
-    PERSONA_PATH.write_text(text.rstrip() + "\n", encoding="utf-8", newline="")
+    write_text_atomic(PERSONA_PATH, text.rstrip() + "\n")
