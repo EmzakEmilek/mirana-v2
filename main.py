@@ -80,6 +80,13 @@ class Mirana:
         self._muted = False            # panic mute: Mirana mlci a ignoruje PTT, kym sa panic klaves nestlaci znova
         self._last_proactive = 0.0     # cas poslednej hlasky z hernej udalosti
         self._last_erik = 0.0          # cas poslednej Erikovej otazky — proaktivne hlasky mu neskacu do reci
+        idle = config.get("idle_nudge", {})
+        self.idle_enabled = idle.get("enabled", False)
+        self.idle_after = float(idle.get("after_min", 10)) * 60
+        self.idle_max_in_row = int(idle.get("max_in_row", 3))
+        self._idle_since = time.time()  # posledna Erikova otazka alebo start — od toho sa meria ticho
+        self._last_nudge = 0.0
+        self._nudges_in_row = 0         # pripomienky bez Erikovej reakcie; po max_in_row Mirana zmlkne (je asi AFK)
         self._telemetry_shown = None   # posledny stav poslany na HUD (posiela sa len zmena)
         self._pending_urgent = None    # (nazov, snapshot, text, cas) — kriticke HP pocas reci pocka, kym dohovori
         self._events: queue.Queue = queue.Queue()
@@ -189,7 +196,8 @@ class Mirana:
                 self._events.put(("fallback", job, "budget_reached"))
                 return
 
-            self._last_erik = time.time()
+            self._last_erik = self._idle_since = time.time()
+            self._nudges_in_row = 0
             self._ask(job, f"[ERIK] {transcript}", stt_sec)  # tag zdroja podla persona.md
         except Exception:
             logger.exception("neocakavana chyba vo workeri")
@@ -208,9 +216,39 @@ class Mirana:
         )
         self._events.put(("answer", job, (answer, stt_sec)))
 
+    def _maybe_nudge(self) -> None:
+        """Erik sa dlho neozval: jedna vtipna pripomienka (moze siahnut po [HRA]). Nie v boji ani v scene,
+        nie ked Mirana hovori; najviac idle_nudge.max_in_row za sebou, potom caka na Erika."""
+        if not self.idle_enabled or self._muted or self._nudges_in_row >= self.idle_max_in_row:
+            return
+        now = time.time()
+        if now - max(self._idle_since, self._last_nudge) < self.idle_after or self.budget.exceeded():
+            return
+        if now - self._last_proactive < 60:
+            return  # prave sa ozvala k udalosti z hry, nech to nie je dvakrat po sebe
+        snap = self.game.current
+        if snap is not None and (snap.in_scene or snap.get("combat")):
+            return  # skusi znova o chvilu
+        with self._lock:
+            if self.state is not State.IDLE:
+                return
+            self._set_state(State.PROCESSING)
+            job = Job(gen=self._gen, released_at=time.perf_counter())
+            self._job = job
+        self._last_nudge = now
+        self._nudges_in_row += 1
+        minutes = int((now - self._idle_since) // 60)
+        logger.info("pripomienka po %d min ticha (%d. za sebou)", minutes, self._nudges_in_row)
+        self.voice.arm()
+        text = f"[IDLE] Erik sa ti neozval {minutes} minút."
+        threading.Thread(target=self._work_tagged, args=(job, text), daemon=True).start()
+
     def _work_game_event(self, job: Job, text: str) -> None:
+        self._work_tagged(job, f"[GAME_EVENT] {text}")
+
+    def _work_tagged(self, job: Job, tagged_text: str) -> None:
         try:
-            self._ask(job, f"[GAME_EVENT] {text}")
+            self._ask(job, tagged_text)
         except Exception:
             logger.exception("chyba pri hernej udalosti")
             self._events.put(("fallback", job, "general_error"))
@@ -324,7 +362,8 @@ class Mirana:
             if self.budget.exceeded():
                 self._events.put(("fallback", job, "budget_reached"))
                 return
-            self._last_erik = time.time()
+            self._last_erik = self._idle_since = time.time()
+            self._nudges_in_row = 0
             self._ask(job, f"[ERIK] {text}")
         except Exception:
             logger.exception("neocakavana chyba pri pisanej otazke")
@@ -410,6 +449,7 @@ class Mirana:
             try:
                 event, *rest = self._events.get(timeout=5)
             except queue.Empty:
+                self._maybe_nudge()
                 continue
             if event == "quit":
                 logger.info("vypnutie z ovladacieho okna")

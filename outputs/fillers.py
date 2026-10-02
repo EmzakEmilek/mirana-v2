@@ -1,5 +1,7 @@
 """Filler hlasky: kratke WAV zakryvaju ticho medzi pustenim PTT a odpovedou.
 
+fillers.speak: false = hlaska sa len ukaze na HUD, nahlas sa nepovie (a WAV sa ani negeneruju).
+
 Pri prvom spusteni sa vygeneruju cez TTS do fillers/*.wav (len chybajuce). Prehravanie je
 neblokujuce — bezi z casovaca v main.py, kym worker cakal na Whisper a Claude.
 """
@@ -32,11 +34,15 @@ class Fillers:
         cfg = config["fillers"]
         self.enabled = cfg["enabled"]
         self.delay_sec = cfg["skip_if_faster_than_ms"] / 1000
+        self.speak = cfg.get("speak", True)
         self._voice = voice
-        self._clips: list[tuple[str, np.ndarray]] = []
+        self._clips: list[tuple[str, np.ndarray | None]] = []
         self._last_index: int | None = None
-        if self.enabled:
+        if self.enabled and self.speak:
             self._load(cfg["lines"])
+        elif self.enabled:
+            self._clips = [(line, None) for line in cfg["lines"]]
+            logger.info("fillery: %d hlasok, len na HUD (bez hlasu)", len(self._clips))
 
     def _load(self, lines: list[str]) -> None:
         FILLERS_DIR.mkdir(exist_ok=True)
@@ -50,14 +56,15 @@ class Fillers:
         logger.info("fillery: %d hlasok (%d novo vygenerovanych)", len(self._clips), generated)
 
     def play_random(self) -> str | None:
-        """Neblokujuce prehratie nahodnej hlasky (ina nez naposledy). Vrati jej text pre HUD."""
+        """Neblokujuce prehratie nahodnej hlasky (ina nez naposledy; bez hlasu, ked speak=false). Vrati text pre HUD."""
         if not self._clips:
             return None
         choices = [i for i in range(len(self._clips)) if i != self._last_index] or [0]
         self._last_index = random.choice(choices)
         line, audio = self._clips[self._last_index]
-        logger.info("filler: %s", line)
-        self._voice.play_audio(audio, block=False)
+        logger.info("filler: %s%s", line, "" if audio is not None else " (len HUD)")
+        if audio is not None:
+            self._voice.play_audio(audio, block=False)
         return line
 
     def wait(self) -> None:

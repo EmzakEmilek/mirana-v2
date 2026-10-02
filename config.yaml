@@ -109,6 +109,7 @@ memory:
 
 fillers:
   enabled: true
+  speak: false                # false = filler sa len ukáže na HUD, nahlas ho nepovie
   skip_if_faster_than_ms: 1300      # pauza pred fillerom (~0.8 s STT + 0.5 s prirodzena prestavka); rychlejsia odpoved filler preskoci
   lines:
     - "sekundu, Emzo"
@@ -116,6 +117,11 @@ fillers:
     - "momentík"
     - "daj mi chvíľku"
     - "overujem"
+
+idle_nudge:
+  enabled: true               # keď sa Erik dlho neozve, Mirana sa vtipne pripomenie (môže siahnuť po stave hry)
+  after_min: 10               # po koľkých minútach ticha
+  max_in_row: 3               # najviac toľko za sebou bez Erikovej reakcie (potom je asi AFK a mlčí)
 
 overlay:
   enabled: true

@@ -29,7 +29,8 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
 - PTT: zadne bocne tlacidlo mysi (mouse_x1), panic mute: predne bocne (mouse_x2)
 - Audio (2026-10-02): mikrofon Trust GXT 232, vystup = predvoleny vystup Windows (24G1WG4 HDMI -> strihova karta),
   druhy vystup vypnuty, hlasitost 100 % (posuvnik v hlavnom okne); sluchadla G733 odpojene
-- Fillery: 5 hlasok, az po 1.3 s
+- Fillery: 5 hlasok, az po 1.3 s, len na HUD (bez hlasu)
+- Pripomienka po tichu: po 10 min, max 3 za sebou
 - Hra: Cyberpunk 2077 2.31 (GOG, cesky preklad), CET 1.37.1, mod mirana_state v3 nainstalovany
 - Proaktivne hlasky: hp_critical, hp_low, death, level_up, district_change, quest_changed, quest_completed, wanted_up
 - Persona: Friday, 1-2 vety, spoiler pravidla, ceske nazvy z hry, rozkazovaci sposob, obcasne nadavky
@@ -157,6 +158,10 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   2x pod rovnakym menom, preto nie podla mena), mikrofon Trust GXT 232. Odpojeny vystup/mikrofon -> zaloha na
   predvolene (log warning) namiesto padu. audio.volume + posuvnik "Hlasitost Mirany" v hlavnom okne (0-150 %,
   prikaz "volume" za behu, uklada sa po pusteni; Nastavenia ho neprepisu).
+- Fillery len na HUD + pripomienka po tichu (2026-10-02): fillers.speak (false = WAV sa ani negeneruju, filler sa
+  len ukaze na HUD). idle_nudge: po 10 min bez Erikovej otazky (hovorenej alebo pisanej) tag [IDLE] + [HRA] ->
+  jedna vtipna veta; nie v boji, v scene, ked Mirana hovori ani do 60 s po hlaske z hry; max 3 za sebou, Erikova
+  otazka pocitadlo vynuluje. Persona: tag [IDLE]. Overene bez zvuku + 4 ukazky z Opusu ($0.035), kazda ina.
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

@@ -69,7 +69,7 @@ Mikrofón a výstup vyber v Nastaveniach → Zvuk (s testom). Presné názvy vyp
 | Model | model a effort, denný strop, pamäť, záložný model |
 | Hra | nájdenie hry, stav CET, inštalácia modu, prahy HP, odstup hlášok, kedy sa ozve sama |
 | Prepis | lokálny Whisper alebo API, model, jazyk (slovník názvov je v config.yaml) |
-| Fillery | hlášky na zakrytie pauzy a ich oneskorenie |
+| Fillery | hlášky na zakrytie pauzy (nahlas alebo len na HUD), oneskorenie; pripomienka po tichu |
 | HUD | zapnutie, port, tempo písania |
 | Chat | čítanie Twitch chatu, kanál, koľko správ vidí, ignorovaní boti |
 | Bezpečnosť | filter a zakázané slová |
@@ -136,7 +136,10 @@ Všetko sa dá nastaviť v okne (Nastavenia) alebo priamo v `config.yaml`:
   každú vetu ~840 ms ticha, Mirana ho oreže na 250 ms — odpoveď z 3 viet je tak o ~15 % kratšia)
 - `tts.effects.preset`: efekty hlasu `vypnute` | `jemny` | `night_city` | `robot` (filtre, bitcrusher, ring mod,
   chorus, echo, kompresor; hlasitosť ostáva rovnaká). Doladenie v `tts.effects.params`.
-- `fillers.lines`: hlášky, ktoré zakryjú pauzu pred odpoveďou (z okna sa pri zmene pregenerujú samy)
+- `fillers.lines`: hlášky, ktoré zakryjú pauzu pred odpoveďou (z okna sa pri zmene pregenerujú samy);
+  `fillers.speak: false` = len na HUD, bez hlasu
+- `idle_nudge`: keď sa 10 min neozveš, Mirana sa vtipne pripomenie (môže siahnuť po stave hry); nie v boji
+  ani v cutscéne, najviac 3× za sebou, potom čaká, kým sa ozveš
 - `game_state.speak_on`: pri ktorých udalostiach z hry sa ozve sama
 - `safety.blocked_words`: vety s týmito slovami sa nevyslovia ani nevypíšu
 

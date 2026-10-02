@@ -361,10 +361,16 @@ class SettingsWindow(ctk.CTkToplevel):
     def _tab_fillers(self, tab):
         fill = self.cfg["fillers"]
         self._switch(tab, "fillers.enabled", "Filler hlášky", fill["enabled"])
+        self._switch(tab, "fillers.speak", "Hovoriť ich nahlas", fill.get("speak", True),
+                     hint="Vypnuté = filler sa len ukáže na HUD, Mirana ho nepovie.")
         self._slider(tab, "fillers.skip_if_faster_than_ms", "Pauza pred fillerom", fill["skip_if_faster_than_ms"],
                      500, 3000, lambda v: f"{v} ms", hint="Keď odpoveď príde skôr, filler sa nezahrá.")
         ctk.CTkLabel(tab, text="Hlášky (jedna na riadok):", text_color=TEXT, anchor="w").pack(fill="x", padx=10, pady=(8, 0))
-        self.fillers_box = self._textbox(tab, "\n".join(fill["lines"]), 200)
+        self.fillers_box = self._textbox(tab, "\n".join(fill["lines"]), 130)
+        idle = self.cfg.get("idle_nudge") or {}
+        self._switch(tab, "idle_nudge.enabled", "Pripomenúť sa po tichu", idle.get("enabled", False),
+                     hint="Keď sa dlho neozveš, Mirana sa vtipne ozve sama (nie v boji ani v cutscéne).")
+        self._entry(tab, "idle_nudge.after_min", "Po koľkých minútach", idle.get("after_min", 10), width=60)
 
     def _tab_hud(self, tab):
         hud = self.cfg["overlay"]
@@ -552,6 +558,11 @@ class SettingsWindow(ctk.CTkToplevel):
         _put(c["stt"], "language", v["stt.language"].get().strip() or "sk")
 
         _put(c["fillers"], "enabled", v["fillers.enabled"].get())
+        _put(c["fillers"], "speak", v["fillers.speak"].get())
+        if "idle_nudge" not in c:
+            c["idle_nudge"] = {}
+        _put(c["idle_nudge"], "enabled", v["idle_nudge.enabled"].get())
+        _put(c["idle_nudge"], "after_min", number("idle_nudge.after_min", int, 1))
         _put(c["fillers"], "skip_if_faster_than_ms", int(v["fillers.skip_if_faster_than_ms"].get()))
         lines = [ln.strip() for ln in self.fillers_box.get("1.0", "end").splitlines() if ln.strip()]
         if c["fillers"]["enabled"] and not lines:
