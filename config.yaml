@@ -3,10 +3,11 @@
 
 audio:
   # Presné názvy zisti cez: python -m sounddevice
-  input_device: "Microphone (Logitech G733 Gaming Headset), Windows WASAPI"   # docasne slúchadlá; neskôr druhý mikrofón
+  input_device: "Microphone (Trust GXT 232 Microphone), Windows WASAPI"   # null = predvolený mikrofón Windows
   # "názov, hostapi" = presný match; samotný názov by trafil aj MME variant, index sa mení po pripojení zariadenia
-  output_device: "Speakers (Logitech G733 Gaming Headset), Windows WASAPI"     # docasne; pre stream: "Voicemeeter Input (VB-Audio Voicemeeter VAIO), Windows WASAPI"
-  stream_output_device: "default"   # druhý výstup pre stream (HDMI -> strihová karta): "default" = predvolený výstup Windows, null = vypnuté
+  output_device: "default"    # "default" = predvolený výstup Windows (teraz 24G1WG4 HDMI -> strihová karta -> stream)
+  stream_output_device: null  # druhý výstup naraz (napr. slúchadlá + HDMI): "default" alebo názov; null = len jeden
+  volume: 100                 # hlasitosť Mirany v % (posúvač v hlavnom okne), 0-150
   sample_rate: null           # null = natívna frekvencia mikrofónu (WASAPI iné neprijme)
   ptt_key: "mouse_x1"         # kláves ("f4") alebo tlačidlo myši: mouse_x1 = zadné bočné, mouse_x2 = predné bočné, mouse_middle
   panic_mute_key: "mouse_x2"  # to isté; okamžite stíši Miranu, druhé stlačenie ju vráti

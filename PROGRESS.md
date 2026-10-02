@@ -27,7 +27,8 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
 - STT: faster-whisper medium, cuda/float16, slovensky prefix + slovnik (211/224 tokenov), filter halucinacie promptu
 - TTS: Azure sk-SK-ViktoriaNeural + phonetics.yaml, rychlost 0 %, pauza medzi vetami 250 ms; efekty hlasu preset "robot"
 - PTT: zadne bocne tlacidlo mysi (mouse_x1), panic mute: predne bocne (mouse_x2)
-- Audio: Logitech G733 (mikrofon aj vystup, WASAPI) — pred streamom vystup na Voicemeeter Input
+- Audio (2026-10-02): mikrofon Trust GXT 232, vystup = predvoleny vystup Windows (24G1WG4 HDMI -> strihova karta),
+  druhy vystup vypnuty, hlasitost 100 % (posuvnik v hlavnom okne); sluchadla G733 odpojene
 - Fillery: 5 hlasok, az po 1.3 s
 - Hra: Cyberpunk 2077 2.31 (GOG, cesky preklad), CET 1.37.1, mod mirana_state v3 nainstalovany
 - Proaktivne hlasky: hp_critical, hp_low, death, level_up, district_change, quest_changed, quest_completed, wanted_up
@@ -152,6 +153,10 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   (len localhost) -> main._handle_typed: ako PTT bez nahravky a STT, barge-in, filler, [HRA] + [CHAT]; pri stlmeni
   sa neposle (hlaska len v okne, nie na HUD). Otestovane bez zvuku. Okno: kratsie tlacidlo Stlmit (Nastavenia
   sa uz nevytlacaju), riadok s klavesmi sa zalamuje.
+- Zariadenia a hlasitost (2026-10-02): output_device "default" (predvoleny vystup Windows; 24G1WG4 je v systeme
+  2x pod rovnakym menom, preto nie podla mena), mikrofon Trust GXT 232. Odpojeny vystup/mikrofon -> zaloha na
+  predvolene (log warning) namiesto padu. audio.volume + posuvnik "Hlasitost Mirany" v hlavnom okne (0-150 %,
+  prikaz "volume" za behu, uklada sa po pusteni; Nastavenia ho neprepisu).
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

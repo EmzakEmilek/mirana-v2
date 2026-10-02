@@ -25,9 +25,10 @@ Hra tlačidlo dostane tiež, preto nech v nej nemá priradenú akciu.
 HUD: `http://localhost:8080`; na streamovacom notebooku v OBS Browser Source `http://192.168.1.110:8080`
 (IP herného PC, alebo `http://ErikPC:8080`). Vo firewalle herného PC je pravidlo „MIRANA HUD (TCP 8080)" len pre domácu sieť.
 
-**Dual PC setup:** Mirana hrá naraz do slúchadiel (`audio.output_device`) aj na predvolený výstup Windows
-(`audio.stream_output_device: "default"` = HDMI monitora → strihová karta → notebook), takže je v streame
-bez Voicemeeteru. Nastavenia → Zvuk → „Výstup pre stream".
+**Dual PC setup:** Mirana hrá na predvolený výstup Windows (`audio.output_device: "default"` = HDMI monitora
+→ strihová karta → notebook), rovnako ako hra, takže je v streame bez Voicemeeteru. Ak chceš Miranu aj
+v slúchadlách zvlášť, nastav ich ako druhý výstup (`audio.stream_output_device`, Nastavenia → Zvuk).
+Odpojené zariadenie Miranu nezhodí: hrá na predvolený výstup a nahráva z predvoleného mikrofónu.
 
 ## Inštalácia
 
@@ -54,6 +55,7 @@ Mikrofón a výstup vyber v Nastaveniach → Zvuk (s testom). Presné názvy vyp
 - stav (STANDBY / POČÚVAM / SPRACOVÁVAM / HOVORÍ / STLMENÁ), dnešná útrata so stropom,
 - riadok „Hra: …" s tým, čo Mirana práve vidí z hry,
 - priebeh rozhovoru (tvoja otázka, Miranina odpoveď, správy z chatu),
+- **Hlasitosť Mirany** (0–150 %): zaberie hneď, aj uprostred vety, a uloží sa,
 - **textové pole**: napíšeš otázku, Enter, a Mirana odpovie hlasom aj na HUD ako pri hovorenej otázke
   (bez prepisu reči, preruší prípadnú rozbehnutú odpoveď; pri stlmení sa neodošle),
 - tlačidlá **Vypnúť/Spustiť**, **Stlmiť**, **HUD**, **Logy**, **Nastavenia**.

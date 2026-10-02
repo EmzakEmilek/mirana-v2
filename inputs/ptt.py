@@ -67,6 +67,12 @@ class PushToTalk:
 
         audio_cfg = config["audio"]
         self.input_device = audio_cfg["input_device"]
+        try:
+            sd.query_devices(self.input_device, "input")
+        except Exception as e:  # odpojeny mikrofon nesmie zhodit Miranu
+            logger.warning("mikrofon %r nie je dostupny (%s), nahravam z predvoleneho", self.input_device, e)
+            self.input_device = None
+        logger.info("mikrofon: %s", sd.query_devices(self.input_device, "input")["name"])
         # WASAPI neprevzorkuje: null = nativna frekvencia zariadenia (G733 = 48 kHz). Whisper si to prevzorkuje sam.
         self.sample_rate = audio_cfg["sample_rate"] or int(sd.query_devices(self.input_device, "input")["default_samplerate"])
         self.ptt_key = parse_key(audio_cfg["ptt_key"])

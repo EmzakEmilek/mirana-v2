@@ -149,6 +149,11 @@ class Mirana:
             self._events.put(("quit",))
         elif cmd == "ask" and text:
             self._events.put(("typed", text))
+        elif cmd == "volume" and text:
+            try:
+                self.voice.volume = max(0.0, min(1.5, float(text) / 100))
+            except ValueError:
+                pass
 
     def _on_ptt_press(self) -> None:
         """Bezi v pynput vlakne. Barge-in musi zastavit zvuk okamzite, nie az ked sa slucka uvolni."""

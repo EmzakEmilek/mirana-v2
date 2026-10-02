@@ -176,12 +176,11 @@ class SettingsWindow(ctk.CTkToplevel):
         self.show_all = ctk.BooleanVar(value=False)
         self.in_box = self._combo(tab, "audio.input_device", "Mikrofón", [],
                                   audio["input_device"] or "(predvolený mikrofón Windows)")
-        self.out_box = self._combo(tab, "audio.output_device", "Výstup (počúvaš ty)", [], audio["output_device"],
-                                   hint="Slúchadlá, v ktorých Miranu počuješ.")
+        self.out_box = self._combo(tab, "audio.output_device", "Výstup", [], _stream_label(audio["output_device"] or "default"),
+                                   hint="Kam Mirana hovorí. Predvolený výstup Windows = tam, kam ide zvuk hry.")
         self.stream_box = self._combo(tab, "audio.stream_output_device", "Výstup pre stream",
                                       [], _stream_label(audio.get("stream_output_device")),
-                                      hint="Mirana hrá naraz aj sem. Predvolený výstup Windows = kam ide zvuk hry "
-                                           "(HDMI -> strihová karta -> notebook).")
+                                      hint="Druhý výstup naraz, napr. slúchadlá + HDMI do strihovej karty. Väčšinou vypnutý.")
         ctk.CTkCheckBox(tab, text="Zobraziť všetky zariadenia (nielen WASAPI)", variable=self.show_all,
                         command=self._fill_devices, fg_color=YELLOW, text_color=DIM).pack(anchor="w", padx=190, pady=2)
         self._fill_devices()
@@ -254,7 +253,7 @@ class SettingsWindow(ctk.CTkToplevel):
             inputs, outputs = [], []
             self.hint.configure(text=f"Zariadenia sa nedajú načítať: {e}", text_color=RED)
         self.in_box.configure(values=["(predvolený mikrofón Windows)"] + inputs)
-        self.out_box.configure(values=outputs)
+        self.out_box.configure(values=[STREAM_DEFAULT] + outputs)
         self.stream_box.configure(values=[STREAM_OFF, STREAM_DEFAULT] + outputs)
 
     def _tab_voice(self, tab):
@@ -435,17 +434,18 @@ class SettingsWindow(ctk.CTkToplevel):
         threading.Thread(target=run, daemon=True).start()
 
     def _test_out(self):
-        device = self.v["audio.output_device"].get()
+        device = _stream_value(self.v["audio.output_device"].get()) or "default"
 
         def run():
             import sounddevice as sd
 
-            from outputs.voice import _ensure_com
+            from outputs.voice import _ensure_com, resolve_output
             _ensure_com()
             try:
-                rate = int(sd.query_devices(device, "output")["default_samplerate"])
+                device_index = resolve_output(device)
+                rate = int(sd.query_devices(device_index)["default_samplerate"])
                 tone = (np.sin(2 * np.pi * 660 * np.arange(0, 0.4, 1 / rate)) * 0.2 * 32767).astype(np.int16)
-                with sd.OutputStream(samplerate=rate, device=device, channels=1, dtype="int16") as stream:
+                with sd.OutputStream(samplerate=rate, device=device_index, channels=1, dtype="int16") as stream:
                     stream.write(tone.reshape(-1, 1))
             except Exception as e:
                 self.after(0, lambda: self.hint.configure(text=f"Výstup: {e}", text_color=RED))
@@ -454,7 +454,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _preview_voice(self):
         cfg = settings.load_editable()
-        cfg["audio"]["output_device"] = self.v["audio.output_device"].get()
+        cfg["audio"]["output_device"] = _stream_value(self.v["audio.output_device"].get()) or "default"
         cfg["audio"]["stream_output_device"] = _stream_value(self.v["audio.stream_output_device"].get())
         cfg["tts"]["voice"] = self.v["tts.voice"].get()
         cfg["tts"]["rate"] = f"{self.v['tts.rate'].get():+d}%"
@@ -503,7 +503,8 @@ class SettingsWindow(ctk.CTkToplevel):
             return value
 
         _put(c["audio"], "input_device", self._selected_input())
-        _put(c["audio"], "output_device", v["audio.output_device"].get())
+        _put(c["audio"], "output_device", _stream_value(v["audio.output_device"].get()) or "default")
+        _put(c["audio"], "volume", settings.load_editable()["audio"].get("volume", 100))  # posuvnik v hlavnom okne
         _put(c["audio"], "stream_output_device", _stream_value(v["audio.stream_output_device"].get()))
         _put(c["audio"], "ptt_key", v["audio.ptt_key"].get())
         _put(c["audio"], "panic_mute_key", v["audio.panic_mute_key"].get())

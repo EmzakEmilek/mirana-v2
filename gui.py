@@ -97,6 +97,19 @@ class App(ctk.CTk):
             ctk.CTkButton(buttons, text=label, command=cmd, width=80, fg_color=PANEL, hover_color="#26262c",
                           border_width=1, border_color="#33333a", **style).pack(side="left", padx=4)
 
+        vol = ctk.CTkFrame(self, fg_color=BG)
+        vol.pack(fill="x", padx=20, pady=(0, 4))
+        ctk.CTkLabel(vol, text="Hlasitosť Mirany", font=ctk.CTkFont("Segoe UI", 12), text_color=TEXT).pack(side="left")
+        self.volume = int(load_config()["audio"].get("volume", 100))
+        self.volume_label = ctk.CTkLabel(vol, text=f"{self.volume} %", width=50, font=ctk.CTkFont("Segoe UI", 12),
+                                         text_color=TEXT)
+        self.volume_label.pack(side="right")
+        self.volume_slider = ctk.CTkSlider(vol, from_=0, to=150, number_of_steps=30, command=self._on_volume,
+                                           button_color=YELLOW, button_hover_color="#d9cc08", progress_color=YELLOW)
+        self.volume_slider.set(self.volume)
+        self.volume_slider.pack(side="left", fill="x", expand=True, padx=10)
+        self.volume_slider.bind("<ButtonRelease-1>", lambda _e: self._save_volume())
+
         budget = ctk.CTkFrame(self, fg_color=BG)
         budget.pack(fill="x", padx=20, pady=(4, 8))
         self.budget_label = ctk.CTkLabel(budget, text="Dnes: —", font=ctk.CTkFont("Segoe UI", 12), text_color=TEXT)
@@ -219,6 +232,22 @@ class App(ctk.CTk):
             return True
         except Exception:
             return False
+
+    def _on_volume(self, value: float) -> None:
+        """Posuvnik: Mirana zmeni hlasitost hned (aj uprostred vety), do configu sa zapise po pusteni."""
+        self.volume = int(round(value))
+        self.volume_label.configure(text=f"{self.volume} %")
+        self._send("volume", text=str(self.volume))
+
+    def _save_volume(self) -> None:
+        try:
+            from core import settings
+            cfg = settings.load_editable()
+            if cfg["audio"].get("volume") != self.volume:
+                cfg["audio"]["volume"] = self.volume
+                settings.save(cfg)
+        except Exception as e:
+            self._write(f"Hlasitosť sa neuložila: {e}", "sys")
 
     def _send_text(self, _event=None) -> str:
         text = self.text_entry.get().strip()

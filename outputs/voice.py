@@ -158,7 +158,14 @@ class Voice:
 
     def __init__(self, config: dict):
         tts_cfg = config["tts"]
-        self.output_device = config["audio"]["output_device"]
+        try:
+            self.output_device = resolve_output(config["audio"]["output_device"] or "default")
+        except Exception as e:  # odpojene sluchadla nesmu zhodit Miranu
+            logger.warning("vystup %r nie je dostupny (%s), hram na predvoleny vystup Windows",
+                           config["audio"]["output_device"], e)
+            self.output_device = resolve_output("default")
+        logger.info("vystup: %s", sd.query_devices(self.output_device)["name"])
+        self.volume = max(0.0, float(config["audio"].get("volume", 100)) / 100)  # meni sa za behu z okna
         self._voice = tts_cfg["voice"]
         self._rate = tts_cfg["rate"]
         self._pitch = tts_cfg["pitch"]
@@ -179,7 +186,7 @@ class Voice:
         self.stream_device: int | None = None
         try:
             stream_device = resolve_output(config["audio"].get("stream_output_device"))
-            if stream_device is not None and stream_device != resolve_output(self.output_device):
+            if stream_device is not None and stream_device != self.output_device:
                 self.stream_device = stream_device
                 self.stream_rate = int(sd.query_devices(stream_device)["default_samplerate"])
                 logger.info("vystup pre stream: %s", sd.query_devices(stream_device)["name"])
@@ -252,6 +259,13 @@ class Voice:
     def stopped(self) -> bool:
         return self._stop_event.is_set()
 
+    def _gain(self, piece: np.ndarray) -> np.ndarray:
+        """Hlasitost z okna, po 50 ms kusoch — posuvnik zaberie aj uprostred vety."""
+        volume = self.volume
+        if volume == 1.0:
+            return piece
+        return np.clip(piece.astype(np.float32) * volume, -32768, 32767).astype(np.int16)
+
     def _play_stream_copy(self, audio: np.ndarray) -> None:
         """Ta ista veta do druheho vystupu (stream), vo vlastnom vlakne — dve zariadenia zapisovane
         striedavo v jednej slucke si cakania scitavali (+0.3 s na vetu). Chyba tu Miranu nezastavi."""
@@ -265,7 +279,7 @@ class Voice:
                 for start in range(0, audio.shape[0], chunk):
                     if self._stop_event.is_set():
                         break
-                    stream.write(np.ascontiguousarray(audio[start:start + chunk]))
+                    stream.write(self._gain(np.ascontiguousarray(audio[start:start + chunk])))
         except Exception as e:
             if not self._stream_warned:
                 self._stream_warned = True
@@ -290,7 +304,7 @@ class Voice:
                     piece = np.ascontiguousarray(audio[start:start + chunk])
                     if self.on_level is not None:
                         self.on_level(_level(piece))
-                    stream.write(piece)
+                    stream.write(self._gain(piece))
             if copy is not None:
                 copy.join(timeout=2)  # dalsia veta az ked doznie aj v streame
             if self.on_level is not None:
