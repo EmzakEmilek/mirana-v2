@@ -96,12 +96,12 @@ llm:
 tts:
   voice: "sk-SK-ViktoriaNeural"   # rodená SK + phonetics.yaml; Emma (multilingválna) čítala fonetický prepis ako ruštinu
   rate: "0%"                  # rýchlosť reči, -30 % až +50 % (+10 % = asi o desatinu rýchlejšie)
-  pitch: "0%"
+  pitch: "+10%"
   sentence_pause_ms: 250      # pauza medzi vetami; Azure dáva za vetu ~840 ms ticha, zvyšok sa oreže
   phonetics_file: "phonetics.yaml"   # anglicizmy -> slovenská fonetika, len pre TTS (titulky ostávajú v origináli)
   effects:                    # efekty na hlas (outputs/voice_fx.py), platia aj pre fillery
     enabled: true
-    preset: "night_city"      # vypnute | jemny | night_city | robot
+    preset: "robot"           # vypnute | jemny | night_city | robot
     params: {}                # jemné doladenie presetu, napr. {ring_mix: 0.08, echo_ms: 60}
 
 memory:
