@@ -41,6 +41,8 @@ from outputs.voice import Voice
 
 logger = logging.getLogger(__name__)
 
+MAX_TYPED_CHARS = 500  # pisana otazka z ovladacieho okna
+
 
 class State(Enum):
     IDLE = auto()
@@ -139,12 +141,14 @@ class Mirana:
                 self._set_state(State.IDLE)
                 logger.info("panic mute vypnuty")
 
-    def _on_command(self, cmd: str) -> None:
+    def _on_command(self, cmd: str, text: str | None = None) -> None:
         """Prikazy z ovladacieho okna (gui.py)."""
         if cmd == "mute":
             self._on_panic()
         elif cmd == "quit":
             self._events.put(("quit",))
+        elif cmd == "ask" and text:
+            self._events.put(("typed", text))
 
     def _on_ptt_press(self) -> None:
         """Bezi v pynput vlakne. Barge-in musi zastavit zvuk okamzite, nie az ked sa slucka uvolni."""
@@ -286,6 +290,41 @@ class Mirana:
             job.filler_timer.start()
         threading.Thread(target=self._work, args=(job, wav_bytes), daemon=True).start()
 
+    def _handle_typed(self, text: str) -> None:
+        """Pisana otazka z ovladacieho okna: ako PTT, len bez nahravky a prepisu. Prerusi beziacu odpoved."""
+        text = " ".join(text.split())[:MAX_TYPED_CHARS]
+        if not text:
+            return
+        with self._lock:
+            if self._muted:
+                logger.info("pisana otazka ignorovana, Mirana je stlmena: %s", text)
+                self.overlay.notice("Mirana je stlmená, otázka sa neposlala. Zapni hlas a pošli ju znova.")
+                return
+            if self.state in (State.PROCESSING, State.SPEAKING):
+                logger.info("pisana otazka prerusila %s", self.state.name)
+                self._cancel_current()
+            self._set_state(State.PROCESSING)
+            job = Job(gen=self._gen, released_at=time.perf_counter())
+            self._job = job
+        self.voice.arm()
+        if self.fillers.enabled:
+            job.filler_timer = threading.Timer(self.fillers.delay_sec, self._play_filler, args=(job,))
+            job.filler_timer.start()
+        threading.Thread(target=self._work_text, args=(job, text), daemon=True).start()
+
+    def _work_text(self, job: Job, text: str) -> None:
+        try:
+            logger.info("Erik (pisane): %s", text)
+            self.overlay.erik(text)
+            if self.budget.exceeded():
+                self._events.put(("fallback", job, "budget_reached"))
+                return
+            self._last_erik = time.time()
+            self._ask(job, f"[ERIK] {text}")
+        except Exception:
+            logger.exception("neocakavana chyba pri pisanej otazke")
+            self._events.put(("fallback", job, "general_error"))
+
     def _remember(self, job: Job, interrupted: bool) -> None:
         """Do pamate ide to, co Erik naozaj pocul — pri preruseni len vyslovene vety."""
         if job.remembered or not job.remember or job.user_text is None:
@@ -374,6 +413,8 @@ class Mirana:
             try:
                 if event == "recording":
                     self._handle_recording(rest[0])
+                elif event == "typed":
+                    self._handle_typed(rest[0])
                 else:
                     job, payload = (rest + [None])[:2]
                     self._handle_event(event, job, payload)

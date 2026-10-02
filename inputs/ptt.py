@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 MOUSE_BUTTONS = {"mouse_x1": "x1", "mouse_x2": "x2", "mouse_middle": "middle"}
-BUTTON_LABELS = {"mouse_x1": "myš – zadné bočné", "mouse_x2": "myš – predné bočné", "mouse_middle": "myš – koliesko"}
+BUTTON_LABELS = {"mouse_x1": "zadné bočné tlačidlo myši", "mouse_x2": "predné bočné tlačidlo myši",
+                 "mouse_middle": "koliesko myši"}
 
 
 def parse_key(spec: str | None):

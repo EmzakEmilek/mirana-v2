@@ -148,6 +148,10 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
   audio.stream_output_device: "default"; druhy vystup v samostatnom vlakne (v jednej slucke +0.3 s na vetu),
   stop funguje na oboch. Voicemeeter/VBAN netreba. Firewall: "MIRANA HUD (TCP 8080)", len LocalSubnet;
   siet je Public, IP 192.168.1.110 (DHCP), hostname ErikPC.
+- Textovy vstup v ovladacom okne (2026-10-02): pole "Napis Mirane…" + Enter/Poslat -> prikaz "ask" cez WebSocket
+  (len localhost) -> main._handle_typed: ako PTT bez nahravky a STT, barge-in, filler, [HRA] + [CHAT]; pri stlmeni
+  sa neposle (hlaska len v okne, nie na HUD). Otestovane bez zvuku. Okno: kratsie tlacidlo Stlmit (Nastavenia
+  sa uz nevytlacaju), riadok s klavesmi sa zalamuje.
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

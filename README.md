@@ -53,7 +53,9 @@ Mikrofón a výstup vyber v Nastaveniach → Zvuk (s testom). Presné názvy vyp
 
 - stav (STANDBY / POČÚVAM / SPRACOVÁVAM / HOVORÍ / STLMENÁ), dnešná útrata so stropom,
 - riadok „Hra: …" s tým, čo Mirana práve vidí z hry,
-- priebeh rozhovoru (tvoja otázka, Miranina odpoveď),
+- priebeh rozhovoru (tvoja otázka, Miranina odpoveď, správy z chatu),
+- **textové pole**: napíšeš otázku, Enter, a Mirana odpovie hlasom aj na HUD ako pri hovorenej otázke
+  (bez prepisu reči, preruší prípadnú rozbehnutú odpoveď; pri stlmení sa neodošle),
 - tlačidlá **Vypnúť/Spustiť**, **Stlmiť**, **HUD**, **Logy**, **Nastavenia**.
 
 **Nastavenia** (bez editovania súborov), záložky:

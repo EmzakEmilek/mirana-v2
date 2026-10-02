@@ -33,7 +33,7 @@ class Overlay:
         self._clients: set = set()
         self._last: dict[str, dict] = {}  # typ -> posledny event, pre novych klientov
         self._loop: asyncio.AbstractEventLoop | None = None
-        self.on_command = None  # on_command(cmd) — prikazy z ovladacieho okna (gui.py), len z localhostu
+        self.on_command = None  # on_command(cmd, text) — prikazy z ovladacieho okna (gui.py), len z localhostu
 
     # --- verejne API (thread-safe) --------------------------------------------------------
 
@@ -92,6 +92,10 @@ class Overlay:
         """Sprava z chatu pre ovladacie okno (HUD ju ignoruje)."""
         self._send({"type": "chat", "nick": nick, "text": text}, remember=False)
 
+    def notice(self, text: str) -> None:
+        """Systemova hlaska len pre ovladacie okno (na HUD v streame nepatri)."""
+        self._send({"type": "notice", "text": text}, remember=False)
+
     def chat_status(self, text: str) -> None:
         self._send({"type": "chat_status", "text": text})
 
@@ -132,7 +136,7 @@ class Overlay:
             logger.info("HUD odpojeny (%d klientov)", len(self._clients))
 
     def _on_message(self, websocket, message) -> None:
-        """HUD nic neposiela; ovladacie okno posiela {"type": "command", "cmd": "mute"|"quit"}.
+        """HUD nic neposiela; ovladacie okno posiela {"type": "command", "cmd": "mute"|"quit"|"ask", "text": ...}.
 
         Server pocuva na 0.0.0.0 (kvoli OBS na notebooku) — prikazy sa preto berú len z tohto PC.
         """
@@ -146,7 +150,8 @@ class Overlay:
         if host not in ("127.0.0.1", "::1"):
             logger.warning("prikaz %r z %s odmietnuty (len localhost)", data.get("cmd"), host)
             return
-        self.on_command(str(data.get("cmd")))
+        text = data.get("text")
+        self.on_command(str(data.get("cmd")), str(text) if text is not None else None)
 
     @staticmethod
     def _process_request(connection, request):

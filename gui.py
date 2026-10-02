@@ -112,14 +112,23 @@ class App(ctk.CTk):
             self.log.tag_config(tag, foreground=color)
         self.log.configure(state="disabled")
 
-        self.keys_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont("Segoe UI", 11), text_color=DIM)
+        ask = ctk.CTkFrame(self, fg_color=BG)
+        ask.pack(fill="x", padx=16, pady=(0, 6))
+        self.text_entry = ctk.CTkEntry(ask, placeholder_text="Napíš Mirane… (Enter = poslať)", height=34,
+                                       font=ctk.CTkFont("Segoe UI", 13), fg_color=PANEL, border_color="#2a2a30")
+        self.text_entry.pack(side="left", fill="x", expand=True)
+        self.text_entry.bind("<Return>", self._send_text)
+        ctk.CTkButton(ask, text="Poslať", width=90, height=34, command=self._send_text, fg_color=YELLOW,
+                      text_color="#000", hover_color="#c9bd00").pack(side="left", padx=(6, 0))
+
+        self.keys_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont("Segoe UI", 11), text_color=DIM, wraplength=520)
         self.keys_label.pack(pady=(0, 10))
         self._show_keys()
 
     def _show_keys(self) -> None:
         audio = load_config()["audio"]
         ptt, self.panic_label = key_label(audio["ptt_key"]), key_label(audio.get("panic_mute_key"))
-        self.keys_label.configure(text=f"{ptt} drž = otázka  ·  {ptt} počas odpovede = prerušiť  ·  {self.panic_label} = stlmiť")
+        self.keys_label.configure(text=f"Otázka: drž {ptt} (počas odpovede ju preruší)  ·  Stlmiť: {self.panic_label}")
 
     def _write(self, text: str, tag: str, newline: bool = True) -> None:
         self.log.configure(state="normal")
@@ -133,7 +142,7 @@ class App(ctk.CTk):
         running = state not in ("offline",)
         self.btn_power.configure(text="Vypnúť" if running else "Spustiť",
                                  state="disabled" if state in ("starting", "stopping") else "normal")
-        self.btn_mute.configure(text="Zapnúť hlas" if state == "muted" else f"Stlmiť ({self.panic_label})",
+        self.btn_mute.configure(text="Zapnúť hlas" if state == "muted" else "Stlmiť",
                                 state="normal" if self.connected else "disabled")
 
     # --- akcie --------------------------------------------------------------------------------
@@ -201,14 +210,25 @@ class App(ctk.CTk):
         else:
             self._write("Nastavenia uložené. Prejavia sa po reštarte Mirany.", "sys")
 
-    def _send(self, cmd: str) -> None:
+    def _send(self, cmd: str, **extra) -> bool:
         ws = self.ws
         if ws is None:
-            return
+            return False
         try:
-            ws.send(json.dumps({"type": "command", "cmd": cmd}))
+            ws.send(json.dumps({"type": "command", "cmd": cmd, **extra}))
+            return True
         except Exception:
-            pass
+            return False
+
+    def _send_text(self, _event=None) -> str:
+        text = self.text_entry.get().strip()
+        if not text:
+            return "break"
+        if not self.connected or not self._send("ask", text=text):
+            self._write("Mirana nebeží — otázka sa neposlala.", "sys")
+            return "break"
+        self.text_entry.delete(0, "end")
+        return "break"
 
     def _open_hud(self) -> None:
         webbrowser.open(f"http://localhost:{self.port}")
@@ -297,6 +317,9 @@ class App(ctk.CTk):
                 self.game_label.configure(text="Hra: nebeží (alebo menu) — Mirana ide bez telemetrie", text_color=DIM)
         elif kind == "chat":
             self._write(f"chat · {ev['nick']}: {ev['text']}", "chat")
+            self.mirana_line_open = False
+        elif kind == "notice":
+            self._write(ev["text"], "sys")
             self.mirana_line_open = False
         elif kind == "chat_status":
             self.chat_label.configure(text=ev["text"].capitalize(),
