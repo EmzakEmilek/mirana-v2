@@ -6,12 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from core import store
-from core.brain import SentenceSplitter
-from core.highlights import fmt_offset, parse_uptime
-from core.safety import Safety
-from inputs.game_state import Snapshot, completed_quests, detect_events, event_text, telemetry_line
-from inputs.twitch_chat import channel_name, clean_text, parse_privmsg
+from mirana import store
+from mirana.llm.brain import SentenceSplitter
+from mirana.features.highlights import fmt_offset, parse_uptime
+from mirana.safety import Safety
+from mirana.inputs.game_state import Snapshot, completed_quests, detect_events, event_text, telemetry_line
+from mirana.inputs.twitch_chat import channel_name, clean_text, parse_privmsg
 
 
 # --- store -------------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ def test_daily_json_rolls_over(tmp_path):
 
 
 def test_budget_counts_and_caps(config, data_dir):
-    from core.budget import Budget
+    from mirana.budget import Budget
     config["limits"]["daily_usd_cap"] = 0.003
     b = Budget(config)
     usage = SimpleNamespace(input_tokens=100, output_tokens=100, cache_read_input_tokens=0,
@@ -159,7 +159,7 @@ def test_twitch_privmsg():
 def test_ptt_keys():
     from pynput import keyboard, mouse
 
-    from inputs.ptt import key_label, parse_key
+    from mirana.inputs.ptt import key_label, parse_key
     assert parse_key("mouse_x1") == mouse.Button.x1
     assert parse_key("F11") == keyboard.Key.f11
     assert parse_key("") is None

@@ -9,8 +9,8 @@ import shutil
 
 from ruamel.yaml import YAML
 
-from core.config import BASE_DIR, CONFIG_PATH, PERSONA_PATH
-from core.store import write_text_atomic
+from mirana.config import BASE_DIR, CONFIG_PATH, PERSONA_PATH
+from mirana.store import write_text_atomic
 
 BACKUP_DIR = BASE_DIR / "data"
 

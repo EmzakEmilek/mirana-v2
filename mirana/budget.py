@@ -7,8 +7,8 @@ Whisper bezi lokalne a Azure TTS je vo free tieri, preto sa pocita len Claude.
 import logging
 import threading
 
-from core.config import BASE_DIR
-from core.store import DailyJson
+from mirana.config import BASE_DIR
+from mirana.store import DailyJson
 
 logger = logging.getLogger(__name__)
 

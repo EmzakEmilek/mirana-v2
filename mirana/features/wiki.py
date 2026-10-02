@@ -15,8 +15,10 @@ import unicodedata
 
 import requests
 
-from core.config import BASE_DIR
-from core.store import write_json
+from mirana import intents
+from mirana.config import BASE_DIR
+from mirana.features import Feature
+from mirana.store import write_json
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,6 @@ TOOL = {
 TITLES_PATH = BASE_DIR / "data" / "wiki_titles.json"
 TITLES_MAX_AGE = 7 * 86400
 # Predhladanie len pri otazkach na lore ("kto je X", "co je X", "povedz mi o X")
-LORE_QUESTION = re.compile(r"\b(kto|čo|co|aký|aká|aké|akú|odkiaľ|odkial|povedz mi o|čo vieš o|kde (je|nájdem|najdem))\b", re.I)
 # Bezne slova a zakladne veci, ktore model pozna (a clanky o nich su plne spoilerov)
 STOPWORDS = {"mirana", "emzo", "erik", "kto", "co", "je", "to", "ten", "ta", "toto", "tento", "aky", "aka", "ake",
              "ako", "kde", "mam", "som", "sa", "si", "na", "do", "za", "od", "a", "the", "ok", "teda", "este",
@@ -214,7 +215,7 @@ class Wiki:
     def match(self, question: str) -> str | None:
         """Nazov clanku, na ktory sa Erik pyta ("kto je Padre?" -> "Padre"), alebo None."""
         index = self._index
-        if not index or not LORE_QUESTION.search(question):
+        if not index or not intents.is_lore_question(question):
             return None
         words = re.findall(r"[\wÀ-ž'.-]+", question)
         # kandidati: najdlhsie suvisle useky slov (n-gramy do 4), od najdlhsieho
@@ -280,3 +281,19 @@ class Wiki:
         with self._lock:
             self._cache[key] = (title, result)
         return title, result
+
+
+class WikiFeature(Feature):
+    """Predhladanie: clanok k otazke "kto je X?" ide modelu hned (~0.5 s) — netreba dalsie kolo s hladanim."""
+
+    def start(self) -> None:
+        self.app.wiki.start()
+
+    def context(self, turn) -> None:
+        wiki = self.app.wiki
+        if not turn.from_erik or not wiki.enabled:
+            return
+        found = wiki.prefetch(turn.question)
+        if found and not turn.cancelled:
+            self.app.overlay.search(found[0])
+            turn.add("WIKI", f"[WIKI {found[0]}] {found[1]}")

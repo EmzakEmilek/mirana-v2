@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from core.config import BASE_DIR
+from mirana.config import BASE_DIR
 
 logger = logging.getLogger(__name__)
 

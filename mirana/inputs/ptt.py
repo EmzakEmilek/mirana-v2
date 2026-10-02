@@ -184,7 +184,7 @@ class PushToTalk:
 
 
 if __name__ == "__main__":
-    from core.config import load_config
+    from mirana.config import load_config
 
     print("Drz PTT (audio.ptt_key) pre nahravanie, pusti pre ulozenie do test.wav. Ctrl+C pre ukoncenie.")
 

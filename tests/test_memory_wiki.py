@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import core.wiki as wiki_mod
-from core.longterm import LongTermMemory
-from core.wiki import Wiki, clean_wikitext, infobox_facts
+import mirana.features.wiki as wiki_mod
+from mirana.features.longterm import LongTermMemory
+from mirana.features.wiki import Wiki, clean_wikitext, infobox_facts
 
 TITLES = ["Padre", "Sebastian Ibarra", "The Mox", "Mox (shard)", "Mox", "Makigai Tanishi T400", "Night City",
           "Jackie Welles", "Arasaka Corporation", "List of weapons", "Padre/Gallery"]

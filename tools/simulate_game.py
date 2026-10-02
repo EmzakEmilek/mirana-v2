@@ -5,7 +5,7 @@
   venv\\Scripts\\python tools\\simulate_game.py --path C:\\...\\state.json
 
 Predvolena cesta je data/sim_state.json — v okne Nastavenia -> Hra nastav tuto cestu, alebo
-spusti Miranu s MIRANA_GAME_STATE_PATH (pozri inputs/game_state.py).
+spusti Miranu s MIRANA_GAME_STATE_PATH (pozri mirana/inputs/game_state.py).
 """
 
 import argparse
@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from core.config import BASE_DIR  # noqa: E402
+from mirana.config import BASE_DIR  # noqa: E402
 
 DEFAULT_PATH = BASE_DIR / "data" / "sim_state.json"
 

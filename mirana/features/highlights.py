@@ -16,8 +16,10 @@ from datetime import datetime
 
 import requests
 
-from core.config import BASE_DIR
-from core.store import DailyJson
+from mirana import intents
+from mirana.config import BASE_DIR
+from mirana.features import Feature
+from mirana.store import DailyJson
 
 logger = logging.getLogger(__name__)
 
@@ -142,3 +144,49 @@ class Highlights:
                  f"policajné naháňačky {s.get('wanted_up', 0)}", f"značky na strih {s.get('marker', 0)}",
                  f"otázok v tejto session {questions}"]
         return "[STREAM] " + " | ".join(parts)
+
+
+class HighlightsFeature(Feature):
+    """Znacka na strih (bocne tlacidlo mysi), zapis udalosti z hry a riadok [STREAM] so statistikami."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.store = app.highlights = Highlights(app.config)
+        self.last_exchange = ("", "")  # posledna otazka a odpoved — kontext k znacke
+        app.ptt.on_marker = self.on_marker
+
+    def start(self) -> None:
+        self.store.start()
+
+    def context(self, turn) -> None:
+        if turn.from_erik and intents.asks_about_stream(turn.question):
+            turn.add("STREAM", self.store.summary_line(self.app.questions))
+
+    def on_answer(self, turn, text: str) -> None:
+        if turn.from_erik:
+            self.last_exchange = (turn.question, text)
+
+    def on_game_event(self, name: str, snap, text: str) -> str:
+        wanted = snap.get("wanted") or 0
+        if name == "death":
+            self.store.add("death", snap.location or "")
+            text += f" (dnes už {self.store.deaths}. smrť)"
+        elif name == "level_up":
+            self.store.add("level_up", f"úroveň {snap.get('level')}")
+        elif name == "quest_completed":
+            self.store.add("quest_completed", text)
+        elif name == "wanted_up" and wanted >= 3:
+            self.store.add("wanted_up", f"{wanted} hviezdy, {snap.location}")
+        return text
+
+    def on_marker(self) -> None:
+        """Bocne tlacidlo: moment na strih. Sietove volanie (cas streamu) mimo hooku mysi."""
+        def work():
+            snap = self.app.game.current
+            where = ", ".join(x for x in ((snap.location if snap else ""), (snap.quest if snap else "") or "") if x)
+            question, answer = self.last_exchange
+            context = " · ".join(x for x in (where, f"Erik: {question}" if question else "",
+                                             f"Mirana: {answer[:120]}" if answer else "") if x)
+            when = self.store.add("marker", context or "bez kontextu", refresh=True)
+            self.app.overlay.notice(f"◆ Značka na strih: {when}")
+        threading.Thread(target=work, name="marker", daemon=True).start()

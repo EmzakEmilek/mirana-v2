@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from core.brain import Answer
-from outputs.overlay import Overlay
+from mirana.llm.brain import Answer
+from mirana.outputs.overlay import Overlay
 
 
 class FakeVoice:
@@ -50,10 +50,10 @@ class FakeVoice:
 class FakeBrain:
     """Odpoved je zoznam viet; kazda pride po `delay` s. Prepis = WAV bytes ako text."""
 
-    def __init__(self, config=None, budget=None):
+    def __init__(self, config=None, budget=None, wiki=None):
         self.budget = budget
         self.stt = SimpleNamespace()
-        self.wiki = SimpleNamespace(enabled=False)
+        self.wiki = wiki
         self.anthropic_client = None
         self.memory_block = None
         self.reply = ["Prvá veta odpovede je tu.", "Druhá veta ide hneď za ňou."]

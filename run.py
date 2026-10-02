@@ -24,8 +24,8 @@ import time
 from collections import deque
 from datetime import datetime
 
-from core.config import BASE_DIR
-from core.session import EXIT_ALREADY_RUNNING, HEARTBEAT_PATH, LOGS_DIR
+from mirana.config import BASE_DIR
+from mirana.session import EXIT_ALREADY_RUNNING, HEARTBEAT_PATH, LOGS_DIR
 
 HEARTBEAT_TIMEOUT_SEC = 60
 STARTUP_GRACE_SEC = 180       # nacitanie Whispera pri vytazenom disku, heartbeat este nebezi

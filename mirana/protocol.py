@@ -1,7 +1,7 @@
 """Protokol medzi Miranou a jej klientmi (HUD v OBS, ovladacie okno) — JSON spravy cez WebSocket.
 
 Jedine miesto, kde su typy sprav a ich polia. Overlay posiela len spravy postavene cez event(),
-testy kontroluju, ze kazdy typ niekto spracuje (overlay/index.html alebo gui.py) a ze okno posiela
+testy kontroluju, ze kazdy typ niekto spracuje (overlay/index.html alebo ui/control.py) a ze okno posiela
 len prikazy, ktore Mirana pozna.
 """
 

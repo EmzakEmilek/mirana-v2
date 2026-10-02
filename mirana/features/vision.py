@@ -13,16 +13,13 @@ import base64
 import ctypes
 import io
 import logging
-import re
 import sys
 from ctypes import wintypes
 
-logger = logging.getLogger(__name__)
+from mirana import intents
+from mirana.features import Feature
 
-# Otazky, pri ktorych Erik ukazuje na nieco na obrazovke
-TRIGGER = re.compile(
-    r"\b(toto|tento|táto|tato|tieto|tohto|tomto|tamto|vidíš|vidis|pozri|obrazovk\w*|čo je to|co je to|kto je to|"
-    r"čo to je|co to je|na čo sa pozerám|na co sa pozeram|čo vidím|co vidim|na koho|na čo mierim)\b", re.I)
+logger = logging.getLogger(__name__)
 
 _dpi_done = False
 
@@ -104,7 +101,7 @@ class Vision:
         self.max_width = int(cfg.get("max_width", 1280))
 
     def wants(self, question: str) -> bool:
-        return self.enabled and bool(TRIGGER.search(question))
+        return self.enabled and intents.wants_vision(question)
 
     def capture(self) -> str | None:
         try:
@@ -112,3 +109,20 @@ class Vision:
         except Exception as e:
             logger.warning("snimka hry zlyhala: %s", e)
             return None
+
+
+class VisionFeature(Feature):
+    """"co je toto?" — snimka okna hry (len hra, nikdy cely monitor), ~50 ms + ~0.2 s pre model."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.vision = Vision(app.config)
+
+    def context(self, turn) -> None:
+        if not turn.from_erik or not self.vision.wants(turn.question):
+            return
+        turn.image = self.vision.capture()
+        if turn.image:
+            turn.add("OBRAZOVKA", "[OBRAZOVKA] priložená snímka hry")
+            if not turn.cancelled:
+                self.app.overlay.scan()

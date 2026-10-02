@@ -23,8 +23,10 @@ import time
 import unicodedata
 from datetime import date, datetime
 
-from core.config import BASE_DIR
-from core.store import append_jsonl, read_json, write_json
+from mirana import intents
+from mirana.config import BASE_DIR
+from mirana.features import Feature
+from mirana.store import append_jsonl, read_json, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +202,7 @@ class LongTermMemory:
         self.save()
 
     def update_stream(self, stats: dict, minutes: int) -> None:
-        """Dnesny stream v historii (statistiky z core.highlights)."""
+        """Dnesny stream v historii (statistiky z mirana.features.highlights)."""
         if not self.enabled:
             return
         today = date.today().isoformat()
@@ -339,9 +341,9 @@ class LongTermMemory:
                     r = json.loads(line)
                 except ValueError:
                     continue
-                question = (r.get("erik") or "").split("\n")[-1]
-                if question.startswith("[ERIK]") and r.get("mirana"):
-                    talk.append(f"Erik: {question[7:]}\nMirana: {r['mirana']}")
+                question = record_question(r)
+                if question and r.get("mirana"):
+                    talk.append(f"Erik: {question}\nMirana: {r['mirana']}")
             for line in chat_lines[done[1]:]:
                 try:
                     c = json.loads(line)
@@ -365,7 +367,7 @@ class LongTermMemory:
                 record = json.loads(line)
             except ValueError:
                 continue
-            chat_line = next((x for x in (record.get("erik") or "").split("\n") if x.startswith("[CHAT]")), "")
+            chat_line = record_chat(record)
             for part in chat_line[7:].split(" | "):
                 m = re.match(r"^([^:(]+?)(?: \((mod|sub|vip|streamer)\))?: (.+)$", part.strip())
                 if not m or part.startswith(("dnes v chate", "posledné minúty")):
@@ -460,3 +462,72 @@ def _read_lines(path) -> list[str]:
         return path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return []
+
+
+def record_question(r: dict) -> str | None:
+    """Erikova otazka zo zaznamu rozhovoru (novy format so zdrojom aj stary s [ERIK] v jednom texte)."""
+    if "zdroj" in r:
+        return r.get("otazka") if r["zdroj"] in ("voice", "typed") else None
+    last = (r.get("erik") or "").split("\n")[-1]
+    return last[7:] if last.startswith("[ERIK]") else None
+
+
+def record_chat(r: dict) -> str:
+    """Riadok [CHAT] zo zaznamu rozhovoru (alebo "")."""
+    if "kontext" in r:
+        return (r.get("kontext") or {}).get("CHAT", "")
+    return next((x for x in (r.get("erik") or "").split("\n") if x.startswith("[CHAT]")), "")
+
+
+class LongTermFeature(Feature):
+    """Pamat medzi streamami: [PAMÄŤ] v system prompte, [DIVÁCI] k otazke, "zabudni", zhrnutie modelom."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.memory = LongTermMemory(app.config, app.session_id)
+        app.brain.memory_block = lambda: self.memory.block
+        self._game_at = 0.0
+
+    def start(self) -> None:
+        self.memory.start(self.app.brain.anthropic_client, stats_fn=self.save_stream)
+
+    def save_stream(self) -> None:
+        minutes = int((time.time() - self.app.highlights.session_start) // 60)
+        self.memory.update_stream(self.app.highlights.stats, minutes)
+
+    def on_chat(self, msg) -> None:
+        self.memory.add_chat(msg)
+
+    def on_snapshot(self, snap) -> None:
+        if snap and time.time() - self._game_at > 30:
+            self._game_at = time.time()
+            self.memory.update_game(snap)
+
+    def context(self, turn) -> None:
+        if not turn.from_erik:
+            return
+        question = turn.question
+        if intents.wants_forget(question):
+            nick = self.memory.forget_viewer(question)
+            if nick:
+                turn.add("SYSTÉM", f"[SYSTÉM] poznámky o divákovi {nick} sú zmazané")
+            else:
+                n = self.memory.forget_fact(self.app.brain.anthropic_client, question)
+                turn.add("SYSTÉM", f"[SYSTÉM] z pamäte o Erikovi zmazané fakty: {n}" if n
+                         else "[SYSTÉM] v pamäti som nič také nenašla")
+        turn.add("DIVÁCI", self.memory.viewers_line(self.app.chat.recent_logins(), question))
+
+    def on_command(self, cmd: str, text: str | None) -> bool:
+        if cmd == "memory_reload":
+            self.memory.reload()
+            return True
+        return False
+
+    def shutdown(self) -> None:
+        """Statistiky dna a zhrnutie modelom (max ~25 s; co nestihne, doplni dalsi start)."""
+        self.save_stream()
+        self.app.overlay.notice("Ukladám pamäť…")
+        worker = threading.Thread(target=self.memory.extract, args=(self.app.brain.anthropic_client,), daemon=True)
+        worker.start()
+        worker.join(timeout=25)
+        self.memory.save(force=True)

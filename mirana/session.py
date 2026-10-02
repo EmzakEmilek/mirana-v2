@@ -5,8 +5,8 @@ import socket
 import sys
 from datetime import datetime
 
-from core.config import BASE_DIR
-from core.store import append_jsonl
+from mirana.config import BASE_DIR
+from mirana.store import append_jsonl
 
 LOGS_DIR = BASE_DIR / "logs"
 

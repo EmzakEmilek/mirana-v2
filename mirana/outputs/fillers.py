@@ -3,7 +3,7 @@
 fillers.speak: false = hlaska sa len ukaze na HUD, nahlas sa nepovie (a WAV sa ani negeneruju).
 
 Pri prvom spusteni sa vygeneruju cez TTS do fillers/*.wav (len chybajuce). Prehravanie je
-neblokujuce — bezi z casovaca v main.py, kym worker cakal na Whisper a Claude.
+neblokujuce — bezi z casovaca v jadre (mirana/app.py), kym worker cakal na Whisper a Claude.
 """
 
 import logging
@@ -13,8 +13,8 @@ import unicodedata
 
 import numpy as np
 
-from core.config import BASE_DIR
-from outputs.voice import Voice
+from mirana.config import BASE_DIR
+from mirana.outputs.voice import Voice
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""Okno Nastavenia pre gui.py: vsetko z config.yaml + persona.md, bez rucneho editovania suborov.
+"""Okno Nastavenia ovladacieho okna (ui/control.py): vsetko z config.yaml + persona.md, bez rucneho editovania suborov.
 
 Zmeny sa prejavia po restarte Mirany (vacsina nastaveni sa cita pri starte) — tlacidlo
 "Ulozit a restartovat" to spravi. Zmena hlasu, rychlosti, vysky alebo fillerov zmaze stare
@@ -16,10 +16,10 @@ import numpy as np
 
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
-from core import settings
-from core.config import BASE_DIR
-from inputs.ptt import parse_key
-from outputs.voice_fx import PRESET_LABELS
+from mirana import settings
+from mirana.config import BASE_DIR
+from mirana.inputs.ptt import parse_key
+from mirana.outputs.voice_fx import PRESET_LABELS
 
 YELLOW, CYAN, RED, DIM = "#FCEE0A", "#00F0FF", "#FF003C", "#7d7d85"
 BG, PANEL, TEXT = "#0a0a0c", "#141418", "#e6e6e6"
@@ -305,7 +305,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._entry(tab, "memory.trim_to", "Po zaplnení ponechať", memory.get("trim_to", memory["max_exchanges"]))
 
     def _tab_game(self, tab):
-        from inputs.game_state import cet_installed, find_game_dir
+        from mirana.inputs.game_state import cet_installed, find_game_dir
 
         gs, limits = self.cfg["game_state"], self.cfg["limits"]
         self.game_dir = find_game_dir()
@@ -348,7 +348,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 row=i // 4, column=i % 4, sticky="w", padx=6, pady=3)
 
     def _install_mod(self):
-        from inputs.game_state import install_mod
+        from mirana.inputs.game_state import install_mod
 
         try:
             path = install_mod(self.game_dir)
@@ -430,7 +430,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _tab_memory(self, tab):
         """Dlhodoba pamat (data/memory.json): fakty o Erikovi a poznamky o divakoch sa daju upravit."""
-        from core.longterm import MEMORY_PATH
+        from mirana.features.longterm import MEMORY_PATH
         try:
             mem = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -474,7 +474,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _save_memory(self) -> bool:
         """Zapise upravy pamate do data/memory.json (cerstvy subor + len fakty a poznamky). True = zmena."""
-        from core.longterm import MEMORY_PATH
+        from mirana.features.longterm import MEMORY_PATH
         facts = [ln.strip() for ln in self.facts_box.get("1.0", "end").splitlines() if ln.strip()]
         notes = {}
         for ln in self.viewers_box.get("1.0", "end").splitlines():
@@ -584,7 +584,7 @@ class SettingsWindow(ctk.CTkToplevel):
         def run():
             import sounddevice as sd
 
-            from outputs.voice import _ensure_com
+            from mirana.outputs.voice import _ensure_com
             _ensure_com()
             try:
                 rate = int(sd.query_devices(device, "input")["default_samplerate"])
@@ -610,7 +610,7 @@ class SettingsWindow(ctk.CTkToplevel):
         def run():
             import sounddevice as sd
 
-            from outputs.voice import _ensure_com, resolve_output
+            from mirana.outputs.voice import _ensure_com, resolve_output
             _ensure_com()
             try:
                 device_index = resolve_output(device)
@@ -639,7 +639,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         def run():
             try:
-                from outputs.voice import Voice
+                from mirana.outputs.voice import Voice
                 voice = Voice(cfg)
                 # po vetach ako pri skutocnej odpovedi, aby bolo pocut aj pauzu medzi vetami
                 sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]

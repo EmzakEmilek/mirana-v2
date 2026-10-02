@@ -16,8 +16,8 @@ import numpy as np
 import sounddevice as sd
 import yaml
 
-from core.config import BASE_DIR
-from outputs.voice_fx import VoiceFx
+from mirana.config import BASE_DIR
+from mirana.outputs.voice_fx import VoiceFx
 
 logger = logging.getLogger(__name__)
 

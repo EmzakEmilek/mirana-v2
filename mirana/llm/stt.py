@@ -42,7 +42,7 @@ class ApiStt:
 
         self.model = stt_cfg["api_model"]
         self.language = stt_cfg["language"]
-        # API kluc si SDK cita z OPENAI_API_KEY (nacitane v core.config)
+        # API kluc si SDK cita z OPENAI_API_KEY (nacitane v mirana.config)
         self.client = OpenAI(timeout=limits["api_timeout_sec"], max_retries=limits["api_retries"])
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
@@ -255,12 +255,12 @@ def create_stt(config: dict):
 
 
 if __name__ == "__main__":
-    # python -m core.stt test.wav [dalsie.wav ...]  — prepis + latencia pre nakonfigurovany provider
-    from core.config import load_config
+    # python -m mirana.llm.stt test.wav [dalsie.wav ...]  — prepis + latencia pre nakonfigurovany provider
+    from mirana.config import load_config
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     if len(sys.argv) < 2:
-        sys.exit("pouzitie: python -m core.stt subor.wav [...]  (nahravku vyrobis cez python -m inputs.ptt)")
+        sys.exit("pouzitie: python -m mirana.llm.stt subor.wav [...]  (nahravku vyrobis cez python -m mirana.inputs.ptt)")
 
     stt = create_stt(load_config())
     for path in sys.argv[1:]:

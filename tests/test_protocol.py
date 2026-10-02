@@ -7,12 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from core import protocol, settings
-from core.config import BASE_DIR, CONFIG_PATH, PERSONA_PATH
-from outputs.overlay import Overlay
+from mirana import protocol, settings
+from mirana.config import BASE_DIR, CONFIG_PATH, PERSONA_PATH
+from mirana.outputs.overlay import Overlay
 
 HUD_SRC = (BASE_DIR / "overlay" / "index.html").read_text(encoding="utf-8")
-GUI_SRC = (BASE_DIR / "gui.py").read_text(encoding="utf-8")
+GUI_SRC = (BASE_DIR / "ui" / "control.py").read_text(encoding="utf-8")
+MIRANA_SRC = "".join(p.read_text(encoding="utf-8") for p in (BASE_DIR / "mirana").rglob("*.py"))
 
 
 def test_every_event_has_a_receiver():
@@ -25,11 +26,10 @@ def test_every_event_has_a_receiver():
 
 
 def test_gui_sends_only_known_commands():
-    sources = GUI_SRC + (BASE_DIR / "gui_settings.py").read_text(encoding="utf-8")
+    sources = GUI_SRC + (BASE_DIR / "ui" / "settings_window.py").read_text(encoding="utf-8")
     sent = set(re.findall(r'_send\("(\w+)"', sources))
     assert sent and sent <= protocol.COMMANDS
-    main_src = (BASE_DIR / "main.py").read_text(encoding="utf-8")
-    handled = set(re.findall(r'cmd == "(\w+)"', main_src))
+    handled = set(re.findall(r'cmd == "(\w+)"', MIRANA_SRC))
     assert protocol.COMMANDS <= handled
 
 

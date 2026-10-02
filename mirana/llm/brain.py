@@ -1,8 +1,8 @@
-"""Brain: STT (core.stt, api|local) -> LLM (Claude, streaming). System prompt = persona (cacheable) + stav hry.
+"""Brain: STT (mirana.llm.stt, api|local) -> LLM (Claude, streaming). System prompt = persona (cacheable) + stav hry.
 
 Odpoved sa streamuje a po celych vetach posiela cez on_sentence, aby hlas mohol zacat hovorit prvu
 vetu, kym model pise dalsie. Retry a timeout riesi SDK (max_retries / timeout na klientovi).
-Pri zlyhani ask_stream vrati Answer s ok=False; o fallbacku rozhoduje main.py.
+Pri zlyhani ask_stream vrati Answer s ok=False; o fallbacku rozhoduje jadro (mirana/app.py).
 """
 
 import logging
@@ -13,10 +13,10 @@ from dataclasses import dataclass, field
 
 from anthropic import Anthropic
 
-from core.budget import Budget
-from core.config import load_persona
-from core.stt import create_stt
-from core.wiki import TOOL as WIKI_TOOL, Wiki
+from mirana.budget import Budget
+from mirana.config import load_persona
+from mirana.llm.stt import create_stt
+from mirana.features.wiki import TOOL as WIKI_TOOL, Wiki
 
 logger = logging.getLogger(__name__)
 
@@ -81,17 +81,16 @@ class SentenceSplitter:
 class Brain:
     """STT (Whisper) -> LLM (Claude, streaming) -> vety."""
 
-    def __init__(self, config: dict, budget: Budget):
+    def __init__(self, config: dict, budget: Budget, wiki: Wiki | None = None):
         self.persona = load_persona()
         self.llm_cfg = config["llm"]
         self.budget = budget
         limits = config["limits"]
 
         self.stt = create_stt(config)
-        self.wiki = Wiki(config)
-        self.wiki.start()
+        self.wiki = wiki if wiki is not None else Wiki(config)  # index nacitava WikiFeature.start()
         self.max_lookups = config.get("wiki", {}).get("max_lookups", 2)
-        # API kluc si SDK cita z ANTHROPIC_API_KEY (nacitane v core.config). Kluc bez workspace
+        # API kluc si SDK cita z ANTHROPIC_API_KEY (nacitane v mirana.config). Kluc bez workspace
         # vyzaduje hlavicku anthropic-workspace-id — ANTHROPIC_WORKSPACE_ID v .env (alebo kluc vytvoreny vo workspace).
         headers = {}
         if os.environ.get("ANTHROPIC_WORKSPACE_ID"):
@@ -100,7 +99,7 @@ class Brain:
             timeout=limits["api_timeout_sec"], max_retries=limits["api_retries"], default_headers=headers
         )
         self._cache_checked = False
-        self.memory_block = None  # callable -> [PAMÄŤ] text (core.longterm), nastavuje main.py
+        self.memory_block = None  # callable -> [PAMÄŤ] text (mirana.features.longterm), nastavuje LongTermFeature
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
         """Whisper (api|local podla config), jazyk podla config. None pri zlyhani."""

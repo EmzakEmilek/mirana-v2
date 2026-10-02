@@ -1,7 +1,7 @@
 """Overlay: WebSocket server pre HUD (overlay/index.html) v OBS.
 
 Jeden port (overlay.port): obycajny HTTP GET vrati index.html, WebSocket upgrade dostava JSON eventy.
-Server bezi vo vlastnom vlakne s vlastnym asyncio loopom; main.py vola send() z ktorehokolvek vlakna.
+Server bezi vo vlastnom vlakne s vlastnym asyncio loopom; jadro vola send() z ktorehokolvek vlakna.
 Novy klient dostane pri pripojeni aktualny stav (state, telemetria, posledna odpoved), aby HUD po
 reconnecte nebol prazdny. Ked overlay zlyha, Mirana bezi dalej — server ma vlastny try/except.
 """
@@ -14,8 +14,8 @@ from http import HTTPStatus
 
 from websockets.asyncio.server import serve
 
-from core import protocol
-from core.config import BASE_DIR
+from mirana import protocol
+from mirana.config import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class Overlay:
         self._clients: set = set()
         self._last: dict[str, dict] = {}  # typ -> posledny event, pre novych klientov
         self._loop: asyncio.AbstractEventLoop | None = None
-        self.on_command = None  # on_command(cmd, text) — prikazy z ovladacieho okna (gui.py), len z localhostu
+        self.on_command = None  # on_command(cmd, text) — prikazy z ovladacieho okna (ui/control.py), len z localhostu
 
     # --- verejne API (thread-safe) --------------------------------------------------------
 
