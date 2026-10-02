@@ -5,14 +5,15 @@
 <title>MIRANA HUD — living core v4</title>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Pozadie je tmavé len pre test v prehliadači. OBS Browser Source ho svojím
-     predvoleným CSS (body { background-color: rgba(0,0,0,0) }) spraví priehľadným. */
+  /* Pozadie je priehľadné (OBS Browser Source). Tmavé je len v bežnom prehliadači na test —
+     trieda "preview" sa pridá, keď stránka nebeží v OBS (OBS má window.obsstudio). */
   html, body {
     margin: 0; padding: 0; height: 100%;
-    background: #0a0a0c;
+    background: transparent;
     font-family: 'Share Tech Mono', monospace;
     overflow: hidden;
   }
+  html.preview, html.preview body { background: #0a0a0c; }
   :root {
     --yellow: #FCEE0A;
     --cyan: #00F0FF;
@@ -117,6 +118,7 @@
     100% { transform: translateX(-50%); filter: none; }
   }
 </style>
+<script>if (!window.obsstudio) document.documentElement.classList.add('preview');</script>
 </head>
 <body>
 
