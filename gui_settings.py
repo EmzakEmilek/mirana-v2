@@ -98,7 +98,7 @@ class SettingsWindow(ctk.CTkToplevel):
         for name, build in (("Zvuk", self._tab_audio), ("Hlas", self._tab_voice), ("Model", self._tab_model),
                             ("Hra", self._tab_game),
                             ("Prepis", self._tab_stt), ("Fillery", self._tab_fillers), ("HUD", self._tab_hud),
-                            ("Bezpečnosť", self._tab_safety), ("Persona", self._tab_persona)):
+                            ("Chat", self._tab_chat), ("Bezpečnosť", self._tab_safety), ("Persona", self._tab_persona)):
             build(tabs.add(name))
 
         bar = ctk.CTkFrame(self, fg_color=BG)
@@ -357,6 +357,20 @@ class SettingsWindow(ctk.CTkToplevel):
         self._entry(tab, "overlay.typewriter_ms_per_char", "Písanie (ms/znak)", hud["typewriter_ms_per_char"],
                     hint="Len záloha, keď hlas vypadne. Inak sa text píše v tempe reči.")
 
+    def _tab_chat(self, tab):
+        chat = self.cfg.get("twitch_chat") or {}
+        self._switch(tab, "twitch_chat.enabled", "Čítať Twitch chat", chat.get("enabled", False),
+                     hint="Mirana chat len číta (bez bota, nič nepíše). Sama ho nekomentuje, len keď sa spýtaš, "
+                          "napr. „čo píše chat?“")
+        self._entry(tab, "twitch_chat.channel", "Kanál", chat.get("channel") or "", width=260,
+                    hint="Názov kanála alebo odkaz, napr. twitch.tv/tvojkanal.")
+        self._entry(tab, "twitch_chat.max_messages", "Posledných správ", chat.get("max_messages", 15), width=60,
+                    hint="Koľko posledných správ Mirana vidí pri tvojej otázke.")
+        self._entry(tab, "twitch_chat.max_age_sec", "Nie staršie ako (s)", chat.get("max_age_sec", 300), width=60)
+        ctk.CTkLabel(tab, text="Ignorovaní boti (jeden na riadok):", text_color=TEXT,
+                     anchor="w").pack(fill="x", padx=10, pady=(8, 0))
+        self.ignore_box = self._textbox(tab, "\n".join(chat.get("ignore_users") or []), 120)
+
     def _tab_safety(self, tab):
         safety = self.cfg.get("safety", {})
         self._switch(tab, "safety.enabled", "Bezpečnostný filter", safety.get("enabled", True),
@@ -527,6 +541,15 @@ class SettingsWindow(ctk.CTkToplevel):
         _put(c["overlay"], "enabled", v["overlay.enabled"].get())
         _put(c["overlay"], "port", number("overlay.port", int, 1024))
         _put(c["overlay"], "typewriter_ms_per_char", number("overlay.typewriter_ms_per_char", int, 5))
+
+        if "twitch_chat" not in c:
+            c["twitch_chat"] = {}
+        chat = c["twitch_chat"]
+        _put(chat, "enabled", v["twitch_chat.enabled"].get())
+        _put(chat, "channel", v["twitch_chat.channel"].get().strip())
+        _put(chat, "max_messages", number("twitch_chat.max_messages", int, 1))
+        _put(chat, "max_age_sec", number("twitch_chat.max_age_sec", int, 10))
+        _put(chat, "ignore_users", [u.strip().lower() for u in self.ignore_box.get("1.0", "end").splitlines() if u.strip()])
 
         c.setdefault("safety", {})
         _put(c["safety"], "enabled", v["safety.enabled"].get())

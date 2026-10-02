@@ -97,7 +97,7 @@ Herný PC na kábli, nie Wi-Fi.
 - [ ] Testovacia otázka cez zadné bočné tlačidlo myši → počuť odpoveď s efektom
 - [ ] Výstup je Voicemeeter (nie slúchadlá), Miranin hlas vidno v OBS audio mixeri
 - [ ] Notebook: overlay v OBS svieti (stav STANDBY)
-- [ ] Kick chat pripojený (až po fáze 5)
+- [ ] V okne svieti „Chat: #kanál pripojený“ (Twitch)
 - [ ] Vieš, kde je panic mute (predné bočné tlačidlo myši)
 
 ---

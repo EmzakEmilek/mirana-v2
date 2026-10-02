@@ -80,6 +80,8 @@ class App(ctk.CTk):
         self.game_label = ctk.CTkLabel(self, text="Hra: čakám na údaje", font=ctk.CTkFont("Segoe UI", 12),
                                        text_color=DIM, anchor="w", wraplength=520, justify="left")
         self.game_label.pack(fill="x", padx=20)
+        self.chat_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont("Segoe UI", 12), text_color=DIM, anchor="w")
+        self.chat_label.pack(fill="x", padx=20)
 
         buttons = ctk.CTkFrame(self, fg_color=BG)
         buttons.pack(fill="x", padx=16, pady=10)
@@ -106,7 +108,7 @@ class App(ctk.CTk):
         self.log = ctk.CTkTextbox(self, fg_color=PANEL, text_color=TEXT, font=ctk.CTkFont("Segoe UI", 13),
                                   wrap="word", corner_radius=4, border_width=0)
         self.log.pack(fill="both", expand=True, padx=16, pady=(0, 8))
-        for tag, color in (("erik", CYAN), ("mirana", YELLOW), ("sys", DIM)):
+        for tag, color in (("erik", CYAN), ("mirana", YELLOW), ("sys", DIM), ("chat", "#a970ff")):
             self.log.tag_config(tag, foreground=color)
         self.log.configure(state="disabled")
 
@@ -293,6 +295,12 @@ class App(ctk.CTk):
                 self.game_label.configure(text="Hra: " + line, text_color=CYAN)
             else:
                 self.game_label.configure(text="Hra: nebeží (alebo menu) — Mirana ide bez telemetrie", text_color=DIM)
+        elif kind == "chat":
+            self._write(f"chat · {ev['nick']}: {ev['text']}", "chat")
+            self.mirana_line_open = False
+        elif kind == "chat_status":
+            self.chat_label.configure(text=ev["text"].capitalize(),
+                                      text_color="#a970ff" if "pripojený" in ev["text"] and "odpojený" not in ev["text"] else DIM)
         elif kind == "info":
             self.info.configure(text=f"Model: {ev.get('model')}  ·  effort {ev.get('effort')}  ·  HUD http://localhost:{self.port}")
 

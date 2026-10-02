@@ -32,6 +32,7 @@ from core.memory import Memory
 from core.safety import Safety
 from core.session import HEARTBEAT_PATH, ConversationLog, ensure_single_instance, setup_logging
 from inputs.game_state import GameState
+from inputs.twitch_chat import TwitchChat
 from inputs.ptt import PushToTalk
 from outputs.fillers import Fillers
 from outputs.overlay import Overlay
@@ -103,6 +104,8 @@ class Mirana:
         self.quiet_after_erik = gs.get("quiet_after_erik_sec", 30)
         self.game = GameState(config, on_event=lambda name, snap, text: self._events.put(("game_event", None, (name, snap, text))),
                               on_snapshot=self._on_game_snapshot)
+        self.chat = TwitchChat(config, on_message=lambda m: self.overlay.chat(m.nick, m.text),
+                               on_status=self.overlay.chat_status)
         self.ptt.on_panic = self._on_panic
         self.overlay.on_command = self._on_command
 
@@ -185,9 +188,10 @@ class Mirana:
 
     def _ask(self, job: Job, tagged_text: str, stt_sec: float = 0.0) -> None:
         """LLM stream. Stav hry ide ako riadok [HRA] na zaciatok spravy — v system prompte by
-        kazda zmena HP zrusila cache pamate, v sprave sa ulozi do historie a cache nerusi."""
-        line = self.game.line()
-        job.user_text = f"{line}\n{tagged_text}" if line else tagged_text
+        kazda zmena HP zrusila cache pamate, v sprave sa ulozi do historie a cache nerusi.
+        Chat divakov ([CHAT]) ide len k Erikovym otazkam, nie k hernym udalostiam."""
+        lines = [self.game.line(), self.chat.line() if tagged_text.startswith("[ERIK]") else None]
+        job.user_text = "\n".join([x for x in lines if x] + [tagged_text])
         answer = self.brain.ask_stream(
             job.user_text, None, self.memory.as_messages(),
             on_sentence=lambda sentence: self._on_sentence(job, sentence),
@@ -347,6 +351,7 @@ class Mirana:
     def run(self) -> None:
         self.overlay.start()
         self.game.start()
+        self.chat.start()
         self.ptt.start()
         logger.info("Mirana bezi (%s, effort %s). Drz %s pre PTT. Dnes minute $%.3f z $%.2f.",
                     self.config["llm"]["model"], self.config["llm"]["effort"], self.config["audio"]["ptt_key"],

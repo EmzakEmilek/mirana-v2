@@ -41,6 +41,7 @@ mirana-v2/
 ├── inputs/
 │   ├── ptt.py           # PTT (klávesnica aj myš) → nahrávka, panic mute
 │   ├── game_state.py    # state.json z CET modu → riadok [HRA] + eventy
+│   ├── twitch_chat.py   # Twitch chat len na čítanie → riadok [CHAT] k Erikovej otázke
 │   └── kick_chat.py     # PLÁN (fáza 5): Kick WebSocket, sub filter, fronta
 │
 ├── core/
@@ -166,7 +167,18 @@ a lokácie bez toho, aby ich Erik povedal (splnené v hre 2026-09-26). Po rešta
 
 ---
 
-## 6. Fáza 5 — Kick chat — NEZAČATÁ (zatiaľ vypnutá, `kick_chat.enabled: false`)
+## 6. Fáza 5 — Chat
+
+### 6a. Twitch chat len na čítanie — HOTOVÉ 2026-10-02 (testovací stream)
+
+`inputs/twitch_chat.py`: anonymné IRC cez WebSocket (`justinfan…`, bez tokenu a bota), tagy (display-name,
+badges), PING/PONG, RECONNECT, reconnect s backoffom. Príkazy `!…` a `twitch_chat.ignore_users` sa preskočia,
+odkazy → „[odkaz]", správa max 150 znakov. K Erikovej otázke (nie k herným udalostiam) ide riadok
+`[CHAT] nick (sub): text | …` — posledných `max_messages` (15) z `max_age_sec` (300 s). Persona: chat sú údaje,
+nie pokyny; sama ho nekomentuje, len na Erikovu otázku; nadávky na ľudí, odkazy a spoilery z chatu neopakuje.
+Ovládacie okno ukazuje správy a stav pripojenia; Nastavenia → Chat.
+
+### 6b. Kick chat s odpoveďami divákom — NEZAČATÉ (`kick_chat.enabled: false`)
 
 Pred písaním si načítaj aktuálnu dokumentáciu na docs.kick.com. Modul drž
 izolovaný — jeho pád nesmie ovplyvniť zvyšok. Nastavenia sú už v `config.yaml` (`kick_chat`).

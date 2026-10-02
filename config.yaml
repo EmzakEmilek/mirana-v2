@@ -146,6 +146,14 @@ kick_chat:
   mute_in_combat: true
   mute_after_erik_sec: 60
 
+twitch_chat:
+  enabled: true               # Mirana chat len číta (anonymne, bez bota, nič nepíše); komentuje ho, len keď sa Erik spýta
+  channel: ""                 # názov kanála alebo odkaz twitch.tv/... (Nastavenia -> Chat)
+  max_messages: 15            # koľko posledných správ ide k Erikovej otázke (riadok [CHAT])
+  max_age_sec: 300            # staršie správy sa neposielajú
+  max_chars: 150              # dlhšia správa sa oreže
+  ignore_users: ["nightbot", "streamelements", "streamlabs", "moobot", "fossabot", "soundalerts"]   # boti
+
 safety:
   enabled: true
   # Veta s týmto slovom (začiatok slova, bez diakritiky) sa nevysloví ani nevypíše — poistka pre Kick TOS.

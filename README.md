@@ -1,6 +1,6 @@
 # MIRANA
 
-Hlasová AI parťáčka pre stream Cyberpunku 2077 na Kicku. Držíš bočné tlačidlo myši, povieš otázku po slovensky,
+Hlasová AI parťáčka pre stream Cyberpunku 2077 (Twitch, neskôr Kick). Držíš bočné tlačidlo myši, povieš otázku po slovensky,
 pustíš, a Mirana odpovie hlasom do slúchadiel aj na HUD v OBS. Štýl Friday z Iron Mana: pokojná, bystrá,
 s ľahkým suchým humorom, občas zanadávaná, bez spoilerov. Vidí do hry cez CET mod (quest, zdravie, polícia,
 auto, cieľ pod zameriavačom…) a pri dôležitých udalostiach sa ozve sama.
@@ -62,6 +62,7 @@ Mikrofón a výstup vyber v Nastaveniach → Zvuk (s testom). Presné názvy vyp
 | Prepis | lokálny Whisper alebo API, model, jazyk (slovník názvov je v config.yaml) |
 | Fillery | hlášky na zakrytie pauzy a ich oneskorenie |
 | HUD | zapnutie, port, tempo písania |
+| Chat | čítanie Twitch chatu, kanál, koľko správ vidí, ignorovaní boti |
 | Bezpečnosť | filter a zakázané slová |
 | Persona | celý text persona.md |
 
@@ -102,6 +103,14 @@ nikdy surový JSON (v teste model zo surového JSON zle prepočítal HP). Prázd
 Bez hry: `venv\Scripts\python tools\simulate_game.py` zapisuje falošný stav (jazda, cutscéna, boj, polícia,
 nízke HP, level, quest, neobjavené miesto) do `data/sim_state.json`; Miranu vtedy spusti s
 `set MIRANA_GAME_STATE_PATH=C:\mirana-v2\data\sim_state.json`.
+
+## Twitch chat
+
+Mirana chat **len číta** (anonymne, bez bota a tokenu, do chatu nič nepíše). Posledných 15 správ
+z posledných 5 minút dostane ako riadok `[CHAT]` ku každej tvojej otázke. Sama ich nekomentuje;
+použije ich, len keď sa spýtaš („čo píše chat?", „čo na to Kubo?"). Správy berie ako údaje, nie pokyny:
+pokusy divákov ju ovládať a spoilery z chatu ignoruje (otestované). Príkazy (`!…`) a boti sa preskočia.
+Nastavenie: okno → Nastavenia → **Chat** (kanál). Správy vidno aj v ovládacom okne (fialovou).
 
 ## Konfigurácia
 
@@ -153,6 +162,7 @@ Pauzu zakryje filler hláška.
 | `core/budget.py`, `core/safety.py`, `core/session.py` | strop nákladov, filter, logy a zámok |
 | `core/config.py`, `core/settings.py` | načítanie configu a .env; zápis so zachovaním komentárov |
 | `inputs/ptt.py` | PTT (klávesnica aj myš), panic mute, nahrávanie |
+| `inputs/twitch_chat.py` | čítanie Twitch chatu (anonymné IRC), riadok [CHAT] |
 | `inputs/game_state.py` | stav hry → riadok [HRA], herné udalosti, nájdenie hry, inštalácia modu |
 | `mod/mirana_state/init.lua` | CET mod v hre |
 | `outputs/speaker.py`, `outputs/voice.py` | TTS po vetách, prehrávanie, fonetika |

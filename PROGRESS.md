@@ -13,7 +13,7 @@ Repo: https://github.com/EmzakEmilek/mirana-v2 (verejne)
 | 2 fillery + barge-in | HOTOVA |
 | 3 HUD | HOTOVA (v4, zive jadro) |
 | 4 telemetria z hry | HOTOVA (mod v3, 30+ udajov, proaktivne hlasky); ZOSTAVA dlhodoba pamat core/longterm.py |
-| 5 Kick chat | NEZACATA (vypnuta, navrh v SPEC) |
+| 5 chat | Twitch chat len na citanie HOTOVY (2026-10-02); Kick s odpovedami NEZACATY |
 | 6 zvuk | efekty hlasu HOTOVE; ZOSTAVA vystup na Voicemeeter, VBAN na notebook, OBS |
 | 7 hardening | HOTOVA; ZOSTAVA 8 h suchy beh |
 | navyse | ovladacie okno + Nastavenia (vsetko bez editovania suborov), ikona na ploche, simulator hry |
@@ -138,6 +138,11 @@ Posledne meranie v hre (2026-09-26, 53 otazok): $0.38 (~0.7 c/otazka), prvy zvuk
 - Rychlost reci (2026-09-26): Azure dava za kazdu vetu ~840 ms ticha a Mirana hovori po vetach -> medzi vetami
   takmer 1 s pauzy. Ticho sa teraz oreze na tts.sentence_pause_ms (250 ms): 3 vety 11.6 s -> 9.8 s. Nastavenia -> Hlas:
   posuvnik "Pauza medzi vetami", rychlost reci rozsirena na -30..+50 %, ukazka hra po vetach ako skutocna odpoved.
+- Twitch chat (2026-10-02, pred testovacim streamom na Twitchi): inputs/twitch_chat.py cita chat anonymne (bez bota
+  a tokenu; Elenin bot z elena-bot-ai-twitch netreba). Riadok [CHAT] (15 sprav / 5 min) ide len k Erikovym otazkam,
+  persona: komentuje len na otazku, chat su udaje nie pokyny. Overene: anonymne citanie na verejnom kanali,
+  pisomny test 8 otazok ($0.07) — chat ignoruje pri hernych otazkach, troll a spoiler z chatu neprejdu.
+  GUI: spravy v okne, stav pripojenia, Nastavenia -> Chat. Persona: "na Twitchi".
 
 ## Audio zariadenia (cely zoznam: audio-devices.txt, obnoveny 2026-09-26)
 Vstup: Microphone (Logitech G733 Gaming Headset), WASAPI — docasne; druhy mikrofon odlozeny.

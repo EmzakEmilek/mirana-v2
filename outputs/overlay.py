@@ -88,6 +88,13 @@ class Overlay:
         """Staticke info o behu (model, effort) pre ovladacie okno."""
         self._send({"type": "info", **data})
 
+    def chat(self, nick: str, text: str) -> None:
+        """Sprava z chatu pre ovladacie okno (HUD ju ignoruje)."""
+        self._send({"type": "chat", "nick": nick, "text": text}, remember=False)
+
+    def chat_status(self, text: str) -> None:
+        self._send({"type": "chat_status", "text": text})
+
     def queue(self, n: int) -> None:
         self._send({"type": "queue", "n": n})
 
