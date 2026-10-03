@@ -33,6 +33,8 @@ VISION_NO = [
     "Musíme sa napojeť na Wikipedia, tak toto nepôjde ďalej.",
     "Kto je Padre?",
     "Koľko mám peňazí?",
+    "A kdo to je? Tato Evelyn Parker. Poľadaj mi v databáze.",   # meno po ukazovacom slove -> wiki
+    "Čo vieš o tomto Jackiem?",
 ]
 
 

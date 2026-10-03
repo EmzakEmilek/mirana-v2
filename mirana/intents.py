@@ -27,7 +27,12 @@ _META = re.compile(r"\b(test\w*|log\w*|stream\w*|chat\w*|wiki\w*|lore|persón\w*
 def wants_vision(question: str) -> bool:
     if _VISION_STRONG.search(question):
         return not _META.search(question) or bool(re.search(r"vidíš|vidis|obrazovk|pozer", question, _I))
-    return bool(_DEMONSTRATIVE.search(question) and _QUESTION.search(question) and not _META.search(question))
+    pointing = [m for m in _DEMONSTRATIVE.finditer(question) if not _NAME_AFTER.match(question, m.end())]
+    return bool(pointing and _QUESTION.search(question) and not _META.search(question))
+
+
+# "Tato Evelyn Parker", "tento Jackie" — ukazovacie slovo pred menom je otazka na postavu (wiki), nie na obrazovku
+_NAME_AFTER = re.compile(r"\s+[A-ZÁÄČĎÉÍĹĽŇÓÔŔŠŤÚÝŽ]")
 
 
 # --- zabudni (dlhodoba pamat) ----------------------------------------------------------------------
