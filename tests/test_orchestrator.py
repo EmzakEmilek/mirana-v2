@@ -237,3 +237,12 @@ def test_hud_v2_stages_marks_and_viewer_card(mirana):
     assert [(text[a:b], kind) for a, b, kind in append["marks"]] == [
         ("Kubo_SK", "nick"), ("Night City", "name"), ("kurva", "swear")]
     assert append["viewers"] == [{"nick": "Kubo_SK", "badge": "SUB", "visits": 3, "since": "2026-09-30"}]
+
+
+def test_empty_proactive_answer_is_silent(mirana):
+    mirana.brain.reply = []                                   # model sa rozhodol mlcat (napr. pripomienka)
+    mirana.start_turn("idle", "Erik sa ti neozval 10 minút.")
+    pump(mirana, lambda: idle(mirana) and mirana.brain.asked)
+    time.sleep(0.3)
+    pump(mirana, lambda: idle(mirana), timeout=1)
+    assert mirana.voice.played == []                          # ziadne "Spojenie s Netom vypadlo"

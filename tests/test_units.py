@@ -200,3 +200,67 @@ def test_events_ignored_right_after_load(tmp_path, config, monkeypatch):
     write(hp=100, level=6)
     write(hp=0, level=6)                                   # neskor: skutocna smrt
     assert seen == ["death"]
+
+
+def test_cache_breakpoint_on_stored_history(config, monkeypatch):
+    """Cache bod je na poslednej sprave pamate (rovnaka pri dalsej otazke), nie na novej otazke s [HRA]."""
+    import mirana.llm.brain as brain_mod
+    monkeypatch.setattr(brain_mod, "create_stt", lambda cfg: None)
+    b = brain_mod.Brain(config, None, wiki=SimpleNamespace(enabled=False))
+    memory = [{"role": "user", "content": "[ERIK] kto je Padre?"}, {"role": "assistant", "content": "Fixer."}]
+    msgs = b._messages(memory, "[HRA] zdravie 80 %\n[ERIK] a kde je?")
+    assert msgs[1]["content"] == [{"type": "text", "text": "Fixer.", "cache_control": {"type": "ephemeral"}}]
+    assert "cache_control" not in msgs[2]["content"][0]
+    assert memory[1]["content"] == "Fixer."                     # pamat sa nemeni
+    first = b._messages([], "[ERIK] ahoj", image_b64="QUJD")
+    assert [c["type"] for c in first[0]["content"]] == ["image", "text"] and len(first) == 1
+
+
+class _FakeStream:
+    """Napodobenina streamu Anthropic SDK: udalosti a finalna sprava."""
+    def __init__(self, events, message):
+        self.events, self.message = events, message
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+    def __iter__(self):
+        return iter(self.events)
+    def get_final_message(self):
+        return self.message
+
+
+def test_screen_tool_round(config, monkeypatch):
+    """Model zavola nastroj obrazovka -> Brain posle snimku ako vysledok a model potom odpovie."""
+    import mirana.llm.brain as brain_mod
+    monkeypatch.setattr(brain_mod, "create_stt", lambda cfg: None)
+    usage = SimpleNamespace(input_tokens=1, output_tokens=1, cache_read_input_tokens=0, cache_creation_input_tokens=0)
+    tool_block = SimpleNamespace(type="tool_use", name="obrazovka", id="t1", input={})
+    first = _FakeStream([SimpleNamespace(type="content_block_start", content_block=tool_block)],
+                        SimpleNamespace(content=[tool_block], stop_reason="tool_use", usage=usage, model="m"))
+    second = _FakeStream([SimpleNamespace(type="text", text="Vidím Maelstrom gangera pri aute.")],
+                         SimpleNamespace(content=[], stop_reason="end_turn", usage=usage, model="m"))
+    calls = []
+    def stream(**kwargs):
+        calls.append(kwargs)
+        return first if len(calls) == 1 else second
+    b = brain_mod.Brain(config, SimpleNamespace(add=lambda m, u: 0.0), wiki=SimpleNamespace(enabled=False))
+    b.anthropic_client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(stream=stream)))
+    b.screen = lambda: "SNIMKA"
+    looked = []
+    answer = b.ask_stream("[ERIK] čo tu vidíš?", None, [], on_sentence=lambda s: None, on_look=lambda: looked.append(1))
+    assert [t["name"] for t in calls[0]["tools"]] == ["obrazovka"]
+    result = calls[1]["messages"][-1]["content"][0]
+    assert result["type"] == "tool_result" and result["content"][0]["source"]["data"] == "SNIMKA"
+    assert looked == [1] and answer.text == "Vidím Maelstrom gangera pri aute."
+    calls.clear()
+    b.ask_stream("[ERIK] čo je toto?", None, [], on_sentence=lambda s: None, image_b64="UZ")   # snimka uz je pri otazke
+    assert "tools" not in calls[0]
+
+
+def test_hra_line_quest_and_no_grenades():
+    s = snap(hp=80, grenade_charges=2, grenade_max=2, heal_charges=1, heal_max=2, quest="Neobjevené",
+             quest_id="generic_sts_quest")
+    line = telemetry_line(s)
+    assert "granát" not in line and "liečenie 1 z 2" in line
+    assert "neobjavené miesto" in line

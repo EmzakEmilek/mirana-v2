@@ -287,6 +287,7 @@ class Mirana:
             on_sentence=lambda sentence: self._on_sentence(turn, sentence),
             should_stop=lambda: turn.cancelled,
             on_lookup=lambda title=None: self._on_lookup(turn, title),
+            on_look=lambda: self._on_look(turn),
         )
         self._events.put(Answered(turn, answer, turn.stt_sec))
 
@@ -305,6 +306,15 @@ class Mirana:
             turn.searched = True
             spoken = self.fillers.play_search()  # nahlas len prva; na HUD sa pri dlhsom hladani stridaju
             self.overlay.search(None, self.fillers.search_lines(spoken))
+
+    def _on_look(self, turn: Turn) -> None:
+        """Model sa sam pozera na hru (nastroj obrazovka): HUD ukaze sken, filler uz netreba."""
+        turn.looked = True
+        if turn.cancelled:
+            return
+        self._cancel_filler(turn)
+        from mirana.inputs.game_state import target_info
+        self.overlay.scan(target_info(self.game.current))
 
     def _on_sentence(self, turn: Turn, sentence: str) -> None:
         if turn.cancelled:
@@ -423,7 +433,7 @@ class Mirana:
         turn.answer = answer
         self.overlay.budget(self.budget.spent, self.budget.cap)
         self.conversation.write(
-            zdroj=turn.source, otazka=turn.question, kontext=turn.context, obrazovka=bool(turn.image),
+            zdroj=turn.source, otazka=turn.question, kontext=turn.context, obrazovka=bool(turn.image) or turn.looked,
             mirana=answer.text, model=answer.model, stop=answer.stop_reason, wiki=answer.lookups,
             stt_s=round(turn.stt_sec, 2), prva_veta_s=answer.first_sentence_sec and round(answer.first_sentence_sec, 2),
             spolu_s=round(answer.total_sec, 2), usd=round(answer.cost, 5), prerusene=turn.cancelled,
@@ -434,7 +444,10 @@ class Mirana:
         logger.info("Mirana: %s", answer.text)
         if not answer.ok and not answer.sentences:
             turn.remember = False
-            self.speaker.say_all(turn, self.fallback["llm_failed"])
+            if turn.from_erik:
+                self.speaker.say_all(turn, self.fallback["llm_failed"])
+            else:
+                self.speaker.end(turn)  # hlaska z vlastneho popudu: model nemal co povedat -> ticho, nie "vypadol Net"
             return
         self.speaker.end(turn)
 

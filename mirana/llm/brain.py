@@ -78,6 +78,14 @@ class SentenceSplitter:
         return rest
 
 
+SCREEN_TOOL = {
+    "name": "obrazovka",
+    "description": ("Pozrie sa na aktuálny obraz hry (snímka okna Cyberpunku). Použi, len keď na odpoveď naozaj "
+                    "potrebuješ vidieť, čo Erik práve vidí, a v správe nemáš [OBRAZOVKA]."),
+    "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+}
+
+
 class Brain:
     """STT (Whisper) -> LLM (Claude, streaming) -> vety."""
 
@@ -100,6 +108,7 @@ class Brain:
         )
         self._cache_checked = False
         self.memory_block = None  # callable -> [PAMÄŤ] text (mirana.features.longterm), nastavuje LongTermFeature
+        self.screen = None        # callable -> snimka hry (base64 JPEG) alebo None; nastavuje VisionFeature
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
         """Whisper (api|local podla config), jazyk podla config. None pri zlyhani."""
@@ -119,17 +128,33 @@ class Brain:
             system.append({"type": "text", "text": game_state_line})
         return system
 
-    def _user_message(self, user_text: str, image_b64: str | None = None) -> dict:
-        """Nova otazka s cache breakpointom: persona + cela doterajsia pamat + tato otazka sa ulozi
-        do cache, dalsia otazka ich precita za zlomok ceny (kym sa pamat neoreze, prefix sa nemeni).
+    def _messages(self, memory_messages: list[dict], user_text: str, image_b64: str | None = None) -> list[dict]:
+        """Pamat rozhovoru + nova otazka. Cache breakpoint je na poslednej sprave PAMATE, nie na novej
+        otazke: do pamate ide len otazka bez [HRA]/[CHAT], takze nova otazka (aj s nimi) by sa pri dalsom
+        volani s cache nezhodovala a cela historia by sa zakazdym zapisovala nanovo (test 3.10.: 4-6 tisic
+        tokenov zapisu na kazdu otazku). Takto sa historia cita z cache a dopise sa len posledna vymena.
         image_b64 = snimka hry (JPEG) pred textom; do pamate nejde."""
-        block = {"type": "text", "text": user_text}
-        if self.llm_cfg.get("cache_memory", True):
-            block["cache_control"] = {"type": "ephemeral"}
-        content = [block]
+        messages = [dict(m) for m in memory_messages]
+        if messages and self.llm_cfg.get("cache_memory", True):
+            last = messages[-1]
+            text = last["content"] if isinstance(last["content"], str) else None
+            if text is not None:
+                last["content"] = [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+        content = [{"type": "text", "text": user_text}]
         if image_b64:
             content.insert(0, {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}})
-        return {"role": "user", "content": content}
+        return messages + [{"role": "user", "content": content}]
+
+    def _screen_result(self):
+        """Vysledok nastroja obrazovka: snimka hry, alebo veta, preco sa neda."""
+        image = None
+        try:
+            image = self.screen() if self.screen is not None else None
+        except Exception as e:
+            logger.warning("snimka pre nastroj obrazovka zlyhala: %s", e)
+        if not image:
+            return "Snímka sa nedá urobiť — hra nebeží v okne alebo je minimalizovaná."
+        return [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image}}]
 
     def _log_usage(self, message, cost: float, started: float, answer: "Answer") -> None:
         usage = message.usage
@@ -141,12 +166,14 @@ class Brain:
         )
 
     def ask_stream(self, user_text: str, game_state_line: str | None, memory_messages: list[dict],
-                   on_sentence=None, should_stop=None, on_lookup=None, image_b64: str | None = None) -> Answer:
+                   on_sentence=None, should_stop=None, on_lookup=None, image_b64: str | None = None,
+                   on_look=None) -> Answer:
         """Streamuje odpoved; kazdu hotovu vetu posle cez on_sentence(veta).
 
         should_stop() -> True preruší stream (barge-in) — dalsie tokeny sa uz neplatia.
         Ked model siahne po wiki, on_lookup() sa zavola hned na zaciatku volania nastroja (hlaska
         "hladam v databaze"), vysledok ide spat modelu a odpoved pokracuje v dalsom kole.
+        Nastrojom obrazovka sa model pozrie na hru sam (on_look() hned na zaciatku — HUD ukaze sken).
         """
         model, effort = self.llm_cfg["model"], self.llm_cfg["effort"]
         started = time.perf_counter()
@@ -156,7 +183,7 @@ class Brain:
             max_tokens=self.llm_cfg["max_tokens"],
             output_config={"effort": effort},
             system=self._build_system(game_state_line),
-            messages=[*memory_messages, self._user_message(user_text, image_b64)],
+            messages=self._messages(memory_messages, user_text, image_b64),
         )
         fallbacks = self.llm_cfg.get("fallbacks")
         if fallbacks and (model.startswith("claude-opus") or model == "claude-sonnet-5-5"):
@@ -173,8 +200,11 @@ class Brain:
             if on_sentence is not None:
                 on_sentence(sentence)
 
-        if self.wiki.enabled:
-            kwargs["tools"] = [WIKI_TOOL]
+        tools = [WIKI_TOOL] if self.wiki.enabled else []
+        if self.screen is not None and not image_b64:  # snimka uz je pri otazke -> netreba
+            tools.append(SCREEN_TOOL)
+        if tools:
+            kwargs["tools"] = tools
         lookups, cost, message = 0, 0.0, None
         try:
             while True:
@@ -184,7 +214,10 @@ class Brain:
                             answer.error = "prerusene"
                             break
                         if event.type == "content_block_start" and event.content_block.type == "tool_use":
-                            if on_lookup is not None:
+                            if getattr(event.content_block, "name", "") == SCREEN_TOOL["name"]:
+                                if on_look is not None:
+                                    on_look()
+                            elif on_lookup is not None:
                                 on_lookup(None)
                         elif event.type == "text":
                             for sentence in splitter.feed(event.text):
@@ -204,6 +237,9 @@ class Brain:
                 lookups += len(calls)
                 results = []
                 for c in calls:
+                    if c.name == SCREEN_TOOL["name"]:
+                        results.append({"type": "tool_result", "tool_use_id": c.id, "content": self._screen_result()})
+                        continue
                     title, text = self.wiki.search((c.input or {}).get("query", ""))
                     if on_lookup is not None and title:
                         on_lookup(title)

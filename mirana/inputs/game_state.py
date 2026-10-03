@@ -211,8 +211,6 @@ def _health(s: Snapshot) -> str | None:
     # od modu v3 su to nabitia z maxima; v2 posielal percenta, tie sa nezobrazuju
     if s.get("heal_charges") is not None and s.get("heal_max"):
         extra.append(f"liečenie {s.get('heal_charges')} z {s.get('heal_max')}")
-    if s.get("grenade_charges") is not None and s.get("grenade_max"):
-        extra.append(f"granáty {s.get('grenade_charges')} z {s.get('grenade_max')}")
     return text + (f" ({', '.join(extra)})" if extra else "")
 
 
@@ -285,6 +283,8 @@ def _story(s: Snapshot) -> str | None:
 
 def _quest(s: Snapshot) -> str | None:
     if not s.quest:
+        if _text(s.get("quest")) in PSEUDO_QUESTS or s.get("quest_id") in PSEUDO_QUEST_IDS:
+            return "označené neobjavené miesto na mape (otáznik — quest alebo gig sa ukáže, keď tam Erik dôjde)"
         return None
     text = f"quest {s.quest}"
     if _text(s.get("objective")):

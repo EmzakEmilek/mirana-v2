@@ -21,6 +21,7 @@ class Turn:
     question: str = ""                       # Erikova otazka (alebo text udalosti) bez znacky
     context: dict[str, str] = field(default_factory=dict)  # znacka -> cely riadok ("[HRA] ...")
     image: str | None = None                 # snimka hry (base64 JPEG) pri "co je toto?"
+    looked: bool = False                     # model sa na hru pozrel sam (nastroj obrazovka)
     stt_sec: float = 0.0
     asked_at: float = 0.0                    # kedy sa otazka poslala modelu (faza "model" v HUD v2)
     prompt: str | None = None                # sprava pre model; None = model sa este nepytal

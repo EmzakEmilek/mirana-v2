@@ -65,7 +65,7 @@ class FakeBrain:
         return wav.decode("utf-8")
 
     def ask_stream(self, user_text, game_state_line, memory_messages, on_sentence=None, should_stop=None,
-                   on_lookup=None, image_b64=None):
+                   on_lookup=None, image_b64=None, on_look=None):
         self.asked.append(user_text)
         if self.fail:
             return Answer(ok=False, error="spojenie", model="fake")
@@ -76,7 +76,7 @@ class FakeBrain:
                 return Answer(ok=True, text=" ".join(said), sentences=said, stop_reason="interrupted", model="fake")
             said.append(sentence)
             on_sentence(sentence)
-        return Answer(ok=True, text=" ".join(said), sentences=said, stop_reason="end_turn", model="fake",
+        return Answer(ok=bool(said), text=" ".join(said), sentences=said, stop_reason="end_turn", model="fake",
                       cost=0.001, total_sec=0.1)
 
 

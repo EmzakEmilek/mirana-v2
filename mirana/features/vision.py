@@ -117,6 +117,8 @@ class VisionFeature(Feature):
     def __init__(self, app):
         super().__init__(app)
         self.vision = Vision(app.config)
+        if self.vision.enabled:
+            app.brain.screen = self.vision.capture  # nastroj obrazovka: model sa pozrie sam, ked potrebuje
 
     def context(self, turn) -> None:
         if not turn.from_erik or not self.vision.wants(turn.question):
