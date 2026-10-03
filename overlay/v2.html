@@ -397,10 +397,6 @@ function drawFrame(dt) {
   c.beginPath(); c.moveTo(W - 4 - 18, 4); c.lineTo(W - 4, 4); c.lineTo(W - 4, 22); c.closePath(); c.fill();
   c.fillRect(4, 34, 3, 56);
   c.fillRect(W - 60, H - 6, 52, 2);
-  // deliaca ciara medzi gulou a textom
-  c.strokeStyle = rgba(acc, .28); c.lineWidth = 1;
-  c.beginPath(); c.moveTo(254, 22); c.lineTo(254, H - 22); c.stroke();
-  for (let y = 30; y < H - 24; y += 24) { c.beginPath(); c.moveTo(254, y); c.lineTo(258, y); c.stroke(); }
   drawReticle(c, acc);
   if (flash > 0) { panelPath(c); c.fillStyle = `rgba(255,0,60,${flash * .35})`; c.fill(); flash = Math.max(0, flash - dt * 1.6); }
 }
@@ -433,16 +429,9 @@ function drawReticle(c, acc) {
     g.addColorStop(0, rgba(acc, .95)); g.addColorStop(.6, rgba(acc, .35)); g.addColorStop(1, rgba(acc, 0));
     c.fillStyle = g; c.beginPath(); c.arc(OX, OY, r, 0, 6.2832); c.fill();
   }
-  // rohy zameriavaca — pri pocuvani sa stiahnu
-  const s = 106 - O.contract * 12, L = 18;
-  c.strokeStyle = rgba(acc, .85); c.lineWidth = 1.6;
-  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-    const x = OX + sx * s, y = OY + sy * s;
-    c.beginPath(); c.moveTo(x, y + -sy * L); c.lineTo(x, y); c.lineTo(x + -sx * L, y); c.stroke();
-  }
-  // drobne popisky ako v optike
+  // drobny popisok sily signalu
+  const s = 106;
   c.font = '9px "Share Tech Mono", Consolas, monospace'; c.fillStyle = rgba(acc, .55);
-  c.fillText('MRN-01 // KIROSHI LINK', OX - s, OY - s - 6);
   c.textAlign = 'right';
   c.fillText(`SIG ${Math.round((S.state === 'offline' ? 0 : .62 + energy * .38) * 100)}%`, OX + s, OY + s + 12);
   c.textAlign = 'left';
