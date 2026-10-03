@@ -116,7 +116,7 @@ def test_mute_ignores_ptt_and_typed(mirana):
 
 
 def test_budget_reached_says_fallback(mirana, config):
-    mirana.budget.cap = 0.0
+    mirana.budget.exceeded = lambda: True        # vycerpany strop
     mirana._handle_typed("ahoj")
     pump(mirana, lambda: mirana.voice.played and idle(mirana))
     assert mirana.brain.asked == [] and len(mirana.memory) == 0  # fallback sa nepamata

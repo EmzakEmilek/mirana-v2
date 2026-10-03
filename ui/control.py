@@ -363,9 +363,13 @@ class App(ctk.CTk):
             self._write(ev["text"], "sys")
         elif kind == "budget":
             spent, cap = ev["spent"], ev["cap"]
-            self.budget_label.configure(text=f"Dnes minuté: ${spent:.2f} z ${cap:.2f}")
+            self.budget_label.configure(text=f"Dnes minuté: ${spent:.2f}" + (f" z ${cap:.2f}" if cap else ""))
             self.budget_bar.set(min(1.0, spent / cap) if cap else 0)
-            self.budget_bar.configure(progress_color=RED if spent >= cap * 0.8 else YELLOW)
+            self.budget_bar.configure(progress_color=RED if cap and spent >= cap * 0.8 else YELLOW)
+            if not cap:
+                self.budget_bar.pack_forget()   # bez stropu nie je k comu merat
+            elif not self.budget_bar.winfo_ismapped():
+                self.budget_bar.pack(fill="x", pady=(4, 0))
         elif kind == "game":
             if ev.get("live"):
                 line = (ev.get("line") or "").removeprefix("[HRA] ")

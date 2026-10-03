@@ -53,7 +53,7 @@ class Budget:
             return float(self._day.data["usd"])
 
     def exceeded(self) -> bool:
-        return self.spent >= self.cap
+        return self.cap > 0 and self.spent >= self.cap   # 0 = bez stropu
 
     def add(self, model: str, usage) -> float:
         """Zapocita odpoved, vrati jej cenu. Pri prekroceni stropu zaloguje varovanie."""
@@ -63,6 +63,6 @@ class Budget:
             spent = float(self._day.data["usd"]) + cost
             self._day.data["usd"] = round(spent, 5)
             self._day.save()
-        if spent >= self.cap:
+        if 0 < self.cap <= spent:
             logger.warning("DENNY STROP DOSIAHNUTY: $%.3f / $%.2f — dalsie otazky sa neposielaju", spent, self.cap)
         return cost

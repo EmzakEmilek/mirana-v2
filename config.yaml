@@ -20,7 +20,7 @@ stt:
   local_model: "medium"       # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
   local_device: "cuda"
   local_compute_type: "float16"   # float16 | int8_float16 | int8 — int8_float16 bol v hre pomalsi (test 2026-10-03: 3.0 vs 2.2 s)
-  local_beam_size: 3          # kolko variantov vety Whisper skusa: 5 = najpresnejsie, 1 = najrychlejsie (2026-10-03: z 5 na 3)
+  local_beam_size: 5          # kolko variantov vety Whisper skusa: 5 = najpresnejsie, 1 = najrychlejsie (2026-10-03: z 5 na 3)
   language: "sk"
   # Slovník pre lokálny Whisper (initial_prompt): naladí ho na anglické názvy z CP2077, ktoré inak
   # prepisuje foneticky ("na SETI" = Night City, "čudy" = Judy). Whisper berie max 224 tokenov, dlhsi zoznam ticho oreze zlava — pri pridavani nieco vyhod.
@@ -84,7 +84,7 @@ stt:
     - "braindance"
 
 llm:
-  model: "claude-sonnet-5-5"  # s wiki stačí Sonnet 5.5 low (najrýchlejší, ~0,4 c/otázka); claude-opus-5-5 = lepšie lore, ~2x drahší
+  model: "claude-opus-5-5"    # s wiki stačí Sonnet 5.5 low (najrýchlejší, ~0,4 c/otázka); claude-opus-5-5 = lepšie lore, ~2x drahší
   max_tokens: 2000            # strop pre premýšľanie + odpoveď dokopy (modely 5.5 premýšľajú vždy); platí sa len skutočne použité
   effort: "low"               # low = najrýchlejší hlas; Sonnet 5.5 má predvolene high, Opus 5.5 medium (test 2026-10-03: bez premýšľania nebol rýchlejší)
   fallbacks: "default"        # ked bezpecnostny filter odmietne (falosny poplach), server otazku zopakuje na inom modeli; null = vypnute
@@ -180,7 +180,7 @@ safety:
   blocked_words: ["negr", "nigger", "nigga", "cigos", "buzerant", "buzna", "faggot", "sieg heil"]
 
 limits:
-  daily_usd_cap: 5.00         # tvrdý denný strop na LLM (mirana/budget.py, stav v data/budget.json); po ňom Mirana povie budget_reached
+  daily_usd_cap: 0            # denný strop na LLM v $ (mirana/budget.py, stav v data/budget.json); 0 = bez stropu, okno len ukazuje útratu
   proactive_cooldown_sec: 300
   api_timeout_sec: 20
   tts_timeout_sec: 10         # Azure syntéza jednej vety; pri preteceni sa veta len vypise na HUD
