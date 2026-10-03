@@ -65,6 +65,7 @@ class LocalStt:
         from faster_whisper import WhisperModel
 
         self.language = stt_cfg["language"]
+        self.beam_size = int(stt_cfg.get("local_beam_size", 3))
         # Slovnik nazvov ako initial_prompt — Whisper ho berie ako predchadzajuci kontext a preferuje tieto tvary.
         vocabulary = stt_cfg.get("local_vocabulary") or []
         prefix = stt_cfg.get("local_prompt_prefix") or ""
@@ -93,12 +94,12 @@ class LocalStt:
 
     def transcribe(self, wav_bytes: bytes) -> str | None:
         try:
-            # beam_size 5 = default whispera; VAD odfiltruje ticho na zaciatku/konci PTT nahravky
+            # beam_size: kolko variantov vety skusa (5 = default whispera, v hre pomalsie); VAD odfiltruje ticho
             segments, _info = self.model.transcribe(
                 io.BytesIO(wav_bytes),
                 language=self.language,
                 initial_prompt=self.initial_prompt,
-                beam_size=5,
+                beam_size=self.beam_size,
                 vad_filter=True,
             )
             text = " ".join(segment.text.strip() for segment in segments)

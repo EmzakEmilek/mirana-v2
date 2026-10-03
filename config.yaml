@@ -19,7 +19,8 @@ stt:
   api_model: "whisper-1"
   local_model: "medium"       # large-v3-turbo prekladal vety do anglictiny (test 2026-09-21); medium je pre SK spolahlivejsi
   local_device: "cuda"
-  local_compute_type: "float16"
+  local_compute_type: "int8_float16"   # float16 | int8_float16 (rychlejsi, menej VRAM — hra ju vytazuje) | int8
+  local_beam_size: 3          # kolko variantov vety Whisper skusa: 5 = najpresnejsie, 1 = najrychlejsie (2026-10-03: z 5 na 3)
   language: "sk"
   # Slovník pre lokálny Whisper (initial_prompt): naladí ho na anglické názvy z CP2077, ktoré inak
   # prepisuje foneticky ("na SETI" = Night City, "čudy" = Judy). Whisper berie max 224 tokenov, dlhsi zoznam ticho oreze zlava — pri pridavani nieco vyhod.

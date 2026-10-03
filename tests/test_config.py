@@ -1,5 +1,6 @@
 """Schema nastaveni, nacitanie configu, uprava pamate z okna, aktualizacia modu, diagnostika, okno Nastavenia."""
 
+import gc
 import io
 import json
 
@@ -124,6 +125,7 @@ def tk_app():
     app.withdraw()
     yield app
     app.destroy()
+    gc.collect()
 
 
 @pytest.fixture
@@ -134,6 +136,9 @@ def window(tk_app):
     tk_app.update()
     yield w
     w.destroy()
+    # Tk objekty (pisma) upratat hned v hlavnom vlakne — inak ich GC zmaze neskor z vlakna Mirany
+    # v inom teste a tkinter tam zamrzne (caka na hlavne vlakno)
+    gc.collect()
 
 
 def test_settings_window_roundtrip_without_changes(window):
