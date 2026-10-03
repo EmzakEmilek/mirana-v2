@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<title>MIRANA HUD v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  /* MIRANA HUD v2 — "Friday + Kiroshi". Zdroj v OBS 700x250 (vlavo hore); pri inej velkosti sa cely
+     panel zmensi/zvacsi a ostane prilepeny vlavo hore. Pozadie je priehladne (OBS), tmave len v prehliadaci.
+     Vrstvy: #frame (2D: telo panela, zameriavac, spektrum, policia), #orb (WebGL: gula z castic),
+     DOM (text), #fx (2D: EKG pri smrti, rámik skenu, razova vlna). */
+  :root {
+    --yellow: #FCEE0A; --cyan: #00F0FF; --red: #FF003C; --purple: #B98CFF; --white: #EEEBE2;
+    --dim: rgba(238,235,226,.46); --faint: rgba(238,235,226,.2);
+    --acc: var(--yellow); --acc-glow: rgba(252,238,10,.5);
+    --ui: 'Rajdhani', 'Segoe UI', sans-serif;
+    --text: 'Chakra Petch', 'Segoe UI', sans-serif;
+    --mono: 'Share Tech Mono', Consolas, monospace;
+  }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  html.preview, html.preview body { background: #0d0f14; }
+  #stage { position: absolute; left: 0; top: 0; width: 700px; height: 250px; transform-origin: 0 0; color: var(--white); }
+  #stage.off { --acc: #8a8a93; --acc-glow: rgba(138,138,147,.25); }
+  #stage.muted { --acc: var(--red); --acc-glow: rgba(255,0,60,.45); }
+  #stage.listening { --acc: var(--cyan); --acc-glow: rgba(0,240,255,.5); }
+  #stage.combat, #stage.critical { --acc: var(--red); --acc-glow: rgba(255,0,60,.5); }
+  canvas { position: absolute; display: block; pointer-events: none; }
+  #frame, #fx { left: 0; top: 0; width: 700px; height: 250px; }
+  #orb { left: 10px; top: 5px; width: 240px; height: 240px; }
+  #fx { z-index: 5; }
+
+  /* --- pravy modul ---------------------------------------------------------------------------------- */
+  .head { position: absolute; left: 268px; top: 13px; width: 416px; height: 26px; display: flex; align-items: center; gap: 12px; z-index: 2; }
+  .brand { font: 700 21px/1 var(--ui); letter-spacing: 6px; color: var(--acc); text-shadow: 0 0 14px var(--acc-glow); transition: color .35s; }
+  .chip { font: 600 11px/1 var(--ui); letter-spacing: 3px; color: var(--acc); display: inline-flex; align-items: center; gap: 7px; opacity: .9; transition: color .35s; }
+  .chip i { width: 7px; height: 7px; background: currentColor; display: inline-block; }
+  #stage.listening .chip i { animation: blink 1s infinite; }
+  #stage.processing .chip i { animation: blink .4s steps(1) infinite; }
+  #stage.speaking .chip i { animation: blink .28s infinite; }
+  @keyframes blink { 50% { opacity: .15; } }
+  .stats { margin-left: auto; display: inline-flex; gap: 14px; font: 700 15px/1 var(--ui); letter-spacing: 2px; }
+  .stats .wanted { color: var(--red); animation: police .5s steps(1) infinite; }
+  @keyframes police { 50% { color: #3d7bff; text-shadow: 0 0 10px #3d7bff; } 0% { text-shadow: 0 0 10px var(--red); } }
+  .stats .deaths { color: rgba(238,235,226,.7); }
+  .stats .deaths.pop { animation: pop .7s ease-out; }
+  @keyframes pop { 0% { transform: scale(1.8); color: var(--red); } 100% { transform: scale(1); } }
+
+  .sub { position: absolute; left: 268px; top: 45px; width: 416px; height: 18px; overflow: hidden; z-index: 2;
+    font: 600 11px/18px var(--ui); letter-spacing: 1.2px; text-transform: uppercase; white-space: nowrap; }
+  .pipe { display: flex; align-items: center; gap: 5px; transition: opacity .5s; }
+  .pipe.dim { opacity: .45; }
+  .st { position: relative; display: inline-flex; gap: 5px; align-items: baseline; color: var(--faint); padding-bottom: 3px; }
+  .st::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: currentColor; opacity: .5; }
+  .st.active { color: var(--acc); }
+  .st.active::after { opacity: 1; background: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px); background-size: 20px 2px; animation: flow .5s linear infinite; }
+  @keyframes flow { to { background-position: 20px 0; } }
+  .st.done { color: var(--white); }
+  .st.done::after { background: var(--acc); opacity: .8; }
+  .st.fail { color: var(--red); }
+  .st b { font: 400 11px var(--mono); letter-spacing: 0; color: var(--dim); text-transform: none; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sep { color: var(--faint); }
+  .toast { display: inline-flex; align-items: center; gap: 8px; color: var(--tc, var(--cyan)); animation: toastIn .35s steps(3); }
+  .toast .ic { font-family: var(--mono); }
+  .toast .meta { color: var(--dim); font: 400 11px var(--mono); letter-spacing: .5px; text-transform: none; }
+  .toast .badge { font: 700 10px/1 var(--ui); letter-spacing: 1.5px; padding: 2px 5px; color: #0b0b0e; background: var(--tc); }
+  @keyframes toastIn { 0% { clip-path: inset(0 100% 0 0); } 100% { clip-path: inset(0 0 0 0); } }
+
+  .text { position: absolute; left: 268px; top: 70px; width: 416px; height: 134px; overflow: hidden; z-index: 2;
+    mask-image: linear-gradient(180deg, transparent 0, #000 8px, #000 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 8px, #000 100%); }
+  .answer { font: 500 17.5px/26px var(--text); color: var(--yellow); text-shadow: 0 0 14px rgba(252,238,10,.22);
+    transition: opacity 1.2s, filter 1.2s, transform 1.2s; overflow-wrap: anywhere; }
+  .answer.typing::after { content: "▌"; color: var(--yellow); animation: blink .8s steps(1) infinite; }
+  .answer.cut { opacity: .5; }
+  .answer.fade { opacity: 0; filter: blur(4px); transform: translateY(-6px); }
+  .answer .name { color: var(--cyan); text-shadow: 0 0 12px rgba(0,240,255,.35); }
+  .answer .nick { color: var(--purple); text-shadow: 0 0 12px rgba(185,140,255,.45); }
+  .answer .swear { animation: swear .75s steps(1); }
+  @keyframes swear {
+    0%  { color: var(--red); text-shadow: -2px 0 var(--cyan), 2px 0 var(--red); }
+    15% { color: #fff; transform: translateX(2px); text-shadow: 2px 0 var(--red), -2px 0 var(--cyan); }
+    30% { color: var(--red); transform: translateX(-1px); text-shadow: -3px 0 var(--red); }
+    50% { color: var(--red); text-shadow: 0 0 10px var(--red); }
+    100% { color: inherit; }
+  }
+  .answer .swear { display: inline-block; }
+  .line { font: 400 16px/26px var(--text); }
+  .line.filler { color: rgba(238,235,226,.72); font-style: italic; }
+  .line.system { color: var(--cyan); }
+
+  .tele { position: absolute; left: 268px; top: 216px; width: 416px; height: 18px; display: flex; gap: 10px; align-items: baseline; z-index: 2;
+    font: 600 12px/18px var(--ui); letter-spacing: 1.8px; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+  .tele .loc { color: var(--cyan); overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+  .tele .quest { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .tele .right { margin-left: auto; font: 400 11.5px var(--mono); letter-spacing: .5px; color: var(--dim); text-transform: none; display: inline-flex; gap: 10px; }
+  .tele .money { color: var(--white); }
+  .tele .money.up { color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+
+  /* --- karta momentu (smrt, level, quest, stvrt, policia, sken) — cez oblast odpovede ----------------- */
+  .card { position: absolute; left: 262px; top: 66px; width: 426px; height: 142px; box-sizing: border-box; z-index: 4;
+    padding: 12px 18px 12px 20px; background: rgba(7,9,13,.94); --c: var(--yellow);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+    display: flex; flex-direction: column; justify-content: center; gap: 5px; opacity: 0; pointer-events: none; }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c); box-shadow: 0 0 14px var(--c); }
+  .card.show { opacity: 1; animation: cardIn .3s steps(4); }
+  .card.hide { opacity: 0; transition: opacity .35s, transform .35s; transform: translateX(10px); }
+  @keyframes cardIn {
+    0% { clip-path: inset(0 0 70% 0); transform: translateX(-8px); }
+    40% { clip-path: inset(45% 0 0 0); transform: translateX(6px); }
+    70% { clip-path: inset(0 0 20% 0); transform: translateX(-2px); }
+    100% { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); transform: none; }
+  }
+  .card .label { font: 700 11px/1 var(--ui); letter-spacing: 3.5px; color: var(--c); text-transform: uppercase; }
+  .card .title { font: 700 36px/1.05 var(--ui); letter-spacing: 4px; color: #fff; text-transform: uppercase;
+    text-shadow: 0 0 18px var(--cg, rgba(252,238,10,.6)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .detail { font: 500 15px/1.3 var(--text); color: rgba(238,235,226,.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .meta { display: flex; gap: 10px; align-items: center; font: 400 12px var(--mono); color: var(--dim); min-height: 16px; }
+  .card .tag { font: 700 11px/1 var(--ui); letter-spacing: 2px; padding: 3px 7px; color: #0b0b0e; background: var(--c); text-transform: uppercase; }
+  .card .hp { width: 120px; height: 5px; background: rgba(255,255,255,.12); position: relative; }
+  .card .hp i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); box-shadow: 0 0 8px var(--c); }
+  .card .reward { font: 700 20px/1 var(--ui); letter-spacing: 2px; color: var(--cyan); text-shadow: 0 0 12px var(--cyan); }
+
+  #stage.glitch { animation: glitch .26s steps(3); }
+  @keyframes glitch {
+    0% { transform: var(--fit) translate(0, 0); filter: none; }
+    33% { transform: var(--fit) translate(-3px, 1px); filter: hue-rotate(25deg) saturate(2); }
+    66% { transform: var(--fit) translate(3px, -1px); filter: brightness(1.4); }
+    100% { transform: var(--fit); filter: none; }
+  }
+  #stage.dead { filter: grayscale(.85) brightness(.85); transition: filter .3s; }
+  @media (prefers-reduced-motion: reduce) { #stage.glitch { animation: none; } }
+</style>
+</head>
+<body>
+<div id="stage" class="off">
+  <canvas id="frame"></canvas>
+  <canvas id="orb"></canvas>
+  <div class="head">
+    <span class="brand">MIRANA</span>
+    <span class="chip"><i></i><span id="chip">OFFLINE</span></span>
+    <span class="stats" id="stats"></span>
+  </div>
+  <div class="sub" id="sub"></div>
+  <div class="text" id="textbox"><div class="answer" id="answer"></div></div>
+  <div class="tele" id="tele"></div>
+  <div class="card" id="card"></div>
+  <canvas id="fx"></canvas>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================================================
+   Udalosti z mirana/outputs/overlay.py (typy a polia: mirana/protocol.py), JSON cez WebSocket /ws.
+   ?demo        — ukazka vsetkych efektov bez Mirany (na nastavenie v OBS)
+   ?demo=scena  — jedna scena: idle listening processing speaking death level quest district radio scan
+                  viewer wanted critical muted offline
+   ?hud=1/2     — vynuti verziu HUD-u (inak podla Nastavenia -> HUD)
+   ===================================================================================================== */
+const VERSION = 'v2';
+const W = 700, H = 250, OX = 130, OY = 125;           // velkost panela, stred gule
+const params = new URLSearchParams(location.search);
+const DEMO = params.has('demo') ? (params.get('demo') || 'all') : null;
+if (!window.obsstudio) document.documentElement.classList.add('preview');
+
+const $ = (id) => document.getElementById(id);
+const stage = $('stage'), answerEl = $('answer'), textbox = $('textbox'), cardEl = $('card'), subEl = $('sub');
+const frame = $('frame'), fxCanvas = $('fx'), orbCanvas = $('orb');
+const fctx = frame.getContext('2d'), xctx = fxCanvas.getContext('2d');
+
+const LABELS = { offline: 'OFFLINE', idle: 'STANDBY', listening: 'POČÚVAM', processing: 'SPRACOVÁVAM', speaking: 'HOVORÍ', muted: 'STLMENÁ' };
+const RGB = { yellow: [252, 238, 10], cyan: [0, 240, 255], red: [255, 0, 60], grey: [138, 138, 147], purple: [185, 140, 255], blue: [61, 123, 255] };
+
+/* ---------- stav ---------- */
+const S = { state: 'offline', combat: false, critical: false, wanted: 0, deaths: 0, money: null,
+            location: '', quest: '', time: '', weather: '' };
+let now = performance.now() / 1000;
+
+/* ---------- velkost: cely panel sa zmesti do zdroja, prilepeny vlavo hore ---------- */
+let K = 1;                                             // pixely platna na 1 jednotku panela
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / H) || 1;
+  stage.style.setProperty('--fit', `scale(${s})`);
+  stage.style.transform = `scale(${s})`;
+  K = Math.max(1, Math.min(3, s * (window.devicePixelRatio || 1)));
+  for (const c of [frame, fxCanvas]) { c.width = Math.round(W * K); c.height = Math.round(H * K); }
+  orbCanvas.width = orbCanvas.height = Math.round(240 * K);
+  if (gl) gl.viewport(0, 0, orbCanvas.width, orbCanvas.height);
+}
+addEventListener('resize', fit);
+
+/* ---------- hlas: hlasitost a 12 pasiem (s automatickym zosilnenim kazdeho pasma) ---------- */
+const NB = 12;
+const raw = new Float32Array(NB), disp = new Float32Array(NB), peak = new Float32Array(NB).fill(.35);
+let levelTarget = 0, level = 0, energy = 0;
+function onLevel(v, bands) {
+  levelTarget = v || 0;
+  for (let i = 0; i < NB; i++) raw[i] = bands ? bands[i] || 0 : 0;
+}
+function updateAudio(dt) {
+  const live = S.state === 'speaking' || S.state === 'listening';
+  const lt = live ? levelTarget : 0;
+  level += (lt - level) * (lt > level ? .5 : .16);
+  energy = Math.max(level, energy - dt * .9);
+  for (let i = 0; i < NB; i++) {
+    const r = live ? raw[i] : 0;
+    peak[i] = Math.max(peak[i] * (1 - dt * .12), r, .3);
+    const n = Math.min(1, r / peak[i]);
+    disp[i] += (n - disp[i]) * (n > disp[i] ? .55 : .14);
+  }
+}
+const bandAt = (x) => {                                // 0..1 -> plynule medzi pasmami
+  const f = Math.max(0, Math.min(.999, x)) * (NB - 1), i = Math.floor(f), t = f - i;
+  return disp[i] * (1 - t) + disp[Math.min(NB - 1, i + 1)] * t;
+};
+
+/* ================================== GULA (WebGL) ================================== */
+const VS = `
+precision highp float;
+attribute vec3 aDir; attribute float aSeed; attribute float aBand; attribute float aOrbit;
+uniform float uTime, uEnergy, uContract, uSpike, uOrbit, uCollapse, uScatter, uBurst, uHeart, uFlat, uScale, uSize, uDim, uGain;
+uniform float uBands[12];
+uniform mat3 uRot;
+uniform vec3 uColA, uColB;
+varying vec3 vCol; varying float vA;
+float band(float x) {
+  float f = clamp(x, 0.0, 0.999) * 11.0; int i = int(floor(f)); float t = fract(f);
+  float a = 0.0; float b = 0.0;
+  for (int k = 0; k < 12; k++) { if (k == i) a = uBands[k]; if (k == i + 1) b = uBands[k]; }
+  if (i >= 11) b = a;
+  return mix(a, b, t);
+}
+float n3(vec3 p) { return sin(p.x * 1.7 + uTime * .9) * sin(p.y * 2.3 - uTime * .7) * sin(p.z * 1.9 + uTime * .5); }
+void main() {
+  vec3 d = aDir;
+  float b = band(aBand);
+  float breath = sin(uTime * 1.3 + aSeed * 6.2831) * .012;
+  float wave = sin(d.y * 9.0 - uTime * 6.0 + aSeed * 2.0) * b * .09;
+  float r = 1.0 + breath + n3(d * 2.6) * (.035 + .17 * uSpike) + b * .30 + wave + uHeart * .11;
+  r *= mix(1.0, .80, uContract);
+  r *= 1.0 + uBurst * (.5 + .35 * sin(aSeed * 40.0));
+  r *= mix(1.0, .07, uCollapse);
+  r *= 1.0 + uScatter * (1.4 + 3.2 * fract(aSeed * 91.7));
+  vec3 p = d * r;
+  p.y *= mix(1.0, .06, uFlat);
+  if (aOrbit > .5) {
+    float ang = aSeed * 43.98 + uTime * (1.1 + fract(aSeed * 13.0) * 1.6);
+    float rr = 1.34 + fract(aSeed * 7.3) * .2;
+    float ta = floor(fract(aSeed * 3.1) * 3.0) * 1.0 - 1.0;
+    vec3 rp = vec3(cos(ang) * rr, 0.0, sin(ang) * rr);
+    rp = vec3(rp.x, rp.z * sin(ta * .9), rp.z * cos(ta * .9));
+    p = mix(p, rp, uOrbit);
+  }
+  p = uRot * p;
+  float persp = 2.6 / (2.6 - p.z * .55);
+  gl_Position = vec4(p.xy * persp * uScale, 0.0, 1.0);
+  gl_PointSize = uSize * persp * (.8 + b * 1.1 + uBurst * .9 + aOrbit * uOrbit * .4);
+  float front = smoothstep(-1.2, 1.2, p.z);
+  float rim = 1.0 - abs(p.z) / max(length(p), .001);           // okraj gule svieti viac (hologram)
+  vA = (.1 + .9 * front) * (.35 + .95 * rim * rim) * (.55 + uEnergy * .6 + b * .6) * uDim * uGain
+       * (1.0 - uCollapse * .5) * (1.0 - uScatter * .85);
+  vec3 col = mix(uColA, uColB, clamp(b * 1.3 + fract(aSeed * 5.0) * .22 + aOrbit * uOrbit * .6, 0.0, 1.0));
+  vCol = mix(col, vec3(1.0), clamp(b * .55 + step(.985, fract(aSeed * 17.0)) * .7, 0.0, 1.0));
+}`;
+const FS = `
+precision mediump float;
+varying vec3 vCol; varying float vA;
+void main() {
+  vec2 c = gl_PointCoord - .5; float d = length(c);
+  if (d > .5) discard;
+  float a = exp(-d * d * 22.0);
+  gl_FragColor = vec4(vCol * a * vA, a * vA);
+}`;
+let gl = null, prog = null, U = {};
+const NPART = 2200, NORBIT = 360;
+function initGL() {
+  try {
+    gl = orbCanvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false });
+    if (!gl) throw new Error('bez WebGL');
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    const data = new Float32Array((NPART + NORBIT) * 6);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < NPART + NORBIT; i++) {
+      let x, y, z;
+      if (i < NPART) { y = 1 - (i + .5) / NPART * 2; const r = Math.sqrt(1 - y * y), ph = i * golden; x = Math.cos(ph) * r; z = Math.sin(ph) * r; }
+      else { const u = Math.random() * 2 - 1, ph = Math.random() * 6.2832, r = Math.sqrt(1 - u * u); x = Math.cos(ph) * r; y = u; z = Math.sin(ph) * r; }
+      const o = i * 6;
+      data[o] = x; data[o + 1] = y; data[o + 2] = z; data[o + 3] = Math.random();
+      data[o + 4] = Math.min(.999, Math.abs(y) * .92 + Math.random() * .08); data[o + 5] = i >= NPART ? 1 : 0;
+    }
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    const attr = (name, size, off) => { const l = gl.getAttribLocation(prog, name); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 24, off * 4); };
+    attr('aDir', 3, 0); attr('aSeed', 1, 3); attr('aBand', 1, 4); attr('aOrbit', 1, 5);
+    for (const n of ['uTime', 'uEnergy', 'uContract', 'uSpike', 'uOrbit', 'uCollapse', 'uScatter', 'uBurst', 'uHeart', 'uFlat',
+                     'uScale', 'uSize', 'uDim', 'uGain', 'uBands', 'uRot', 'uColA', 'uColB']) U[n] = gl.getUniformLocation(prog, n);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.clearColor(0, 0, 0, 0);
+  } catch (e) {
+    console.warn('HUD v2: gula bez WebGL —', e.message);
+    gl = null; orbCanvas.style.display = 'none';
+  }
+}
+
+/* parametre gule plynulo smeruju k cielom podla stavu */
+const O = { contract: 0, spike: 0, orbit: 0, flat: 0, dim: .35, collapse: 0, scatter: 0, burst: 0, heart: 0,
+            colA: [.5, .5, .55], colB: [.6, .6, .65], rot: 0, speed: .2 };
+const COLORS = {
+  offline: [[.32, .32, .36], [.45, .45, .5]], idle: [[.99, .93, .04], [1, .97, .78]], listening: [[0, .94, 1], [.82, 1, 1]],
+  processing: [[.99, .93, .04], [0, .94, 1]], speaking: [[.99, .93, .04], [1, .72, .3]], muted: [[.55, .2, .26], [.6, .45, .48]],
+  danger: [[1, 0, .24], [1, .86, .1]],
+};
+let deathT = -99, burstT = -99;
+function heartbeat(t) { const p = (t * 1.1) % 1; return p < .08 ? 1 : p < .16 ? .25 : p < .26 ? .75 : 0; }
+function updateOrb(dt) {
+  const st = S.state, k = Math.min(1, dt * 4);
+  const want = {
+    contract: st === 'listening' ? 1 : 0, spike: S.combat || S.critical ? 1 : 0, orbit: st === 'processing' ? 1 : 0,
+    flat: st === 'muted' ? 1 : 0, dim: st === 'offline' ? .35 : st === 'muted' ? .55 : st === 'idle' ? .92 : 1,
+    speed: st === 'processing' ? 1.4 : st === 'speaking' ? .45 + energy : st === 'listening' ? .3 : .16,
+  };
+  for (const key in want) O[key] += (want[key] - O[key]) * k;
+  const cols = (S.combat || S.critical) && st !== 'offline' && st !== 'muted' ? COLORS.danger : COLORS[st] || COLORS.offline;
+  for (let i = 0; i < 3; i++) { O.colA[i] += (cols[0][i] - O.colA[i]) * k; O.colB[i] += (cols[1][i] - O.colB[i]) * k; }
+  O.rot += dt * O.speed;
+  O.heart = S.critical ? heartbeat(now) : O.heart * .9;
+  const bt = now - burstT;                             // level up: razovy vybuch a navrat
+  O.burst = bt < 0 ? 0 : bt < .15 ? bt / .15 : Math.max(0, 1 - (bt - .15) / 1.1);
+  const t = now - deathT;                              // smrt: zrutenie, ticho, vybuch, poskladanie
+  if (t >= 0 && t < 4.2) {
+    O.collapse = t < .45 ? t / .45 : t < 2.3 ? 1 : Math.max(0, 1 - (t - 2.3) / .3);
+    O.scatter = t < 2.3 ? 0 : t < 2.6 ? (t - 2.3) / .3 : Math.max(0, 1 - (t - 2.6) / 1.4);
+  } else { O.collapse = 0; O.scatter = 0; }
+}
+function rotMat(yaw, pitch) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return new Float32Array([cy, sp * sy, -cp * sy, 0, cp, sp, sy, -sp * cy, cp * cy]);
+}
+const bandU = new Float32Array(NB);
+function drawOrb() {
+  if (!gl) return;
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  for (let i = 0; i < NB; i++) bandU[i] = disp[i];
+  gl.uniform1f(U.uTime, now); gl.uniform1f(U.uEnergy, energy);
+  gl.uniform1f(U.uContract, O.contract); gl.uniform1f(U.uSpike, O.spike); gl.uniform1f(U.uOrbit, O.orbit);
+  gl.uniform1f(U.uCollapse, O.collapse); gl.uniform1f(U.uScatter, O.scatter); gl.uniform1f(U.uBurst, O.burst);
+  gl.uniform1f(U.uHeart, O.heart); gl.uniform1f(U.uFlat, O.flat); gl.uniform1f(U.uDim, O.dim);
+  gl.uniform1f(U.uScale, .5); gl.uniform1f(U.uSize, 2.6 * K); gl.uniform1f(U.uGain, 1.0);
+  gl.uniform1fv(U.uBands, bandU);
+  gl.uniformMatrix3fv(U.uRot, false, rotMat(O.rot, .38 + Math.sin(now * .4) * .08));
+  gl.uniform3fv(U.uColA, O.colA); gl.uniform3fv(U.uColB, O.colB);
+  gl.drawArrays(gl.POINTS, 0, NPART + NORBIT);
+}
+
+/* ================================== RAM PANELA A ZAMERIAVAC (2D) ================================== */
+function accRGB() {
+  if (S.state === 'offline') return RGB.grey;
+  if (S.combat || S.critical || S.state === 'muted') return RGB.red;
+  return S.state === 'listening' ? RGB.cyan : RGB.yellow;
+}
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let bodyAlpha = .82, flash = 0;
+function panelPath(c) {
+  const x0 = 4, y0 = 4, x1 = W - 4, y1 = H - 4, k = 18;
+  c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 - k, y0); c.lineTo(x1, y0 + k); c.lineTo(x1, y1);
+  c.lineTo(x0 + k, y1); c.lineTo(x0, y1 - k); c.closePath();
+}
+let scanPattern = null;
+function drawFrame(dt) {
+  const c = fctx, acc = accRGB();
+  c.setTransform(K, 0, 0, K, 0, 0);
+  c.clearRect(0, 0, W, H);
+  const idleish = S.state === 'idle' && !answerEl.textContent;
+  bodyAlpha += ((S.state === 'offline' ? .5 : idleish ? .62 : .84) - bodyAlpha) * Math.min(1, dt * 3);
+  panelPath(c);
+  c.fillStyle = `rgba(5,7,11,${bodyAlpha})`; c.fill();
+  if (!scanPattern) {                                  // jemne riadkovanie ako na displeji
+    const p = document.createElement('canvas'); p.width = 4; p.height = 3;
+    const pc = p.getContext('2d'); pc.fillStyle = 'rgba(255,255,255,.035)'; pc.fillRect(0, 0, 4, 1);
+    scanPattern = c.createPattern(p, 'repeat');
+  }
+  c.fillStyle = scanPattern; c.fill();
+  // ziara za gulou
+  const glow = c.createRadialGradient(OX, OY, 0, OX, OY, 118);
+  glow.addColorStop(0, rgba(acc, .10 + energy * .14)); glow.addColorStop(1, rgba(acc, 0));
+  c.fillStyle = glow; c.fillRect(OX - 120, OY - 120, 240, 240);
+  // okraj: policia (cervena/modra), kriticke HP (tep), inak farba stavu
+  let edge = rgba(acc, .55), blur = 0;
+  if (S.wanted > 0) { const on = Math.floor(now * 2) % 2; edge = on ? 'rgba(61,123,255,.95)' : 'rgba(255,0,60,.95)'; blur = 16; }
+  else if (S.critical) { const h = heartbeat(now); edge = `rgba(255,0,60,${.45 + .55 * h})`; blur = 6 + 18 * h; }
+  c.save(); c.shadowColor = edge; c.shadowBlur = blur; c.strokeStyle = edge; c.lineWidth = 1.2; panelPath(c); c.stroke(); c.restore();
+  // rohove stitky a lista
+  c.fillStyle = rgba(acc, .9);
+  c.beginPath(); c.moveTo(W - 4 - 18, 4); c.lineTo(W - 4, 4); c.lineTo(W - 4, 22); c.closePath(); c.fill();
+  c.fillRect(4, 34, 3, 56);
+  c.fillRect(W - 60, H - 6, 52, 2);
+  // deliaca ciara medzi gulou a textom
+  c.strokeStyle = rgba(acc, .28); c.lineWidth = 1;
+  c.beginPath(); c.moveTo(254, 22); c.lineTo(254, H - 22); c.stroke();
+  for (let y = 30; y < H - 24; y += 24) { c.beginPath(); c.moveTo(254, y); c.lineTo(258, y); c.stroke(); }
+  drawReticle(c, acc);
+  if (flash > 0) { panelPath(c); c.fillStyle = `rgba(255,0,60,${flash * .35})`; c.fill(); flash = Math.max(0, flash - dt * 1.6); }
+}
+function drawReticle(c, acc) {
+  const st = S.state;
+  // spektrum: 72 ciarok okolo gule (zrkadlovo), dlzka podla pasiem
+  const N = 72, r0 = 92;
+  c.lineWidth = 1.6;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * Math.PI * 2 - Math.PI / 2;
+    const m = Math.abs(((i / N) * 2 + .5) % 2 - 1);  // 0 hore/dole .. 1 po bokoch -> nizke pasma po bokoch
+    const v = bandAt(1 - m);
+    const len = 2 + v * 20 + (st === 'processing' ? 2.5 * Math.max(0, Math.sin(now * 8 - i * .35)) : 0);
+    c.strokeStyle = rgba(acc, .22 + v * .7);
+    c.beginPath(); c.moveTo(OX + Math.cos(a) * r0, OY + Math.sin(a) * r0);
+    c.lineTo(OX + Math.cos(a) * (r0 + len), OY + Math.sin(a) * (r0 + len)); c.stroke();
+  }
+  // tenky kruh a rotujuce segmenty
+  c.strokeStyle = rgba(acc, .25); c.lineWidth = 1;
+  c.beginPath(); c.arc(OX, OY, 86, 0, 6.2832); c.stroke();
+  const spin = O.rot * 1.7;
+  c.strokeStyle = rgba(acc, .6); c.lineWidth = 2;
+  for (let k = 0; k < 3; k++) { const a = spin + k * 2.094; c.beginPath(); c.arc(OX, OY, 116, a, a + .55); c.stroke(); }
+  if (st === 'processing') {                           // skenovaci oblúk
+    c.save(); c.shadowColor = rgba(acc, .9); c.shadowBlur = 12; c.strokeStyle = rgba(acc, .95); c.lineWidth = 2.5;
+    const a = now * 3.6; c.beginPath(); c.arc(OX, OY, 110, a, a + 1.0); c.stroke(); c.restore();
+  }
+  if (!gl) {                                           // bez WebGL: aspon svietiace jadro
+    const r = 34 + energy * 22 + O.heart * 8, g = c.createRadialGradient(OX, OY, 0, OX, OY, r);
+    g.addColorStop(0, rgba(acc, .95)); g.addColorStop(.6, rgba(acc, .35)); g.addColorStop(1, rgba(acc, 0));
+    c.fillStyle = g; c.beginPath(); c.arc(OX, OY, r, 0, 6.2832); c.fill();
+  }
+  // rohy zameriavaca — pri pocuvani sa stiahnu
+  const s = 106 - O.contract * 12, L = 18;
+  c.strokeStyle = rgba(acc, .85); c.lineWidth = 1.6;
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const x = OX + sx * s, y = OY + sy * s;
+    c.beginPath(); c.moveTo(x, y + -sy * L); c.lineTo(x, y); c.lineTo(x + -sx * L, y); c.stroke();
+  }
+  // drobne popisky ako v optike
+  c.font = '9px "Share Tech Mono", Consolas, monospace'; c.fillStyle = rgba(acc, .55);
+  c.fillText('MRN-01 // KIROSHI LINK', OX - s, OY - s - 6);
+  c.textAlign = 'right';
+  c.fillText(`SIG ${Math.round((S.state === 'offline' ? 0 : .62 + energy * .38) * 100)}%`, OX + s, OY + s + 12);
+  c.textAlign = 'left';
+}
+
+/* ================================== EFEKTY NAVRCHU (2D) ================================== */
+const fxList = [];
+function drawFx(dt) {
+  const c = xctx;
+  c.setTransform(K, 0, 0, K, 0, 0);
+  c.clearRect(0, 0, W, H);
+  for (let i = fxList.length - 1; i >= 0; i--) {
+    const f = fxList[i], t = now - f.t0;
+    if (t > f.dur) { fxList.splice(i, 1); continue; }
+    if (f.kind === 'ekg') drawEkg(c, t);
+    else if (f.kind === 'shock') {
+      const k = t / f.dur; c.strokeStyle = rgba(f.color, (1 - k) * .9); c.lineWidth = 2.5 * (1 - k) + .5;
+      c.beginPath(); c.arc(OX, OY, 70 + k * 90, 0, 6.2832); c.stroke();
+    } else if (f.kind === 'brackets') drawScanBrackets(c, t, f);
+  }
+}
+function drawEkg(c, t) {
+  // ciara srdca cez cely panel: 3 udery, potom rovna ciara (flatline) a dozneje
+  const x0 = 18, x1 = W - 18, y = 150, span = x1 - x0, head = Math.min(1, t / 1.6) * span;
+  const alpha = t < 2.4 ? 1 : Math.max(0, 1 - (t - 2.4) / 1.2);
+  c.save(); c.shadowColor = 'rgba(255,0,60,.9)'; c.shadowBlur = 10; c.strokeStyle = `rgba(255,0,60,${alpha})`; c.lineWidth = 2;
+  c.beginPath();
+  for (let x = 0; x <= head; x += 2) {
+    const u = x / span; let dy = 0;
+    if (u < .62) {
+      const beat = (u * 3 / .62) % 1;
+      dy = beat > .42 && beat < .46 ? -34 : beat > .46 && beat < .5 ? 26 : beat > .5 && beat < .53 ? -8 : beat > .3 && beat < .38 ? -4 : 0;
+    }
+    x ? c.lineTo(x0 + x, y + dy) : c.moveTo(x0 + x, y + dy);
+  }
+  c.stroke();
+  if (head < span) { c.fillStyle = `rgba(255,255,255,${alpha})`; c.beginPath(); c.arc(x0 + head, y, 2.5, 0, 6.2832); c.fill(); }
+  c.restore();
+}
+function drawScanBrackets(c, t, f) {
+  // rámik skenu sa zo sirsieho stiahne na kartu a cez kartu prejde skenovacia ciara
+  const k = Math.min(1, t / .45), grow = (1 - k) * 18;
+  const x0 = 262 - grow, y0 = 66 - grow, x1 = 688 + grow, y1 = 208 + grow, L = 16;
+  const a = t > f.dur - .4 ? (f.dur - t) / .4 : 1;
+  c.strokeStyle = rgba(f.color, .95 * a); c.lineWidth = 2;
+  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) {
+    c.beginPath(); c.moveTo(x, y + sy * L); c.lineTo(x, y); c.lineTo(x + sx * L, y); c.stroke();
+  }
+  if (t < 1.4) {
+    const yy = 66 + ((t / 1.4) % 1) * 142;
+    const g = c.createLinearGradient(0, yy - 14, 0, yy);
+    g.addColorStop(0, rgba(f.color, 0)); g.addColorStop(1, rgba(f.color, .35 * a));
+    c.fillStyle = g; c.fillRect(262, yy - 14, 426, 14);
+    c.fillStyle = rgba(f.color, .9 * a); c.fillRect(262, yy, 426, 1.5);
+  }
+}
+function fx(kind, dur, extra) { fxList.push({ kind, dur, t0: now, ...(extra || {}) }); }
+
+/* ================================== TEXT ODPOVEDE ================================== */
+// Odpoved prichadza po vetach; kazda veta ma zvyraznene useky (marks). Text sa pise v tempe hlasu
+// po segmentoch (beh obycajneho textu alebo zvyrazneny usek) — segmenty sa len dopisuju, nikdy
+// neprekresluju, aby animacia nadavky zbehla len raz.
+let full = '', segs = [], segIdx = 0, shown = 0, rate = 26, lastT = 0, typing = false, fadeTimer = null, frameMs = 0;
+function answerStart() {
+  clearTimeout(fadeTimer);
+  full = ''; segs = []; segIdx = 0; shown = 0;
+  answerEl.className = 'answer'; answerEl.textContent = ''; textbox.scrollTop = 0;
+  hideCard(true);
+}
+function answerAppend(text, msPerChar, marks, viewers) {
+  clearTimeout(fadeTimer);
+  if (!full && answerEl.querySelector('.line')) answerEl.textContent = '';
+  const base = full ? full.length + 1 : 0;
+  if (full) segs.push({ a: full.length, b: full.length + 1, kind: '' });
+  full += (full ? ' ' : '') + text;
+  let pos = 0;
+  for (const [a, b, kind] of (marks || []).slice().sort((x, y) => x[0] - y[0])) {
+    if (a < pos || b > text.length) continue;
+    if (a > pos) segs.push({ a: base + pos, b: base + a, kind: '' });
+    segs.push({ a: base + a, b: base + b, kind });
+    pos = b;
+  }
+  if (pos < text.length) segs.push({ a: base + pos, b: base + text.length, kind: '' });
+  rate = msPerChar || 26;
+  answerEl.classList.remove('fade', 'cut'); answerEl.classList.add('typing');
+  for (const v of viewers || []) toast('viewer', v);
+  if (!typing) { typing = true; lastT = frameMs; }
+}
+function renderTyping(nowMs) {
+  if (!typing) return;
+  shown = Math.min(full.length, shown + Math.max(0, nowMs - lastT) / rate); lastT = nowMs;
+  const n = Math.floor(shown);
+  while (segIdx < segs.length && segs[segIdx].a < n) {
+    const s = segs[segIdx];
+    if (!s.el) {
+      s.el = s.kind ? document.createElement('span') : document.createTextNode('');
+      if (s.kind) s.el.className = s.kind;
+      answerEl.appendChild(s.el);
+    }
+    s.el.textContent = full.slice(s.a, Math.min(s.b, n));
+    if (n >= s.b) segIdx++; else break;
+  }
+  textbox.scrollTop = textbox.scrollHeight;
+  if (n >= full.length) { typing = false; answerEl.classList.toggle('typing', S.state === 'speaking'); }
+}
+function finishTyping() { shown = full.length; typing = true; renderTyping(frameMs); typing = false; answerEl.classList.remove('typing'); }
+function cutTyping() { typing = false; answerEl.classList.remove('typing'); answerEl.classList.add('cut'); }
+function scheduleFade() {
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    answerEl.classList.add('fade');
+    setTimeout(() => { if (answerEl.classList.contains('fade')) { answerEl.textContent = ''; answerEl.className = 'answer'; full = ''; segs = []; } }, 1300);
+  }, 5000);
+}
+function showLine(text, cls) {
+  if (full) return;                                     // odpoved ma prednost
+  answerEl.className = 'answer';
+  answerEl.innerHTML = '';
+  const d = document.createElement('div'); d.className = 'line ' + cls; d.textContent = text;
+  answerEl.appendChild(d);
+}
+
+/* ================================== FAZY OTAZKY (riadok pod nadpisom) ================================== */
+const PIPE = ['mic', 'prepis', 'databaza', 'sken', 'model', 'hlas'];
+const PIPE_LABEL = { mic: 'MIKROFÓN', prepis: 'PREPIS', databaza: 'DATABÁZA', sken: 'SKEN', model: 'MODEL', hlas: 'HLAS' };
+let pipe = {}, pipeDim = false, dbLines = [], dbTimer = null;
+function setStage(name, status, info) {
+  pipe[name] = { status, info: info != null ? info : (pipe[name] || {}).info };
+  renderSub();
+}
+function renderSub() {
+  if (toastActive) return;
+  if (pinned && S.state === 'speaking') { showToast(pinned); return; }
+  subEl.textContent = '';
+  const row = document.createElement('div'); row.className = 'pipe' + (pipeDim ? ' dim' : '');
+  let first = true;
+  const many = PIPE.filter((n) => pipe[n]).length > 3;
+  for (const name of PIPE) {
+    const p = pipe[name]; if (!p) continue;
+    if (name === 'mic' && p.status === 'done' && many) continue;   // mikrofon uz netreba, setrime miesto
+    if (!first) { const s = document.createElement('span'); s.className = 'sep'; s.textContent = '›'; row.appendChild(s); }
+    first = false;
+    const el = document.createElement('span'); el.className = 'st ' + p.status;
+    el.append((p.status === 'done' ? '✓ ' : p.status === 'fail' ? '✕ ' : '') + PIPE_LABEL[name]);
+    if (p.info) { const b = document.createElement('b'); b.textContent = p.info; el.appendChild(b); }
+    row.appendChild(el);
+  }
+  subEl.appendChild(row);
+}
+function dbSearch(title, lines) {
+  clearInterval(dbTimer);
+  if (title) { setStage('databaza', 'done', title); return; }
+  dbLines = (lines || []).filter(Boolean);
+  let i = 0;
+  setStage('databaza', 'active', dbLines[0] || 'hľadám');
+  if (dbLines.length > 1) dbTimer = setInterval(() => { i = (i + 1) % dbLines.length; setStage('databaza', 'active', dbLines[i]); }, 2000);
+}
+
+/* ================================== TOASTY (divaci, radio, ciel) ================================== */
+let toastQueue = [], toastActive = null, toastTimer = null, pinned = null;
+function toast(kind, data) { toastQueue.push({ kind, data }); if (!toastActive) nextToast(); }
+function nextToast() {
+  clearTimeout(toastTimer);
+  const t = toastQueue.shift();
+  if (!t) { toastActive = null; if (pinned) showToast(pinned); else renderSub(); return; }
+  toastActive = t; showToast(t);
+  toastTimer = setTimeout(nextToast, t.kind === 'viewer' ? 3200 : 4200);
+}
+function showToast(t) {
+  subEl.textContent = '';
+  const el = document.createElement('span'); el.className = 'toast';
+  const d = t.data;
+  const add = (cls, text) => { if (!text && text !== 0) return; const s = document.createElement('span'); s.className = cls; s.textContent = text; el.appendChild(s); };
+  if (t.kind === 'viewer') {
+    el.style.setProperty('--tc', 'var(--purple)');
+    add('ic', '◈'); add('', 'KONTAKT · ' + d.nick); add('badge', d.badge);
+    add('meta', `${d.visits || 1}. deň na streame` + (d.since ? ` · od ${fmtDate(d.since)}` : ''));
+  } else if (t.kind === 'radio') {
+    el.style.setProperty('--tc', 'var(--cyan)');
+    add('ic', '♫'); add('', d.song); add('meta', d.station);
+  } else if (t.kind === 'target') {
+    el.style.setProperty('--tc', `var(--${STATUS_COLOR[d.status] || 'yellow'})`);
+    add('ic', '◎'); add('', d.name); add('badge', d.status); add('meta', d.level ? `LVL ${d.level}` : '');
+  } else {
+    el.style.setProperty('--tc', `var(--${d.color || 'yellow'})`);
+    add('ic', '◆'); add('', d.text); add('meta', d.detail);
+  }
+  subEl.appendChild(el);
+}
+const fmtDate = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${+m[3]}.${+m[2]}.` : iso; };
+
+/* ================================== KARTY MOMENTOV ================================== */
+const STATUS_COLOR = { 'nepriateľ': 'red', boss: 'red', 'mŕtvy': 'red', civil: 'cyan', 'neutrálny': 'yellow', vozidlo: 'cyan', zariadenie: 'cyan' };
+const FX_STYLE = {
+  death: { label: 'FLATLINE · V ZOMREL', color: 'red', dur: 5200 },
+  level_up: { label: 'POSTUP POSTAVY', color: 'yellow', dur: 4200 },
+  quest_completed: { label: 'HLAVNÝ QUEST DOKONČENÝ', color: 'cyan', dur: 5200 },
+  wanted: { label: 'NCPD · HĽADANÁ OSOBA', color: 'red', dur: 4200 },
+  district: { label: 'VSTUP DO ŠTVRTE', color: 'yellow', dur: 4600 },
+};
+let cardTimer = null, rewardWatch = null;
+function showCard(o) {
+  clearTimeout(cardTimer);
+  cardEl.innerHTML = '';
+  cardEl.style.setProperty('--c', `var(--${o.color})`);
+  cardEl.style.setProperty('--cg', rgba(RGB[o.color] || RGB.yellow, .65));
+  const add = (cls, text) => { const d = document.createElement('div'); d.className = cls; d.textContent = text; cardEl.appendChild(d); return d; };
+  add('label', o.label); const title = add('title', o.title);
+  if (o.detail) add('detail', o.detail);
+  const meta = document.createElement('div'); meta.className = 'meta'; cardEl.appendChild(meta);
+  if (o.meta) o.meta(meta);
+  cardEl.className = 'card'; void cardEl.offsetWidth; cardEl.className = 'card show';
+  let size = 36; while (title.scrollWidth > title.clientWidth && size > 20) { size -= 2; title.style.fontSize = size + 'px'; }
+  cardTimer = setTimeout(() => hideCard(false), o.dur || 4200);
+  return meta;
+}
+function hideCard(now_) {
+  clearTimeout(cardTimer);
+  if (!cardEl.classList.contains('show')) return;
+  cardEl.className = 'card hide';
+  if (now_) cardEl.className = 'card';
+}
+function gameFx(kind, text, detail) {
+  const busy = S.state === 'speaking';
+  if (kind === 'radio') { toast('radio', { song: text, station: detail }); return; }
+  const st = FX_STYLE[kind] || { label: 'UDALOSŤ', color: 'yellow', dur: 4000 };
+  glitch();
+  if (kind === 'death') {
+    deathT = now; flash = 1; fx('ekg', 3.8);
+    stage.classList.add('dead'); setTimeout(() => stage.classList.remove('dead'), 2300);
+    const p = $('stats').querySelector('.deaths'); if (p) { p.classList.remove('pop'); void p.offsetWidth; p.classList.add('pop'); }
+  }
+  if (kind === 'level_up') { burstT = now; fx('shock', 1.2, { color: RGB.yellow }); }
+  if (busy) { toast('game', { text, detail, color: st.color }); return; }  // Mirana hovori: odpoved nezakryjeme
+  const quest = kind === 'quest_completed' && detail;   // velky nazov questu, nie "quest dokonceny" dvakrat
+  const meta = showCard({ label: st.label, title: quest ? detail : text, detail: quest ? '' : detail, color: st.color, dur: st.dur });
+  if (kind === 'quest_completed') {                    // odmena: eddies, ktore pribudnu do 10 s
+    rewardWatch = { base: S.money, meta, until: now + 10 };
+  }
+}
+function scanTarget(target) {
+  const t = target;
+  setStage('sken', 'done', t ? t.name : 'obraz');
+  const color = t ? STATUS_COLOR[t.status] || 'yellow' : 'cyan';
+  fx('brackets', 3.6, { color: RGB[color] || RGB.yellow });
+  showCard({
+    label: t ? (t.recent ? 'SKEN · PRED CHVÍĽOU ZAMERANÝ' : 'SKEN CIEĽA · KIROSHI') : 'VIZUÁLNY SKEN',
+    title: t ? t.name : 'ANALYZUJEM OBRAZ', color, dur: 3600,
+    detail: t ? '' : 'snímka hry ide Mirane',
+    meta: (m) => {
+      if (!t) return;
+      const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = t.status; m.appendChild(tag);
+      if (t.level) m.append(`LVL ${t.level}`);
+      if (t.hp != null) {
+        const bar = document.createElement('span'); bar.className = 'hp'; const i = document.createElement('i');
+        i.style.width = Math.max(0, Math.min(100, t.hp)) + '%'; bar.appendChild(i); m.append(bar, `${t.hp} %`);
+      }
+    },
+  });
+  if (t) pinned = { kind: 'target', data: t };          // pocas odpovede ostane v riadku pod nadpisom
+}
+
+/* ================================== HLAVICKA A TELEMETRIA ================================== */
+function renderStats() {
+  const el = $('stats'); el.textContent = '';
+  if (S.wanted > 0) { const w = document.createElement('span'); w.className = 'wanted'; w.textContent = '★'.repeat(S.wanted); el.appendChild(w); }
+  if (S.deaths > 0) { const d = document.createElement('span'); d.className = 'deaths'; d.textContent = '☠ ' + S.deaths; el.appendChild(d); }
+}
+let moneyShown = null, moneyAnim = null;
+function renderTele() {
+  const el = $('tele'); el.textContent = '';
+  if (S.state === 'offline') { const s = document.createElement('span'); s.textContent = 'čakám na Miranu…'; el.appendChild(s); return; }
+  const loc = document.createElement('span'); loc.className = 'loc'; loc.textContent = S.location ? '◢ ' + S.location : '◢ mimo hry';
+  const q = document.createElement('span'); q.className = 'quest'; q.textContent = S.quest || '';
+  const right = document.createElement('span'); right.className = 'right';
+  if (S.time) right.append(S.time);
+  if (S.weather) right.append(' · ' + S.weather);
+  if (S.money != null) { const m = document.createElement('span'); m.className = 'money'; m.id = 'money'; m.textContent = fmtMoney(moneyShown ?? S.money); right.appendChild(m); }
+  el.append(loc, q, right);
+}
+const fmtMoney = (v) => '€$ ' + Math.round(v).toLocaleString('sk-SK').replace(/ /g, ' ');
+function setTelemetry(t) {
+  const prevMoney = S.money, prevDeaths = S.deaths;
+  Object.assign(S, { combat: !!t.combat, critical: !!t.critical, wanted: t.wanted || 0, deaths: t.deaths || 0,
+                     location: t.location || '', quest: t.quest || '', time: t.time || '', weather: t.weather || '',
+                     money: typeof t.money === 'number' ? t.money : null });
+  if (S.money != null && prevMoney != null && S.money !== prevMoney) animateMoney(prevMoney, S.money);
+  else moneyShown = S.money;
+  if (rewardWatch && S.money != null && rewardWatch.base != null && S.money > rewardWatch.base && now < rewardWatch.until) {
+    const gain = S.money - rewardWatch.base, r = document.createElement('span'); r.className = 'reward';
+    r.textContent = '+' + fmtMoney(gain).replace('€$ ', '') + ' €$';
+    rewardWatch.meta.textContent = ''; rewardWatch.meta.appendChild(r); rewardWatch = null;
+  }
+  if (S.deaths !== prevDeaths) renderStats();
+  renderStats(); renderTele(); applyClasses();
+}
+function animateMoney(from, to) {
+  cancelAnimationFrame(moneyAnim);
+  const t0 = frameMs, dur = 900;                       // cas snimky — rovnaky zdroj ako n z requestAnimationFrame
+  const step = (n) => {
+    const k = Math.max(0, Math.min(1, (n - t0) / dur)); moneyShown = from + (to - from) * (1 - Math.pow(1 - k, 3));
+    const m = $('money'); if (m) { m.textContent = fmtMoney(moneyShown); m.classList.toggle('up', to > from && k < 1); }
+    if (k < 1) moneyAnim = requestAnimationFrame(step); else moneyShown = to;
+  };
+  moneyAnim = requestAnimationFrame(step);
+}
+
+/* ================================== STAVY ================================== */
+function applyClasses() {
+  stage.classList.toggle('off', S.state === 'offline');
+  for (const s of ['muted', 'listening', 'processing', 'speaking', 'idle']) stage.classList.toggle(s, S.state === s);
+  stage.classList.toggle('combat', S.combat); stage.classList.toggle('critical', S.critical);
+}
+function glitch() { stage.classList.remove('glitch'); void stage.offsetWidth; stage.classList.add('glitch'); }
+let pipeFade = null;
+function setState(s) {
+  const prev = S.state; S.state = s;
+  $('chip').textContent = LABELS[s] || s.toUpperCase();
+  applyClasses();
+  if (prev === s) return;
+  glitch();
+  clearTimeout(pipeFade);
+  if (s === 'listening') { pipe = { mic: { status: 'active' } }; pipeDim = false; pinned = null; renderSub(); }
+  if (s === 'processing') {
+    if (prev === 'listening') { pipe.mic = { status: 'done' }; } else { pipe = {}; pinned = null; }
+    pipeDim = false; renderSub();
+  }
+  if (s === 'speaking') { pipe.hlas = { status: 'active' }; pipeDim = true; clearInterval(dbTimer); renderSub(); }
+  if (prev === 'speaking') {
+    if (s === 'idle') finishTyping(); else cutTyping();
+    scheduleFade();
+    if (pipe.hlas) pipe.hlas.status = 'done';
+    renderSub();
+  }
+  if (s === 'idle' || s === 'muted' || s === 'offline') {
+    clearInterval(dbTimer);
+    pipeFade = setTimeout(() => { pipe = {}; pinned = null; if (!toastActive) subEl.textContent = ''; }, 3500);
+  }
+  if (s === 'listening' || s === 'idle') { if (!full) answerEl.textContent = ''; }
+  renderTele();
+}
+
+/* ================================== UDALOSTI ================================== */
+function handle(ev) {
+  switch (ev.type) {
+    case 'state':         setState(ev.state); break;
+    case 'level':         onLevel(ev.v, ev.bands); break;
+    case 'filler':        showLine('· ' + ev.text + ' ·', 'filler'); break;
+    case 'answer_start':  answerStart(); break;
+    case 'answer_append': answerAppend(ev.text, ev.ms_per_char, ev.marks, ev.viewers); break;
+    case 'question':      showLine(ev.text, 'system'); break;
+    case 'telemetry':     setTelemetry(ev); break;
+    case 'search':        dbSearch(ev.title, ev.lines); break;
+    case 'scan':          scanTarget(ev.target); break;
+    case 'game_fx':       gameFx(ev.kind, ev.text, ev.detail); break;
+    case 'stage':         setStage(ev.name, ev.status, ev.sec != null ? ev.sec.toFixed(1) + 's' : null); break;
+    case 'hud':           if (ev.version !== VERSION && !params.has('hud') && !DEMO) location.reload(); break;
+  }
+}
+
+/* ================================== HLAVNA SLUCKA ================================== */
+let last = performance.now();
+function loop(ms) {
+  const dt = Math.min(.05, Math.max(0, ms - last) / 1000); last = ms; now = ms / 1000; frameMs = ms;
+  updateAudio(dt); updateOrb(dt);
+  drawFrame(dt); drawOrb(); drawFx(dt); renderTyping(ms);
+  requestAnimationFrame(loop);
+}
+
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws');
+  ws.onopen = () => { if (S.state === 'offline') setState('idle'); };
+  ws.onmessage = (m) => { try { handle(JSON.parse(m.data)); } catch (e) { console.error(e); } };
+  ws.onclose = () => { setState('offline'); setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
+}
+
+/* ================================== UKAZKA (?demo) ================================== */
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+let fakeTimer = null;
+function fakeVoice(on, loud = .8) {
+  clearInterval(fakeTimer);
+  if (!on) { onLevel(0, null); return; }
+  fakeTimer = setInterval(() => {
+    const t = performance.now() / 1000, syl = Math.abs(Math.sin(t * 6.3)) * (.55 + .45 * Math.abs(Math.sin(t * 1.7)));
+    const v = loud * (.25 + .75 * syl);
+    onLevel(v, Array.from({ length: NB }, (_, i) => Math.max(0, Math.min(1, v * (1 - Math.abs(i - 3.2) / 8.5) + .12 * Math.random()))));
+  }, 50);
+}
+const mk = (text, ...pairs) => pairs.map(([word, kind]) => { const a = text.indexOf(word); return [a, a + word.length, kind]; });
+const TELE = { location: 'Watson, Kabuki', quest: 'Jízda', combat: false, wanted: 0, critical: false, deaths: 6, money: 12400, time: '23:40', weather: 'dážď' };
+const SCENES = {
+  async idle() { handle({ type: 'state', state: 'idle' }); handle({ type: 'telemetry', ...TELE }); },
+  async listening() { await SCENES.idle(); handle({ type: 'state', state: 'listening' }); fakeVoice(true, .6); },
+  async processing() {
+    await SCENES.listening(); await wait(900); fakeVoice(false);
+    handle({ type: 'state', state: 'processing' });
+    handle({ type: 'stage', name: 'prepis', status: 'active', sec: null }); await wait(700);
+    handle({ type: 'stage', name: 'prepis', status: 'done', sec: 1.2 });
+    handle({ type: 'search', title: null, lines: ['hľadám v databáze', 'prehľadávam archív'] });
+    handle({ type: 'filler', text: 'sekundu, Emzo' });
+    await wait(900); handle({ type: 'search', title: 'Sebastian Ibarra', lines: [] });
+    handle({ type: 'stage', name: 'model', status: 'active', sec: null });
+  },
+  async speaking() {
+    await SCENES.processing(); await wait(700);
+    handle({ type: 'stage', name: 'model', status: 'done', sec: 1.6 });
+    handle({ type: 'state', state: 'speaking' }); handle({ type: 'answer_start' }); fakeVoice(true);
+    const s1 = 'Padre je fixer z Heywoodu, kedysi bol medzi Valentinos.';
+    handle({ type: 'answer_append', text: s1, ms_per_char: 34, marks: mk(s1, ['Padre', 'name'], ['Heywoodu', 'name'], ['Valentinos', 'name']), viewers: [] });
+    await wait(s1.length * 34 + 200);
+    const s2 = 'Kurva, Kubo_SK, toho chlapa nechceš mať proti sebe.';
+    handle({ type: 'answer_append', text: s2, ms_per_char: 34, marks: mk(s2, ['Kurva', 'swear'], ['Kubo_SK', 'nick']),
+             viewers: [{ nick: 'Kubo_SK', badge: 'SUB', visits: 3, since: '2026-10-02' }] });
+  },
+  async death() { await SCENES.idle(); await wait(400); handle({ type: 'telemetry', ...TELE, deaths: 7 }); handle({ type: 'game_fx', kind: 'death', text: 'FLATLINE #7', detail: 'Watson, Kabuki' }); },
+  async level() { await SCENES.idle(); await wait(400); handle({ type: 'game_fx', kind: 'level_up', text: 'LEVEL 12', detail: '+1 atribút · +1 perk' }); },
+  async quest() { await SCENES.idle(); await wait(400); handle({ type: 'game_fx', kind: 'quest_completed', text: 'QUEST DOKONČENÝ', detail: 'Pochôdzka' }); await wait(1200); handle({ type: 'telemetry', ...TELE, money: 13600 }); },
+  async district() { await SCENES.idle(); await wait(400); handle({ type: 'game_fx', kind: 'district', text: 'Watson', detail: 'Kabuki · 23:40 · dážď' }); },
+  async radio() { await SCENES.idle(); await wait(400); handle({ type: 'game_fx', kind: 'radio', text: 'Never Fade Away', detail: '89.7 Growl FM' }); },
+  async scan() { await SCENES.idle(); handle({ type: 'state', state: 'processing' }); await wait(300); handle({ type: 'scan', target: { name: 'Maelstrom Ganger', status: 'nepriateľ', level: 8, hp: 64, recent: false } }); },
+  async viewer() { await SCENES.speaking(); },
+  async wanted() { await SCENES.idle(); handle({ type: 'telemetry', ...TELE, combat: true, wanted: 3 }); handle({ type: 'game_fx', kind: 'wanted', text: 'NCPD ★★★', detail: 'Watson, Kabuki' }); },
+  async critical() { await SCENES.idle(); handle({ type: 'telemetry', ...TELE, combat: true, critical: true }); },
+  async muted() { await SCENES.idle(); handle({ type: 'state', state: 'muted' }); },
+  async offline() { setState('offline'); },
+};
+async function runDemo(scene) {
+  if (scene !== 'all') { await (SCENES[scene] || SCENES.idle)(); return; }
+  const order = ['listening', 'processing', 'speaking', 'death', 'level', 'quest', 'district', 'radio', 'scan', 'wanted', 'critical', 'muted'];
+  for (;;) {
+    for (const s of order) {
+      fakeVoice(false); handle({ type: 'telemetry', ...TELE }); handle({ type: 'state', state: 'idle' });
+      await wait(600); await SCENES[s](); await wait(s === 'speaking' ? 7000 : 5200);
+    }
+  }
+}
+
+initGL();
+fit();
+renderTele();
+requestAnimationFrame(loop);
+if (DEMO) runDemo(DEMO); else connect();
+</script>
+</body>
+</html>

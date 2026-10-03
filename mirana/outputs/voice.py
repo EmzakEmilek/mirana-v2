@@ -17,6 +17,7 @@ import sounddevice as sd
 import yaml
 
 from mirana.config import BASE_DIR
+from mirana.spectrum import bands as spectrum_bands
 from mirana.outputs.voice_fx import VoiceFx
 
 logger = logging.getLogger(__name__)
@@ -323,9 +324,10 @@ class Voice:
             if self._stop_event.wait(0.05 / speed):
                 break
             if self.on_level is not None:
-                self.on_level(_level(audio[start:start + chunk]))
+                piece = audio[start:start + chunk]
+                self.on_level(_level(piece), spectrum_bands(piece, self.device_rate))
         if self.on_level is not None:
-            self.on_level(0.0)
+            self.on_level(0.0, None)
 
     def _play_blocking(self, audio: np.ndarray) -> None:
         if NO_AUDIO:
@@ -352,12 +354,12 @@ class Voice:
                         break
                     piece = audio[start:start + chunk]
                     if self.on_level is not None:
-                        self.on_level(_level(piece))
+                        self.on_level(_level(piece), spectrum_bands(piece, self.device_rate))
                     stream.write(self._gain(piece, self.channels))
             if copy is not None:
                 copy.join(timeout=2)  # dalsia veta az ked doznie aj v streame
             if self.on_level is not None:
-                self.on_level(0.0)
+                self.on_level(0.0, None)
 
     def play(self, wav_bytes: bytes) -> None:
         """Prehra WAV bytes na nakonfigurovane vystupne zariadenie (blokuje do konca). Pre testy a nastroje."""

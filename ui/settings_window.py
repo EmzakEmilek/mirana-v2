@@ -32,8 +32,9 @@ MIC_DEFAULT = "(predvolený mikrofón Windows)"
 STREAM_OFF = "(vypnutý)"
 STREAM_DEFAULT = "(predvolený výstup Windows)"
 VOICE_KEYS = ("tts.voice", "tts.rate", "tts.pitch", "tts.phonetics_file")
-HUD_TESTS = [("Odpoveď", "answer"), ("Databáza", "db"), ("Sken obrazovky", "scan"), ("Level", "level"),
-             ("Quest", "quest"), ("Smrť", "death"), ("Polícia", "police"), ("Kritické HP", "critical")]
+HUD_TESTS = [("Odpoveď", "answer"), ("Databáza", "db"), ("Sken cieľa", "scan"), ("Level", "level"),
+             ("Quest", "quest"), ("Smrť", "death"), ("Polícia", "police"), ("Kritické HP", "critical"),
+             ("Štvrť", "district"), ("Rádio", "radio"), ("Divák", "viewer"), ("Počúvanie", "listen")]
 
 
 def _put(section, key: str, value) -> None:

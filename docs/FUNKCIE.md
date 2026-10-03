@@ -95,14 +95,28 @@ Hra musí bežať v okne alebo okne bez okrajov (pri exkluzívnej celej obrazovk
 ## HUD
 
 `http://localhost:8080`; na streamovacom notebooku OBS Browser Source `http://<IP herného PC>:8080`.
-Rozlíšenie zdroja: celá obrazovka (1920×1080, HUD dole v strede), alebo v tvare panela, napr. **1960×300** —
-vtedy HUD vyplní celý zdroj a v OBS sa dá ťahať za rohy. Efekty:
+Verzia sa prepína v Nastaveniach → HUD → **Vzhľad HUD**; otvorený HUD v OBS sa po reštarte Mirany prepne sám.
+`?hud=1` alebo `?hud=2` v adrese vynúti verziu, `?demo` ukáže všetky efekty bez Mirany (na nastavenie v OBS).
 
-- prístup do databázy pri hľadaní vo wiki, vizuálny sken pri snímke hry
-- banner pri leveli, dokončenom queste, smrti („FLATLINE #3“) a policajných hviezdach
-- v hlavičke hviezdy polície a počítadlo smrtí za dnešok; pri kritickom HP červený tep, pri smrti záblesk
+**v2 · Friday + Kiroshi** (zdroj 700×250, napríklad vľavo hore; pri inej veľkosti sa celý zmenší alebo zväčší):
 
-Všetky sa dajú vyskúšať v Nastaveniach → HUD → **Test efektov** (len vizuál, nič nepovie).
+- **guľa** z ~2 500 častíc, ktorá reaguje na výšku aj silu hlasu (12 frekvenčných pásiem Miraninho hlasu
+  a pri počúvaní tvojho mikrofónu): počúva = stiahne sa a zmodrie, premýšľa = okolo krúžia dáta, hovorí = vlní sa
+  s hlasom, boj = zčervenie a zježí sa, kritické HP = bije ako srdce, smrť = zrúti sa a rozletí, stlmená = sploští sa
+- okolo nej **Kiroshi zameriavač**: spektrum hlasu, rotujúce segmenty a rohy, ktoré sa pri počúvaní stiahnu
+- **fázy otázky** pod nadpisom: mikrofón › prepis (s časom) › databáza (článok) › sken › model (s časom) › hlas
+- **odpoveď** so zvýraznením: mená a miesta z hry modro, nicky divákov fialovo, nadávka na okamih zaglitchuje načerveno
+- **karty momentov** priamo v paneli: smrť (EKG čiara, ktorá sa vyrovná, a „FLATLINE #7“), level (rázová vlna),
+  dokončený hlavný quest (s odmenou v eddies, keď pribudnú), polícia (okraj bliká na červeno-modro), nová štvrť,
+  sken cieľa pri „kto je toto?“ (meno, nepriateľ/civil/boss, level, zdravie)
+- pri reči malé správy v riadku pod nadpisom: **kontakt divákov**, ktorých Mirana spomenie (nick, SUB/MOD, koľký deň),
+  nová skladba v rádiu, cieľ skenu
+- dole poloha, quest, čas v hre, počasie a eddies (pri zmene sa načítajú)
+
+**v1 · klasický panel** (zdroj na celú obrazovku alebo v tvare panela, napr. 1960×300): jadro, odpoveď,
+banner pri leveli, queste, smrti a polícii, hviezdy a počítadlo smrtí.
+
+Všetky efekty sa dajú vyskúšať v Nastaveniach → HUD → **Test efektov** (len vizuál, nič nepovie).
 
 ## Twitch chat
 

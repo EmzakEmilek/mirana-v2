@@ -223,7 +223,7 @@
      telemetry {location, quest, combat, wanted, critical, deaths}
      search {title}                    pristup do databazy (null = hlada, inak nazov clanku)
      game_fx {kind, text}              banner pri leveli, queste, smrti, policii
-     queue {n}                         nepoužíva sa
+     stage, hud                        len pre HUD v2 (v1: hud = prepnutie verzie z Nastavení)
    ========================================================== */
 const el = (id) => document.getElementById(id);
 const panel = el('panel'), statusLabel = el('status-label');
@@ -326,6 +326,7 @@ function renderStats() {
 const FX_COLORS = { level_up: 'var(--yellow)', quest_completed: 'var(--cyan)', death: 'var(--red)', wanted: 'var(--red)' };
 let alertTimer = null;
 function gameFx(kind, text) {
+  if (!FX_COLORS[kind]) return;                  // stvrt, radio... ukazuje len HUD v2
   const a = el('alert');
   a.style.setProperty('--fx', FX_COLORS[kind] || 'var(--yellow)');
   a.textContent = text;
@@ -493,6 +494,8 @@ function handle(ev) {
     case 'search':    dbSearch(ev.title, ev.lines); break;
     case 'scan':      screenScan(); break;
     case 'game_fx':   gameFx(ev.kind, ev.text); break;
+    case 'stage':     break;                     // fazy otazky ukazuje len HUD v2
+    case 'hud':       if (ev.version !== 'v1' && !/[?&]hud=/.test(location.search)) location.reload(); break;
   }
 }
 

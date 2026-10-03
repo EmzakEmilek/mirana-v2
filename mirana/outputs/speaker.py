@@ -31,16 +31,17 @@ class Speaker:
 
     # --- verejne API (z ktorehokolvek vlakna) -----------------------------------------------
 
-    def say(self, job, sentence: str) -> None:
+    def say(self, job, sentence: str, extra: dict | None = None) -> None:
+        """extra = doplnky vety pre HUD (zvyraznene slova, divaci) — idu s vetou az do answer_append."""
         reason = self.safety.check(sentence) if self.safety is not None else None
         if reason:
             logger.warning("safety: veta zahodena (%s): %r", reason, sentence[:80])
             return
-        self._synth_q.put((job, sentence))
+        self._synth_q.put((job, sentence, extra or {}))
 
     def end(self, job) -> None:
         """Ziadne dalsie vety pre tento job — po poslednej zavola on_done."""
-        self._synth_q.put((job, _END))
+        self._synth_q.put((job, _END, {}))
 
     def say_all(self, job, text: str) -> None:
         self.say(job, text)
@@ -50,22 +51,22 @@ class Speaker:
 
     def _synth_loop(self) -> None:
         while True:
-            job, item = self._synth_q.get()
+            job, item, extra = self._synth_q.get()
             if job.cancelled:
                 continue
             if item is _END:
-                self._play_q.put((job, _END, None))
+                self._play_q.put((job, _END, None, {}))
                 continue
             audio = None
             try:
                 audio = self.voice.to_device_audio(self.voice.synthesize(item, timeout=self.tts_timeout))
             except Exception as e:
                 logger.warning("TTS zlyhalo pre vetu %r: %s", item[:40], e)
-            self._play_q.put((job, item, audio))
+            self._play_q.put((job, item, audio, extra))
 
     def _play_loop(self) -> None:
         while True:
-            job, item, audio = self._play_q.get()
+            job, item, audio, extra = self._play_q.get()
             try:
                 if job.cancelled:
                     continue
@@ -84,11 +85,11 @@ class Speaker:
                     if not job.tts_failed:
                         job.tts_failed = True
                         self.overlay.question(self.tts_failed_text)
-                    self.overlay.answer_append(item, ms_per_char=self.ms_per_char)
+                    self.overlay.answer_append(item, ms_per_char=self.ms_per_char, **extra)
                     continue
                 # HUD pise v tempe hlasu (93 % dlzky, nech text dobehne tesne pred koncom vety)
                 duration = audio.shape[0] / self.voice.device_rate
-                self.overlay.answer_append(item, duration_sec=duration * 0.93)
+                self.overlay.answer_append(item, duration_sec=duration * 0.93, **extra)
                 self.voice.play_audio(audio, block=True)
             except Exception:
                 logger.exception("prehravanie vety zlyhalo")

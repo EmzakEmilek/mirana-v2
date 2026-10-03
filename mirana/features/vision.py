@@ -125,4 +125,5 @@ class VisionFeature(Feature):
         if turn.image:
             turn.add("OBRAZOVKA", "[OBRAZOVKA] priložená snímka hry")
             if not turn.cancelled:
-                self.app.overlay.scan()
+                from mirana.inputs.game_state import target_info
+                self.app.overlay.scan(target_info(self.app.game.current))

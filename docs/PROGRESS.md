@@ -206,6 +206,14 @@ Stavba programu: docs/ARCHITECTURE.md. Zmeny pre Erika: CHANGELOG.md.
     uprava pamate z okna cez prikaz memory_edit; Azure STT a Kick odstranene; archiv logov do ZIP (overeny pred
     zmazanim, poslednych 4 sessions ostava); ARCHITECTURE.md, FUNKCIE.md, CHANGELOG.md, kratsi README.
 
+- HUD v2 (2026-10-03, z navrhu vybrane A+B, body 3, 4, 7, 14, 17; momenty 9-13 v paneli, nie cez obrazovku):
+  overlay/v2.html (WebGL gula 2 200 + 360 castic, frekvencne pasma z mirana/spectrum.py, Kiroshi zameriavac,
+  fazy otazky, zvyraznenie slov z Hud.on_sentence, karty, toasty), prepinanie overlay.hud + ?hud=, ?demo na nahlad.
+  Overene: 100 testov, nahlady sceny cez Chrome headless (bez obrazovky), ostry start bez zvuku (stranky v1/v2,
+  sprava hud, fazy, pasma). V OBS na notebooku este neovereny — Erik.
+- Whisper int8_float16 + beam 3 (2026-10-03): bez hry bez rozdielu, overi sa z logov po streame (vcera median 2,6 s).
+- Persona nadavky (2026-10-03): len zapojene do vety; overi sa z logov po streame (vcera 35/121 odpovedi, skoro vsetky prilepene).
+
 ## Audio zariadenia (2026-10-02)
 Vstup: Microphone (Trust GXT 232 Microphone), WASAPI.
 Vystup: predvoleny vystup Windows = 24G1WG4 (NVIDIA High Definition Audio, HDMI) -> strihova karta -> notebook s OBS.

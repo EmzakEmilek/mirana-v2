@@ -53,7 +53,8 @@ v streame bez Voicemeeteru. HUD v OBS na notebooku: Browser Source `http://<IP h
 - **pamäť**: postup v hre, streamy, fakty o tebe, diváci z chatu („zabudni Kuba“)
 - **chat**: číta Twitch chat, komentuje ho len na otázku
 - **momenty na strih**, štatistiky streamu, pripomienka po 10 min ticha, poznámky „zapíš si do logu…“
-- **HUD** s efektmi (databáza, sken, level, smrť, polícia), test efektov v Nastaveniach
+- **HUD v2** (Friday + Kiroshi): 3D guľa reagujúca na hlas, fázy otázky, zvýraznené mená a nicky, karty momentov
+  (smrť, level, quest, štvrť, polícia, sken cieľa, kontakt divákov); v1 ostáva na prepnutie v Nastaveniach
 
 Podrobnosti: [docs/FUNKCIE.md](docs/FUNKCIE.md).
 

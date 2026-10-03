@@ -84,8 +84,8 @@ class RecordingOverlay(Overlay):
     """Skutocny protokol (event() kontroluje polia), spravy sa len zapisuju."""
 
     def __init__(self, config):
+        self.sent: list[dict] = []            # uz __init__ Overlay posiela spravu "hud"
         super().__init__(config)
-        self.sent: list[dict] = []
 
     def _send(self, kind, /, **fields):
         super()._send(kind, **fields)

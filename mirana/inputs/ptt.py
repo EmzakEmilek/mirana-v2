@@ -17,6 +17,8 @@ import numpy as np
 import sounddevice as sd
 from pynput import keyboard, mouse
 
+from mirana.spectrum import bands as spectrum_bands
+
 logger = logging.getLogger(__name__)
 
 
@@ -95,8 +97,9 @@ class PushToTalk:
                 self._level_frames += frames
                 if self._level_frames >= self.sample_rate // 20:
                     self._level_frames = 0
-                    rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32767.0
-                    self.on_level(min(1.0, (rms * 6.0) ** 0.6))
+                    recent = np.concatenate(self._frames[-8:])[-(self.sample_rate // 20):]  # ~50 ms pre pasma
+                    rms = float(np.sqrt(np.mean(recent.astype(np.float32) ** 2))) / 32767.0
+                    self.on_level(min(1.0, (rms * 6.0) ** 0.6), spectrum_bands(recent, self.sample_rate))
 
     def _on_click(self, x, y, button, pressed):
         if pressed:

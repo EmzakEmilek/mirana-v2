@@ -225,6 +225,9 @@ SETTINGS = (
 
     # --- HUD --------------------------------------------------------------------------------------
     S("overlay.enabled", True, tab="HUD", label="HUD zapnutý"),
+    S("overlay.hud", "v2", "choice", choices=("v1", "v2"), tab="HUD", label="Vzhľad HUD", width=260,
+      labels={"v1": "v1 · klasický panel", "v2": "v2 · Friday + Kiroshi"},
+      hint="Otvorený HUD v OBS sa po reštarte Mirany prepne sám. v2 je robený na zdroj 700×250 (dá sa zväčšiť)."),
     S("overlay.port", 8080, lo=1024, hi=65535, tab="HUD", label="Port", hint="OBS Browser Source: http://IP-herného-PC:port"),
     S("overlay.typewriter_ms_per_char", 26, lo=5, hi=200, tab="HUD", label="Písanie (ms/znak)",
       hint="Len záloha, keď hlas vypadne. Inak sa text píše v tempe reči."),

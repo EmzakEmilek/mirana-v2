@@ -150,6 +150,7 @@ idle_nudge:
 
 overlay:
   enabled: true
+  hud: "v2"                   # v1 = klasicky panel, v2 = Friday + Kiroshi (zdroj v OBS 700x250, Nastavenia -> HUD)
   host: "0.0.0.0"             # 0.0.0.0 kvôli prístupu z notebooku
   port: 8080
   typewriter_ms_per_char: 26  # zaloha; pri odpovedi sa tempo pocita z dlzky audia, aby text dobehol s hlasom

@@ -148,7 +148,7 @@ def test_normal_game_event_respects_quiet_after_erik(mirana):
 def test_game_event_records_highlight_and_fx(mirana):
     mirana._on_game_event("death", Snapshot({"in_game": True, "hp": 0, "district": "Watson"}), "Erik práve zomrel")
     assert mirana._events.get_nowait().text == "Erik práve zomrel (dnes už 1. smrť)"
-    assert mirana.overlay.of("game_fx")[-1] == {"type": "game_fx", "kind": "death", "text": "FLATLINE #1"}
+    assert mirana.overlay.of("game_fx")[-1] == {"type": "game_fx", "kind": "death", "text": "FLATLINE #1", "detail": "Watson"}
     assert mirana.highlights.path.read_text(encoding="utf-8").count("SMRŤ") == 1
 
 
@@ -221,3 +221,19 @@ def test_memory_edit_command(mirana):
     mirana._on_command("memory_edit", json.dumps({"facts": ["hrá za Nomáda"], "notes": {}}))
     assert memory.data["erik"]["facts"] == ["hrá za Nomáda"]
     assert "hrá za Nomáda" in memory.block
+
+
+
+def test_hud_v2_stages_marks_and_viewer_card(mirana):
+    mirana.longterm.data["viewers"] = {"kubo_sk": {"nick": "Kubo_SK", "visits": 3, "badges": ["subscriber"],
+                                                   "first_seen": "2026-09-30", "notes": []}}
+    mirana.brain.reply = ["Kubo_SK, vitaj späť v Night City, kurva."]
+    ask_by_voice(mirana, "pozdrav Kuba")
+    pump(mirana, lambda: len(mirana.memory) == 1 and idle(mirana))
+    stages = [(e["name"], e["status"]) for e in mirana.overlay.of("stage")]
+    assert stages == [("prepis", "active"), ("prepis", "done"), ("model", "active"), ("model", "done")]
+    append = mirana.overlay.of("answer_append")[0]
+    text = append["text"]
+    assert [(text[a:b], kind) for a, b, kind in append["marks"]] == [
+        ("Kubo_SK", "nick"), ("Night City", "name"), ("kurva", "swear")]
+    assert append["viewers"] == [{"nick": "Kubo_SK", "badge": "SUB", "visits": 3, "since": "2026-09-30"}]

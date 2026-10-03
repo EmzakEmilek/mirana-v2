@@ -11,6 +11,7 @@ import json
 import logging
 import threading
 from http import HTTPStatus
+from urllib.parse import parse_qs, urlsplit
 
 from websockets.asyncio.server import serve
 
@@ -19,7 +20,8 @@ from mirana.config import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
-INDEX_PATH = BASE_DIR / "overlay" / "index.html"
+INDEX_PATH = BASE_DIR / "overlay" / "index.html"     # HUD v1 (klasicky panel)
+V2_PATH = BASE_DIR / "overlay" / "v2.html"           # HUD v2 (Friday + Kiroshi)
 
 
 class Overlay:
@@ -31,10 +33,12 @@ class Overlay:
         self.host = cfg["host"]
         self.port = cfg["port"]
         self.ms_per_char = cfg["typewriter_ms_per_char"]
+        self.hud_version = cfg.get("hud", "v2")
         self._clients: set = set()
         self._last: dict[str, dict] = {}  # typ -> posledny event, pre novych klientov
         self._loop: asyncio.AbstractEventLoop | None = None
         self.on_command = None  # on_command(cmd, text) — prikazy z ovladacieho okna (ui/control.py), len z localhostu
+        self._send("hud", version=self.hud_version)  # otvorena stranka v OBS sa po zmene v Nastaveniach prepne sama
 
     # --- verejne API (thread-safe) --------------------------------------------------------
 
@@ -54,13 +58,15 @@ class Overlay:
         by sa inak stara odpoved vypisala znova."""
         self._send("answer_start")
 
-    def answer_append(self, text: str, duration_sec: float | None = None, ms_per_char: int | None = None) -> None:
-        """Dalsia veta odpovede. Tempo pisania z dlzky jej audia, aby text dobehol s hlasom."""
+    def answer_append(self, text: str, duration_sec: float | None = None, ms_per_char: int | None = None,
+                      marks: list | None = None, viewers: list | None = None) -> None:
+        """Dalsia veta odpovede. Tempo pisania z dlzky jej audia, aby text dobehol s hlasom.
+        marks = zvyraznene slova vo vete, viewers = divaci, ktorych veta spomina (karta v HUD v2)."""
         if ms_per_char is None:
             ms_per_char = self.ms_per_char
             if duration_sec and text:
                 ms_per_char = max(15, int(duration_sec * 1000 / len(text)))
-        self._send("answer_append", text=text, ms_per_char=ms_per_char)
+        self._send("answer_append", text=text, ms_per_char=ms_per_char, marks=marks or [], viewers=viewers or [])
 
     def question(self, text: str) -> None:
         """Len pre [SYSTEM] hlasky — Erikove otazky sa na HUD nezobrazuju (rozhodnutie 2026-09-21)."""
@@ -71,24 +77,29 @@ class Overlay:
         inak nazov najdeneho clanku."""
         self._send("search", title=title, lines=lines or [])
 
-    def scan(self) -> None:
-        """Mirana sa pozera na obrazovku (posiela sa snimka hry)."""
-        self._send("scan")
+    def scan(self, target: dict | None = None) -> None:
+        """Mirana sa pozera na obrazovku (posiela sa snimka hry); target = ciel pod zameriavacom."""
+        self._send("scan", target=target)
 
-    def game_fx(self, kind: str, text: str) -> None:
-        """Efekt na HUD pri udalosti z hry (level, quest, smrt, policia)."""
-        self._send("game_fx", kind=kind, text=text)
+    def game_fx(self, kind: str, text: str, detail: str = "") -> None:
+        """Efekt na HUD pri udalosti z hry (level, quest, smrt, policia, stvrt, radio)."""
+        self._send("game_fx", kind=kind, text=text, detail=detail)
 
     def telemetry(self, *, location: str = "", quest: str = "", combat: bool = False, wanted: int = 0,
-                  critical: bool = False, deaths: int = 0) -> None:
+                  critical: bool = False, deaths: int = 0, money: int | None = None, time: str = "",
+                  weather: str = "") -> None:
         """HP sa na HUD neukazuje (ma ho hra): lokacia + quest, boj a kriticke HP zafarbia jadro,
-        hviezdy policie a pocitadlo smrti su v hlavicke panela."""
+        hviezdy policie a pocitadlo smrti su v hlavicke panela; v2 ukazuje aj cas, pocasie a eddies."""
         self._send("telemetry", location=location, quest=quest, combat=combat, wanted=wanted,
-                   critical=critical, deaths=deaths)
+                   critical=critical, deaths=deaths, money=money, time=time, weather=weather)
 
-    def level(self, value: float) -> None:
-        """Hlasitost 0..1 (hlas Mirany alebo Erikov mikrofon), ~20x/s. Nepamata sa."""
-        self._send("level", v=round(value, 3))
+    def stage(self, name: str, status: str, sec: float | None = None) -> None:
+        """Faza otazky pre HUD v2 (prepis, model): active -> done (so sekundami) alebo fail."""
+        self._send("stage", name=name, status=status, sec=sec)
+
+    def level(self, value: float, bands: list[float] | None = None) -> None:
+        """Hlasitost 0..1 a frekvencne pasma (hlas Mirany alebo Erikov mikrofon), ~20x/s. Nepamata sa."""
+        self._send("level", v=round(value, 3), bands=bands)
 
     def erik(self, text: str) -> None:
         """Prepis Erikovej otazky — pre ovladacie okno. HUD ho ignoruje (otazky sa na streame neukazuju)."""
@@ -173,14 +184,24 @@ class Overlay:
         text = data.get("text")
         self.on_command(str(data.get("cmd")), str(text) if text is not None else None)
 
-    @staticmethod
-    def _process_request(connection, request):
-        """Obycajny GET (Browser Source v OBS) dostane index.html; WebSocket upgrade ide dalej."""
+    def page_path(self, path: str):
+        """Stranka HUD-u podla Nastavenia -> HUD (overlay.hud); "?hud=1" / "?hud=2" v adrese ju prebije."""
+        url = urlsplit(path)
+        if url.path not in ("/", "/index.html", "/v2.html"):
+            return None
+        wanted = (parse_qs(url.query).get("hud") or [""])[0].lower().lstrip("v")
+        version = {"1": "v1", "2": "v2"}.get(wanted, "v2" if url.path == "/v2.html" else self.hud_version)
+        return V2_PATH if version == "v2" else INDEX_PATH
+
+    def _process_request(self, connection, request):
+        """Obycajny GET (Browser Source v OBS) dostane HUD; WebSocket upgrade ide dalej."""
         if request.headers.get("Upgrade", "").lower() == "websocket":
             return None
-        if request.path in ("/", "/index.html"):
-            response = connection.respond(HTTPStatus.OK, INDEX_PATH.read_text(encoding="utf-8"))
+        page = self.page_path(request.path)
+        if page is not None:
+            response = connection.respond(HTTPStatus.OK, page.read_text(encoding="utf-8"))
             response.headers["Content-Type"] = "text/html; charset=utf-8"
+            response.headers["Cache-Control"] = "no-store"
             return response
         return connection.respond(HTTPStatus.NOT_FOUND, "Not Found")
 

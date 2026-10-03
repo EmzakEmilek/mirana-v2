@@ -22,6 +22,7 @@ class Turn:
     context: dict[str, str] = field(default_factory=dict)  # znacka -> cely riadok ("[HRA] ...")
     image: str | None = None                 # snimka hry (base64 JPEG) pri "co je toto?"
     stt_sec: float = 0.0
+    asked_at: float = 0.0                    # kedy sa otazka poslala modelu (faza "model" v HUD v2)
     prompt: str | None = None                # sprava pre model; None = model sa este nepytal
 
     # priebeh odpovede (cita ho Speaker, stream v Brain aj hlavna slucka)

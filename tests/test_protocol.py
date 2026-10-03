@@ -12,12 +12,16 @@ from mirana.config import BASE_DIR, CONFIG_PATH, PERSONA_PATH
 from mirana.outputs.overlay import Overlay
 
 HUD_SRC = (BASE_DIR / "overlay" / "index.html").read_text(encoding="utf-8")
+HUD2_SRC = (BASE_DIR / "overlay" / "v2.html").read_text(encoding="utf-8")
 GUI_SRC = (BASE_DIR / "ui" / "control.py").read_text(encoding="utf-8")
 MIRANA_SRC = "".join(p.read_text(encoding="utf-8") for p in (BASE_DIR / "mirana").rglob("*.py"))
 
 
 def test_every_event_has_a_receiver():
     hud = set(re.findall(r"case '(\w+)':", HUD_SRC))
+    hud2 = set(re.findall(r"case '(\w+)':", HUD2_SRC))
+    assert protocol.HUD <= hud2, protocol.HUD - hud2      # aj HUD v2 spracuje vsetko
+    assert hud2 <= set(protocol.EVENTS)
     gui = set(re.findall(r'kind == "(\w+)"', GUI_SRC)) - {"connected", "disconnected", "diagnostics"}  # vnutorne udalosti okna
     assert protocol.HUD <= hud, protocol.HUD - hud
     assert protocol.GUI <= gui, protocol.GUI - gui
@@ -35,7 +39,7 @@ def test_gui_sends_only_known_commands():
 
 def test_event_validates_fields():
     assert protocol.event("state", state="idle") == {"type": "state", "state": "idle"}
-    assert protocol.event("game_fx", kind="death", text="x")["kind"] == "death"
+    assert protocol.event("game_fx", kind="death", text="x", detail="")["kind"] == "death"
     with pytest.raises(ValueError):
         protocol.event("state")
     with pytest.raises(ValueError):
@@ -62,7 +66,7 @@ def test_overlay_methods_build_valid_events(overlay):
     overlay.answer_append("Veta.", duration_sec=1.0)
     overlay.info(model="m", effort="low")
     assert overlay._last["telemetry"]["wanted"] == 2
-    assert set(overlay._last) == {"telemetry", "state", "info"}  # jednorazove spravy sa nepamataju
+    assert set(overlay._last) == {"telemetry", "state", "info", "hud"}  # jednorazove spravy sa nepamataju
     with pytest.raises(TypeError):
         overlay.telemetry("Watson", "Jízda")  # len s menami poli
 

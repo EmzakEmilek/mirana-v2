@@ -97,6 +97,7 @@ class Mirana:
         self.chat = TwitchChat(config, on_message=self._on_chat, on_status=self.overlay.chat_status)
         self.overlay.on_command = self._on_command
         self.highlights = None  # nastavi HighlightsFeature (pocitadlo smrti a statistiky dna)
+        self.longterm = None    # nastavi LongTermFeature (divaci pre karty v HUD v2)
         self.features = [feature(self) for feature in FEATURES]
 
     @property
@@ -225,11 +226,14 @@ class Mirana:
     def _work_voice(self, turn: Turn, wav_bytes: bytes) -> None:
         try:
             started = time.perf_counter()
+            self.overlay.stage("prepis", "active")
             transcript = self.brain.transcribe(wav_bytes)
             turn.stt_sec = time.perf_counter() - started
             if transcript is None:
+                self.overlay.stage("prepis", "fail")
                 self._events.put(Fallback(turn, "stt_failed"))
                 return
+            self.overlay.stage("prepis", "done", round(turn.stt_sec, 1))
             if not transcript.strip():
                 self._cancel_filler(turn)  # omylom stlacene PTT — ticho, bez fillera
                 self._events.put(Silent(turn))
@@ -275,6 +279,9 @@ class Mirana:
             turn.add("CHAT", self.chat.line())
         self._each("context", turn)
         turn.prompt = turn.build_prompt()
+        turn.asked_at = time.perf_counter()
+        if not turn.cancelled:
+            self.overlay.stage("model", "active")
         answer = self.brain.ask_stream(
             turn.prompt, None, self.memory.as_messages(), image_b64=turn.image,
             on_sentence=lambda sentence: self._on_sentence(turn, sentence),
@@ -305,7 +312,10 @@ class Mirana:
         if turn.first_sentence:
             turn.first_sentence = False
             self._cancel_filler(turn)
-        self.speaker.say(turn, sentence)
+            self.overlay.stage("model", "done", round(time.perf_counter() - turn.asked_at, 1))
+        extra: dict = {}
+        self._each("on_sentence", turn, sentence, extra)  # zvyraznene slova a divaci pre HUD v2
+        self.speaker.say(turn, sentence, extra)
 
     # --- speaker vlakno -----------------------------------------------------------------------
 

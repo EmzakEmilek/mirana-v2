@@ -8,15 +8,17 @@ len prikazy, ktore Mirana pozna.
 # typ -> polia spravy (okrem "type"); None = volne polia (info)
 EVENTS: dict[str, tuple[str, ...] | None] = {
     "state": ("state",),                        # idle | listening | processing | speaking | muted
-    "level": ("v",),                            # hlasitost 0..1, ~20x/s
+    "level": ("v", "bands"),                    # hlasitost 0..1 a 12 frekvencnych pasiem (alebo None), ~20x/s
     "filler": ("text",),
     "answer_start": (),
-    "answer_append": ("text", "ms_per_char"),
+    "answer_append": ("text", "ms_per_char", "marks", "viewers"),   # marks [[od, do, name|nick|swear]]
     "question": ("text",),                      # systemova hlaska (vypadok hlasu...)
     "search": ("title", "lines"),               # hladanie v databaze (wiki)
-    "scan": (),                                 # snimka obrazovky ide modelu
-    "game_fx": ("kind", "text"),                # level_up | quest_completed | death | wanted
-    "telemetry": ("location", "quest", "combat", "wanted", "critical", "deaths"),
+    "scan": ("target",),                        # snimka obrazovky ide modelu; ciel pod zameriavacom alebo None
+    "game_fx": ("kind", "text", "detail"),      # level_up | quest_completed | death | wanted | district | radio
+    "telemetry": ("location", "quest", "combat", "wanted", "critical", "deaths", "money", "time", "weather"),
+    "stage": ("name", "status", "sec"),         # faza otazky: prepis | model; active | done | fail
+    "hud": ("version",),                        # ktory HUD ma server nastaveny (v1 | v2) — stranka sa prepne sama
     "erik": ("text",),                          # prepis Erikovej otazky
     "budget": ("spent", "cap"),
     "game": ("live", "line"),                   # riadok [HRA] pre okno
@@ -26,7 +28,7 @@ EVENTS: dict[str, tuple[str, ...] | None] = {
 }
 
 HUD = {"state", "level", "filler", "answer_start", "answer_append", "question", "search", "scan",
-       "game_fx", "telemetry"}
+       "game_fx", "telemetry", "stage", "hud"}
 GUI = {"state", "erik", "answer_start", "answer_append", "question", "budget", "game", "info", "notice",
        "chat_status"}
 
@@ -34,7 +36,7 @@ GUI = {"state", "erik", "answer_start", "answer_append", "question", "budget", "
 COMMANDS = {"mute", "quit", "ask", "memory_edit", "hud_test", "volume"}
 
 # spravy, ktore nove pripojenie dostane hned (aktualny stav); ostatne su jednorazove
-REMEMBERED = {"state", "telemetry", "budget", "game", "info", "chat_status"}
+REMEMBERED = {"state", "telemetry", "budget", "game", "info", "chat_status", "hud"}
 
 
 def event(kind: str, /, **fields) -> dict:

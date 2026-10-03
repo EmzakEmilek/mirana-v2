@@ -44,7 +44,8 @@ jednej funkcie sa len zaloguje:
 | `LogArchive` | `archive.py` | staré logy do `logs/archive/<mesiac>.zip` |
 
 Metódy funkcie (všetky voliteľné): `start`, `on_question(turn)`, `context(turn)`, `on_answer(turn, text)`,
-`on_game_event(name, snap, text) -> text`, `on_snapshot(snap)`, `on_chat(msg)`, `on_command(cmd, text) -> bool`,
+`on_sentence(turn, sentence, extra)` (doplnky vety pre HUD), `on_game_event(name, snap, text) -> text`,
+`on_snapshot(snap)`, `on_chat(msg)`, `on_command(cmd, text) -> bool`,
 `tick` (každých 5 s ticha), `shutdown`. **Nová funkcia** = nový súbor v `mirana/features/` + jeden riadok
 v `app.FEATURES` + test.
 
@@ -82,8 +83,15 @@ Stav zdieľaný medzi vláknami (`state`, `_gen`, `_turn`) chráni `Mirana._lock
 ## Protokol HUD / okno
 
 `mirana/protocol.py` je jediné miesto s typmi správ a ich poľami (`EVENTS`), so zoznamom, kto ich spracúva
-(`HUD` = `overlay/index.html`, `GUI` = `ui/control.py`), a s príkazmi z okna (`COMMANDS`). Príkazy sa berú
-len z localhostu a bez hlavičky Origin (nie z prehliadača). Test kontroluje, že každý typ má príjemcu.
+(`HUD` = `overlay/index.html` aj `overlay/v2.html`, `GUI` = `ui/control.py`), a s príkazmi z okna (`COMMANDS`).
+Príkazy sa berú len z localhostu a bez hlavičky Origin (nie z prehliadača). Test kontroluje, že každý typ má
+príjemcu v oboch verziách HUD-u.
+
+HUD v2 dostáva navyše: `level` s 12 frekvenčnými pásmami (`mirana/spectrum.py`, hlas aj mikrofón), `stage`
+(fázy otázky z jadra), `answer_append` so zvýraznenými úsekmi a spomenutými divákmi (`Hud.on_sentence` →
+Speaker ich nesie s vetou až do HUD-u), `scan` s cieľom pod zameriavačom, `game_fx` s detailom (aj štvrť
+a rádio) a `hud` (verzia z Nastavení — otvorená stránka sa po zmene prepne sama). Server dáva stránku podľa
+`overlay.hud`, `?hud=1|2` ju prebije.
 
 ## Nastavenia
 

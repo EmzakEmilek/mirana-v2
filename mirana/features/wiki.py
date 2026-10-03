@@ -212,6 +212,11 @@ class Wiki:
         except Exception as e:
             logger.warning("wiki index sa nepodarilo nacitat: %s", e)
 
+    def has_name(self, text: str) -> bool:
+        """Je text nazov clanku wiki (postava, miesto, gang...)? Pre zvyraznenie v HUD v2."""
+        key = _norm(text)
+        return bool(key) and key in self._index
+
     def match(self, question: str) -> str | None:
         """Nazov clanku, na ktory sa Erik pyta ("kto je Padre?" -> "Padre"), alebo None."""
         index = self._index

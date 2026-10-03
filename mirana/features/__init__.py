@@ -19,6 +19,9 @@ class Feature:
     def context(self, turn) -> None:
         """Doplni kontext pre model cez turn.add(znacka, riadok) — worker vlakno."""
 
+    def on_sentence(self, turn, sentence: str, extra: dict) -> None:
+        """Veta odpovede ide do hlasu (worker vlakno). extra = doplnky pre HUD (marks, viewers)."""
+
     def on_answer(self, turn, text: str) -> None:
         """Odpoved, ktoru Erik naozaj pocul (pri preruseni len vyslovene vety) — hlavna slucka."""
 

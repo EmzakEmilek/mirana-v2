@@ -62,3 +62,9 @@ _LORE = re.compile(r"\b(kto|čo|co|aký|aká|aké|akú|aky|aka|ake|aku|odkiaľ|o
 
 def is_lore_question(question: str) -> bool:
     return bool(_LORE.search(question))
+
+
+# --- nadavky (HUD v2 ich na okamih zaglitchuje) ---------------------------------------------------------
+SWEAR = re.compile(r"\b(kurv\w*|kurev\w*|do (?:riti|piče|prdele|hajzlu)|piči\w*|pič\w*|kokot\w*|čurák\w*|curak\w*|"
+                   r"hovn\w*|sračk\w*|srac\w*|doprdele|prdel\w*|jeb\w*|pojeb\w*|vyjeb\w*|zjeb\w*|zasran\w*|"
+                   r"posran\w*|chuj\w*|debil\w*|sakra)\b", _I)

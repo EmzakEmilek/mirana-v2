@@ -2,6 +2,15 @@
 
 Podrobný denník práce je v [docs/PROGRESS.md](docs/PROGRESS.md), tu len čo sa zmenilo pre Erika.
 
+## 2026-10-03 — HUD v2, rýchlejší prepis, nadávky
+
+- **HUD v2 (Friday + Kiroshi)** pre zdroj 700×250: 3D guľa z častíc, ktorá reaguje na výšku a silu hlasu,
+  Kiroshi zameriavač so spektrom, fázy otázky (prepis › databáza › model › hlas s časmi), zvýraznené mená z hry,
+  nicky divákov a nadávky, karty momentov v paneli (smrť s EKG, level, quest s odmenou, štvrť, polícia, sken
+  cieľa) a kontakt divákov, ktorých Mirana spomenie. Prepína sa v Nastaveniach → HUD; v1 ostáva.
+- **Whisper:** int8_float16 a beam 3 (Nastavenia → Prepis) — má zrýchliť prepis, keď hra vyťažuje grafiku.
+- **Persona:** nadávka musí byť súčasťou vety (pomenúva, zosilňuje, je v obrate), nie prilepená na koniec.
+
 ## 2026-10-03 — prestavba programu (tri vlny)
 
 **Spoľahlivosť**

@@ -514,6 +514,7 @@ class LongTermFeature(Feature):
     def __init__(self, app):
         super().__init__(app)
         self.memory = LongTermMemory(app.config, app.session_id)
+        app.longterm = self.memory              # divaci pre karty v HUD v2
         app.brain.memory_block = lambda: self.memory.block
         self._game_at = 0.0
 

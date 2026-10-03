@@ -325,6 +325,21 @@ def _target(s: Snapshot) -> str | None:
     return f"{verb} {name}" + (f" ({', '.join(info)})" if info else "")
 
 
+def target_info(s: Snapshot | None) -> dict | None:
+    """Ciel pod zameriavacom pre kartu skenu v HUD v2: meno, druh, level, zdravie (alebo None)."""
+    t = s.get("target") if s is not None and isinstance(s.get("target"), dict) else None
+    name = _thing_name(t.get("name")) if t else None
+    if not name:
+        return None
+    if t.get("kind") in ("vehicle", "device"):
+        status = "vozidlo" if t.get("kind") == "vehicle" else "zariadenie"
+    else:
+        status = ("mŕtvy" if t.get("dead") else "boss" if t.get("boss") else "nepriateľ" if t.get("hostile")
+                  else "civil" if t.get("civilian") else "neutrálny")
+    return {"name": name, "status": status, "level": t.get("level") if not t.get("dead") else None,
+            "hp": t.get("hp") if not t.get("dead") else None, "recent": bool(t.get("recent"))}
+
+
 def _vehicle(s: Snapshot) -> str | None:
     radio = _text(s.get("radio"))
     song = _text(s.get("song"))
