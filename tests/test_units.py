@@ -166,3 +166,37 @@ def test_ptt_keys():
     assert key_label("mouse_x2") == "predné bočné tlačidlo myši"
     with pytest.raises(ValueError):
         parse_key("neexistuje")
+
+
+def test_loaded_save_is_not_progress():
+    story = lambda *ids: {"main_done": [{"id": i, "title": i} for i in ids]}
+    assert detect_events(snap(level=1), snap(level=7), 30, 10) == []                  # skok o 6 levelov = save
+    assert detect_events(snap(level=6), snap(level=7), 30, 10) == ["level_up"]
+    many = detect_events(snap(story=story()), snap(story=story("q001", "q002", "q003")), 30, 10)
+    assert "quest_completed" not in many                                              # 3 naraz = save
+    one = detect_events(snap(story=story("q001")), snap(story=story("q001", "q003")), 30, 10)
+    assert "quest_completed" in one
+
+
+def test_events_ignored_right_after_load(tmp_path, config, monkeypatch):
+    import json as _json
+    import mirana.inputs.game_state as gs
+    path = tmp_path / "state.json"
+    config["game_state"].update(enabled=True, json_path=str(path))
+    seen = []
+    game = gs.GameState(config, on_event=lambda name, s, text: seen.append(name))
+    clock = [1000.0]
+    monkeypatch.setattr(gs.time, "time", lambda: clock[0])
+    def write(**data):
+        path.write_text(_json.dumps({"in_game": True, "hp": 100, **data}), encoding="utf-8")
+        game._mtime = 0                                    # novy zapis (mtime sa v teste nemusi zmenit)
+        game._tick()
+    write(in_game=False)                                   # menu
+    write(hp=100, level=6)                                 # nacitany save
+    clock[0] += 5
+    write(hp=0, level=6)                                   # 5 s po nacitani: ignorovane
+    assert seen == []
+    clock[0] += 40
+    write(hp=100, level=6)
+    write(hp=0, level=6)                                   # neskor: skutocna smrt
+    assert seen == ["death"]

@@ -124,6 +124,9 @@ PSEUDO_QUESTS = {"Neobjevené", "Neobjavené", "Undiscovered"}
 PSEUDO_QUEST_IDS = {"generic_sts_quest"}
 
 TARGET_HOLD_SEC = 10  # ako dlho po odvrateni pohladu sa ciel este posiela ("pred chvilou zameriaval")
+# Po nacitani hry (save, start) mod chvilu posiela neuplne udaje (level 1, prazdny pribeh) a potom skutocne —
+# vyzeralo by to ako level up a hromada dokoncenych questov. Udalosti sa vtedy ignoruju.
+LOAD_GRACE_SEC = 30
 
 # Od tejto urovne je hrac v scene (rozhovor s volbami, cutscena) — gamePSMHighLevel.SceneTier3+
 SCENE_TIER = 3
@@ -396,7 +399,7 @@ def detect_events(prev: Snapshot | None, cur: Snapshot, hp_low: int, hp_critical
         events.append("district_change")
     if cur.quest and cur.quest != (last_quest or prev.quest):
         events.append("quest_changed")
-    if completed_quests(prev, cur):
+    if len(completed_quests(prev, cur)) == 1:  # viac naraz = nacitany save, nie postup
         events.append("quest_completed")
     wanted, old_wanted = cur.get("wanted"), prev.get("wanted")
     if isinstance(wanted, int) and isinstance(old_wanted, int):
@@ -404,7 +407,7 @@ def detect_events(prev: Snapshot | None, cur: Snapshot, hp_low: int, hp_critical
             events.append("wanted_up")
         elif wanted == 0 < old_wanted:
             events.append("wanted_clear")
-    if (cur.get("level") or 0) > (prev.get("level") or 0) > 0:
+    if 0 < (prev.get("level") or 0) < (cur.get("level") or 0) <= (prev.get("level") or 0) + 2:  # skok = nacitany save
         events.append("level_up")
     if cur.get("combat") and not prev.get("combat"):
         events.append("combat_start")
@@ -451,6 +454,7 @@ class GameState:
         self._last_quest: str | None = None
         self._errors: set[str] = set()
         self._last_target: tuple[dict, float] | None = None
+        self._in_game_since = 0.0           # kedy sa hrac naposledy dostal do hry (nacitanie save)
 
     def start(self) -> None:
         if not self.enabled:
@@ -509,7 +513,12 @@ class GameState:
                     logger.warning("CET mod: tieto udaje nejdu: %s", errors)
             if prev is None or prev.get("quest_id") != data.get("quest_id"):
                 logger.info("sledovany quest: %s (id %s, typ %s)", data.get("quest"), data.get("quest_id"), data.get("quest_type"))
+            if snap.get("in_game") and (prev is None or not prev.get("in_game")):
+                self._in_game_since = time.time()
             events = detect_events(prev, snap, self.hp_low, self.hp_critical, self._last_quest)
+            if events and time.time() - self._in_game_since < LOAD_GRACE_SEC:
+                logger.info("udalosti hned po nacitani hry ignorovane: %s", ", ".join(events))
+                events = []
             if snap.quest:
                 self._last_quest = snap.quest
             for event in events:
