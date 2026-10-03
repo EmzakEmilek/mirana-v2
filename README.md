@@ -61,7 +61,7 @@ Podrobnosti: [docs/FUNKCIE.md](docs/FUNKCIE.md).
 ## Náklady
 
 4-hodinový stream so Sonnet 5.5 low ~**$1** (Claude), zhrnutie do pamäte ~2–5 c. Whisper beží lokálne, Azure TTS
-je vo free tieri. Denný strop `limits.daily_usd_cap` (predvolene $5). Odozva: mimo hry ~3–4 s, v hre ~5–6 s
+je vo free tieri. Denný strop `limits.daily_usd_cap` (0 = bez stropu, okno ukazuje dnešnú útratu). Odozva: mimo hry ~3–4 s, v hre ~5–6 s
 (hra vyťažuje GPU); pauzu zakryje filler na HUD.
 
 ## Pre vývoj
