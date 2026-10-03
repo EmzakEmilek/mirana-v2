@@ -10,6 +10,9 @@ Podrobný denník práce je v [docs/PROGRESS.md](docs/PROGRESS.md), tu len čo s
   cieľa) a kontakt divákov, ktorých Mirana spomenie. Prepína sa v Nastaveniach → HUD; v1 ostáva.
 - **Whisper:** int8_float16 a beam 3 (Nastavenia → Prepis) — má zrýchliť prepis, keď hra vyťažuje grafiku.
 - **Persona:** nadávka musí byť súčasťou vety (pomenúva, zosilňuje, je v obrate), nie prilepená na koniec.
+- **Persona zoštíhlená** (130 → 102 riadkov, 1 490 → 1 120 slov): každé pravidlo raz, bez vzorových fráz, ktoré
+  Mirana opakovala doslova („strať sa im z dohľadu“ 7×, prerozprávaná persona pri „predstav sa“), zákazy len pri
+  spoileroch, hraniciach Twitchu, stave hry a chate; hovorená slovenčina so správnou zhodou.
 
 ## 2026-10-03 — prestavba programu (tri vlny)
 
