@@ -350,8 +350,6 @@ def _vehicle(s: Snapshot) -> str | None:
     if not _text(s.get("vehicle")):
         return music  # vreckove radio aj peso
     text = f"{'šoféruje' if s.get('driver', True) else 'vezie sa v'} {s.get('vehicle')}"
-    if s.get("speed_kmh") is not None:
-        text += f", {s.get('speed_kmh')} km/h"
     return text + (f", {music}" if music else "")
 
 

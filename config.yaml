@@ -144,7 +144,7 @@ longterm:
   viewer_notes: 3             # najviac poznámok na diváka
 
 idle_nudge:
-  enabled: true               # keď sa Erik dlho neozve, Mirana sa vtipne pripomenie (môže siahnuť po stave hry)
+  enabled: false              # pripomienka po tichu; vypnutá na Erikovu žiadosť (3.10.)
   after_min: 10               # po koľkých minútach ticha
   max_in_row: 3               # najviac toľko za sebou bez Erikovej reakcie (potom je asi AFK a mlčí)
 

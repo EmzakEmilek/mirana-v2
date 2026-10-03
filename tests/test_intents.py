@@ -52,8 +52,12 @@ def test_note():
     assert intents.wants_note("Mirana, zapíš si do logu, že HUD je veľký")
     assert intents.wants_note("toto bolo trošku odveci, napíš si do logu")
     assert intents.wants_note("poznač si do poznámok, že chcem rýchlejší hlas")
-    assert not intents.wants_note("zapíš si, že idem spať")       # bez miesta (log/poznamky)
+    assert intents.wants_note("Zapisci, že nemusíme riešiť, ako rýchlo jazdím")     # skomolene prepisom, bez "do logu"
+    assert intents.wants_note("Mirana zapíš, že vypneme aj tieto 10 minútové pauzy")
+    assert intents.wants_note("Zapamätaj si, že Enki je žena, moderátorka.")
+    assert not intents.wants_note("napíš do chatu pozdrav")                         # "napis" bez logu nie je poznamka
     assert not intents.wants_note("pozri logy")
+    assert not intents.wants_note("Mirana, zapíname stream")
 
 
 def test_forget_stream_lore():

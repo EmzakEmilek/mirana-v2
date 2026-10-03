@@ -44,12 +44,15 @@ def wants_forget(question: str) -> bool:
 
 
 # --- poznamka do logu ("zapis si do logu, ze ...") -----------------------------------------------
-_NOTE_VERB = re.compile(r"zap[ií]š|zapis|poznač|poznac|zaznač|zaznac|napíš|napis", _I)
+_NOTE_VERB = re.compile(r"\bzap[ií]š|\bzap[ií]s|poznač|poznac|zaznač|zaznac|zapamät|zapamat", _I)
 _NOTE_PLACE = re.compile(r"do logu|\blog\w*|poznám|poznam", _I)
+_WRITE = re.compile(r"\bnap[ií]š|\bnapis", _I)
 
 
 def wants_note(question: str) -> bool:
-    return bool(_NOTE_VERB.search(question) and _NOTE_PLACE.search(question))
+    """Kazde "zapis / zapamataj si / poznac" (aj skomolene prepisom: zapisci, zapísi) ide do poznamok;
+    "napis" len s "do logu", lebo "napis do chatu" je nieco ine (3.10.: 8 zo 14 ziadosti sa stratilo)."""
+    return bool(_NOTE_VERB.search(question) or (_WRITE.search(question) and _NOTE_PLACE.search(question)))
 
 
 # --- otazka na stream (riadok [STREAM] so statistikami) --------------------------------------------
