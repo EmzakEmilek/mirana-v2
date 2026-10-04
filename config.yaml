@@ -84,7 +84,7 @@ stt:
     - "braindance"
 
 llm:
-  model: "claude-opus-5-5"    # s wiki stačí Sonnet 5.5 low (najrýchlejší, ~0,4 c/otázka); claude-opus-5-5 = lepšie lore, ~2x drahší
+  model: "claude-opus-5-5"    # Erik chce Opus (lepšie komunikuje); po oprave cache ~1,5 c/otázka, Sonnet ~0,7 c
   max_tokens: 2000            # strop pre premýšľanie + odpoveď dokopy (modely 5.5 premýšľajú vždy); platí sa len skutočne použité
   effort: "low"               # low = najrýchlejší hlas; Sonnet 5.5 má predvolene high, Opus 5.5 medium (test 2026-10-03: bez premýšľania nebol rýchlejší)
   fallbacks: "default"        # ked bezpecnostny filter odmietne (falosny poplach), server otazku zopakuje na inom modeli; null = vypnute
