@@ -181,7 +181,7 @@ def test_volume_and_memory_commands(mirana):
 
 
 def test_context_lines_in_fixed_order_and_structured_log(mirana):
-    mirana.game.line = lambda: "[HRA] zdravie 80 %"
+    mirana.game.line = lambda points=False: "[HRA] zdravie 80 %"
     mirana.chat.line = lambda: "[CHAT] Kubo: ahoj"
     mirana._handle_typed("Mirana, čo je toto za auto? A koľko krát som dnes zomrel?")
     pump(mirana, lambda: len(mirana.memory) == 1 and idle(mirana))
@@ -246,3 +246,11 @@ def test_empty_proactive_answer_is_silent(mirana):
     time.sleep(0.3)
     pump(mirana, lambda: idle(mirana), timeout=1)
     assert mirana.voice.played == []                          # ziadne "Spojenie s Netom vypadlo"
+
+
+def test_points_go_to_model_only_for_build_questions(mirana):
+    mirana._handle_typed("kto je Padre?")
+    pump(mirana, lambda: len(mirana.memory) == 1 and idle(mirana))
+    mirana._handle_typed("do čoho mám dať perky?")
+    pump(mirana, lambda: len(mirana.memory) == 2 and idle(mirana))
+    assert mirana.game.points_asked == [False, True]

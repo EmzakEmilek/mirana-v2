@@ -264,3 +264,17 @@ def test_hra_line_quest_and_no_grenades():
     line = telemetry_line(s)
     assert "granát" not in line and "liečenie 1 z 2" in line
     assert "neobjavené miesto" in line
+
+
+def test_unspent_points_only_on_level_up_or_build_question():
+    from mirana import intents
+    s = snap(level=11, attribute_points=1, perk_points=2, attributes={"reflexes": 8})
+    assert "nerozdelené" not in telemetry_line(s)                       # bezna otazka: body nepripomina
+    assert "nerozdelené 1 atribútový bod a 2 perkové body" in telemetry_line(s, points=True)
+    assert event_text("level_up", s) == "Erik postúpil na úroveň 11, nerozdelené 1 atribútový bod a 2 perkové body"
+    assert event_text("level_up", snap(level=11)) == "Erik postúpil na úroveň 11"
+    for q in ("do čoho mám dať perky?", "kam dám ten bod?", "aký build mi odporučíš?", "čo mám vylepšiť?",
+              "rozdeľ mi atribúty", "aký mám level?"):
+        assert intents.asks_about_build(q), q
+    for q in ("kto je Padre?", "čo je toto za auto?", "Dexov bodyguard je kto?", "kde je Lizzie?"):
+        assert not intents.asks_about_build(q), q

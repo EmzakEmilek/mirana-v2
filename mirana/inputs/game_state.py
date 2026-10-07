@@ -219,7 +219,21 @@ def _world(s: Snapshot) -> str | None:
     return ", ".join(items) or None
 
 
-def _character(s: Snapshot) -> str | None:
+def _free_points(s: Snapshot) -> str | None:
+    """"nerozdelené 1 atribútový bod a 2 perkové body", alebo None."""
+    free = []
+    if s.get("attribute_points"):
+        n = s.get("attribute_points")
+        free.append(f"{n} {_plural(n, 'atribútový bod', 'atribútové body', 'atribútových bodov')}")
+    if s.get("perk_points"):
+        n = s.get("perk_points")
+        free.append(f"{n} {_plural(n, 'perkový bod', 'perkové body', 'perkových bodov')}")
+    return "nerozdelené " + " a ".join(free) if free else None
+
+
+def _character(s: Snapshot, points: bool = False) -> str | None:
+    """points=False: nerozdelene body sa neposielaju — inak ich Mirana pripominala pri kazdej otazke
+    (3.10.: ~15x za vecer). Idu len k otazke na build a pri level-upe (event_text)."""
     if s.get("level") is None:
         return None
     text = f"úroveň {s.get('level')}"
@@ -228,15 +242,9 @@ def _character(s: Snapshot) -> str | None:
     attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
     if attrs:
         text += ", atribúty " + " ".join(f"{sk} {attrs[key]}" for key, sk in ATTRIBUTES if attrs.get(key) is not None)
-    free = []
-    if s.get("attribute_points"):
-        n = s.get("attribute_points")
-        free.append(f"{n} {_plural(n, 'atribútový bod', 'atribútové body', 'atribútových bodov')}")
-    if s.get("perk_points"):
-        n = s.get("perk_points")
-        free.append(f"{n} {_plural(n, 'perkový bod', 'perkové body', 'perkových bodov')}")
+    free = _free_points(s) if points else None
     if free:
-        text += ", nerozdelené " + " a ".join(free)
+        text += ", " + free
     return text
 
 
@@ -353,11 +361,12 @@ def _vehicle(s: Snapshot) -> str | None:
     return text + (f", {music}" if music else "")
 
 
-def telemetry_line(s: Snapshot) -> str:
-    """Slovensky riadok pre model. Z hry su len vlastne mena; prazdne a nulove casti sa vynechaju."""
+def telemetry_line(s: Snapshot, points: bool = False) -> str:
+    """Slovensky riadok pre model. Z hry su len vlastne mena; prazdne a nulove casti sa vynechaju.
+    points=True pridá nerozdelené body (len keď sa Erik pýta na build)."""
     parts = [
         _health(s), _world(s), _situation(s), _quest(s), _target(s), _vehicle(s), _weapon(s),
-        _character(s), _gear(s), _story(s),
+        _character(s, points), _gear(s), _story(s),
         f"{s.get('money')} eddies" if s.get("money") is not None else None,
     ]
     return "[HRA] " + " | ".join(p for p in parts if p)
@@ -371,7 +380,7 @@ EVENT_TEXT = {
     "district_change": "Erik prišiel do štvrte {location}",
     "quest_changed": "Erik sleduje nový quest {quest}",
     "quest_completed": "Erik dokončil hlavný quest {completed}",
-    "level_up": "Erik postúpil na úroveň {level}",
+    "level_up": "Erik postúpil na úroveň {level}{points}",
     "wanted_up": "polícia ho hľadá, už {wanted}",
     "wanted_clear": "polícia ho prestala hľadať",
     "combat_start": "začal sa boj",
@@ -428,6 +437,7 @@ def event_text(name: str, s: Snapshot, prev: Snapshot | None = None) -> str:
         "hp": s.get("hp"), "location": s.location or "?", "quest": s.quest or "?", "level": s.get("level"),
         "wanted": f"{wanted} {_plural(wanted, 'hviezda', 'hviezdy', 'hviezd')}",
         "completed": ", ".join(completed_quests(prev, s)) or "?",
+        "points": f", {_free_points(s)}" if _free_points(s) else "",
     }
     return EVENT_TEXT.get(name, name).format(**values)
 
@@ -472,9 +482,9 @@ class GameState:
             return None
         return s
 
-    def line(self) -> str | None:
+    def line(self, points: bool = False) -> str | None:
         s = self.current
-        return telemetry_line(s) if s else None
+        return telemetry_line(s, points) if s else None
 
     def _run(self) -> None:
         while True:

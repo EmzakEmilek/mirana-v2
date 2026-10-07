@@ -123,8 +123,10 @@ class FakeGame:
     def __init__(self, config=None, on_event=None, on_snapshot=None):
         self.on_event, self.on_snapshot = on_event, on_snapshot
         self.current = None
+        self.points_asked: list[bool] = []
 
-    def line(self):
+    def line(self, points=False):
+        self.points_asked.append(points)
         return None
 
     def start(self):

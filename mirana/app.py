@@ -18,6 +18,7 @@ from enum import Enum, auto
 
 from mirana.budget import Budget
 from mirana import config as config_module
+from mirana import intents
 from mirana.config import load_config
 from mirana.events import Answered, Fallback, GameEvent, Interrupted, Quit, Recording, Silent, Spoken, Typed
 from mirana.features.archive import LogArchive
@@ -274,7 +275,8 @@ class Mirana:
     def _ask(self, turn: Turn) -> None:
         """Kontext + LLM stream. Stav hry ide ako riadok [HRA] do spravy — v system prompte by kazda
         zmena HP zrusila cache pamate. Chat divakov ([CHAT]) ide len k Erikovym otazkam."""
-        turn.add("HRA", self.game.line())
+        # nerozdelene body len k otazke na build — inak ich Mirana pripominala pri kazdej otazke
+        turn.add("HRA", self.game.line(points=turn.from_erik and intents.asks_about_build(turn.question)))
         if turn.from_erik:
             turn.add("CHAT", self.chat.line())
         self._each("context", turn)

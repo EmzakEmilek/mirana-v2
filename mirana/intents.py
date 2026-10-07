@@ -63,6 +63,15 @@ def asks_about_stream(question: str) -> bool:
     return bool(_STREAM.search(question))
 
 
+# --- otazka na build (k riadku [HRA] sa pridaju nerozdelene body) ---------------------------------
+_BUILD = re.compile(r"\bbod(y|ov|u|om|mi)?\b|\bperk\w*|atrib[uú]t\w*|\bbuild\w*|\bskill\w*|\blevel\w*|"
+                    r"\búrove[nň]\w*|\buroven\w*|\búrovn\w*|vylep[sš]\w*|rozde[lľ]\w*|\bstrom\w*", _I)
+
+
+def asks_about_build(question: str) -> bool:
+    return bool(_BUILD.search(question))
+
+
 # --- otazka na lore (predhladanie vo wiki) ---------------------------------------------------------
 _LORE = re.compile(r"\b(kto|čo|co|aký|aká|aké|akú|aky|aka|ake|aku|odkiaľ|odkial|povedz mi o|čo vieš o|co vies o|"
                    r"kde (je|nájdem|najdem))\b", _I)
